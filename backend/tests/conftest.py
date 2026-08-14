@@ -122,6 +122,7 @@ _MUTABLE_TABLES: tuple[str, ...] = (
     "credential_tokens",
     "comment_mentions",
     "comment_edits",
+    "comment_resolution_events",
     "comments",
     "phenopacket_audit",
     # Source-import evidence tables: children must be removed before their

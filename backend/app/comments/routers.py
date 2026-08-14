@@ -15,13 +15,10 @@ import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import (
-    require_comment_author_or_admin,
-    require_curator,
-)
+from app.auth.dependencies import require_curator
 from app.comments.models import Comment
 from app.comments.schemas import (
     CommentCreate,
@@ -33,6 +30,7 @@ from app.comments.schemas import (
 from app.comments.service import CommentsService
 from app.database import get_db
 from app.models.user import User
+from app.phenopackets.review.policy import ReviewPolicyError
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +135,38 @@ def _map_service_error(exc: Exception) -> HTTPException:
             status_code=404,
             detail={"code": "not_found", "message": str(exc)},
         )
+    if isinstance(exc, CommentsService.IssueInputInvalid):
+        return HTTPException(
+            status_code=422,
+            detail={"code": "review_issue_input_invalid", "message": str(exc)},
+        )
+    conflict_errors = (
+        (CommentsService.RevisionMismatch, "revision_mismatch"),
+        (CommentsService.ReviewRevisionMismatch, "review_revision_mismatch"),
+        (CommentsService.ReviewClosed, "review_closed"),
+        (
+            CommentsService.ReviewIssueDeleteForbidden,
+            "review_issue_delete_forbidden",
+        ),
+    )
+    for error_type, code in conflict_errors:
+        if isinstance(exc, error_type):
+            return HTTPException(
+                status_code=409,
+                detail={"code": code, "message": str(exc)},
+            )
+    if isinstance(exc, ReviewPolicyError):
+        status_code = (
+            409 if exc.code in {"review_closed", "unresolved_review_issues"} else 403
+        )
+        return HTTPException(
+            status_code=status_code,
+            detail={
+                "code": exc.code,
+                "message": exc.message,
+                **({"context": exc.context} if exc.context else {}),
+            },
+        )
     # Unmapped exception path: log the real cause server-side, return a
     # generic 500 so we don't leak SQL fragments / stack context to the
     # client (Copilot PR #254 routers.py:137).
@@ -167,10 +197,15 @@ async def create_comment(
             body_markdown=body.body_markdown,
             mention_user_ids=body.mention_user_ids,
             actor=current_user,
+            record_revision=body.record_revision,
+            review_revision_id=body.review_revision_id,
         )
+        response = await _build_comment_response(svc, comment)
+        await db.commit()
+        return response
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return await _build_comment_response(svc, comment)
 
 
 # ---------------------------------------------------------------------------
@@ -267,9 +302,12 @@ async def update_comment(
             mention_user_ids=body.mention_user_ids,
             actor=current_user,
         )
+        response = await _build_comment_response(svc, comment)
+        await db.commit()
+        return response
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return await _build_comment_response(svc, comment)
 
 
 # ---------------------------------------------------------------------------
@@ -280,31 +318,47 @@ async def update_comment(
 @router.post("/{comment_id}/resolve", response_model=CommentResponse)
 async def resolve_comment(
     comment_id: int,
+    body: Any = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ) -> CommentResponse:
     """Mark a comment as resolved."""
     svc = CommentsService(db)
     try:
-        comment = await svc.resolve(comment_id=comment_id, actor=current_user)
+        comment = await svc.resolve(
+            comment_id=comment_id,
+            actor=current_user,
+            issue_input=body,
+        )
+        response = await _build_comment_response(svc, comment)
+        await db.commit()
+        return response
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return await _build_comment_response(svc, comment)
 
 
 @router.post("/{comment_id}/unresolve", response_model=CommentResponse)
 async def unresolve_comment(
     comment_id: int,
+    body: Any = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ) -> CommentResponse:
     """Clear the resolved flag on a comment."""
     svc = CommentsService(db)
     try:
-        comment = await svc.unresolve(comment_id=comment_id, actor=current_user)
+        comment = await svc.unresolve(
+            comment_id=comment_id,
+            actor=current_user,
+            issue_input=body,
+        )
+        response = await _build_comment_response(svc, comment)
+        await db.commit()
+        return response
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return await _build_comment_response(svc, comment)
 
 
 # ---------------------------------------------------------------------------
@@ -316,15 +370,17 @@ async def unresolve_comment(
 async def delete_comment(
     comment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_comment_author_or_admin),
+    current_user: User = Depends(require_curator),
 ) -> Response:
     """Soft-delete a comment (author or admin only)."""
     svc = CommentsService(db)
     try:
         await svc.soft_delete(comment_id=comment_id, actor=current_user)
+        await db.commit()
+        return Response(status_code=204)
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------------------

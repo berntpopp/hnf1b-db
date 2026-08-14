@@ -54,6 +54,27 @@
         "title": "AggregationResult",
         "type": "object"
       },
+      "ApprovalAttestation": {
+        "description": "Affirmative statements required for an independent approval decision.",
+        "properties": {
+          "independent_review": {
+            "const": true,
+            "title": "Independent Review",
+            "type": "boolean"
+          },
+          "no_unmanaged_conflict": {
+            "const": true,
+            "title": "No Unmanaged Conflict",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "independent_review",
+          "no_unmanaged_conflict"
+        ],
+        "title": "ApprovalAttestation",
+        "type": "object"
+      },
       "AssessmentStatus": {
         "description": "Explicit clinical assessment states for a source phenotype question.",
         "enum": [
@@ -4574,6 +4595,64 @@
       "TransitionRequest": {
         "description": "Request body for POST /phenopackets/{id}/transitions.\n\nSee .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md \u00a77.3.",
         "properties": {
+          "approved_content_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Content Sha256"
+          },
+          "approved_revision_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Revision Id"
+          },
+          "attestation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApprovalAttestation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidate_content_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Content Sha256"
+          },
+          "candidate_revision_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Revision Id"
+          },
           "reason": {
             "maxLength": 500,
             "minLength": 1,

@@ -3,19 +3,27 @@
 from __future__ import annotations
 
 import uuid
-from typing import List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
+from pydantic import ValidationError
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.comments.models import Comment, CommentEdit, CommentMention
+from app.comments.models import (
+    Comment,
+    CommentEdit,
+    CommentMention,
+    CommentResolutionEvent,
+)
+from app.comments.schemas import ReviewIssueReopenRequest, ReviewIssueResolveRequest
 from app.models.user import User
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.review.policy import IssueAction, ReviewPolicy
 
 
 class CommentsService:
-    """All comment operations. Single-transaction, commit at the end of each method."""
+    """All comment operations, flushed into the router-owned transaction."""
 
     class RecordNotFound(Exception):
         """(record_type, record_id) does not resolve to a real record (C3)."""
@@ -38,6 +46,21 @@ class CommentsService:
     class SoftDeleted(Exception):
         """Write attempted on a soft-deleted comment (C6)."""
 
+    class RevisionMismatch(Exception):
+        """The optimistic phenopacket revision is stale."""
+
+    class ReviewRevisionMismatch(Exception):
+        """The issue does not identify the exact active review candidate."""
+
+    class ReviewClosed(Exception):
+        """The active cycle is not open for the requested issue action."""
+
+    class ReviewIssueDeleteForbidden(Exception):
+        """Blocking review issues are retained through audited retraction."""
+
+    class IssueInputInvalid(Exception):
+        """A blocking issue action omitted or malformed its conditional body."""
+
     def __init__(self, db: AsyncSession) -> None:
         """Initialise with an async database session."""
         self.db = db
@@ -46,34 +69,24 @@ class CommentsService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _check_record_exists(
-        self, record_type: str, record_id: uuid.UUID
-    ) -> None:
-        """C3 — verify target record is not hard-deleted (soft-deleted is OK).
+    async def _lock_record(self, record_type: str, record_id: uuid.UUID) -> Phenopacket:
+        """Lock a comment owner, including a soft-deleted phenopacket.
 
         The global soft-delete ORM filter (app.database._register_soft_delete_filter)
-        would exclude soft-deleted Phenopacket rows from the count query. We bypass
-        it via ``include_deleted=True`` so that soft-deleted records are still valid
-        comment targets (spec invariant C3).
+        is bypassed because comments remain addressable after owner soft deletion.
         """
         if record_type != "phenopacket":
             raise self.RecordNotFound(f"Unsupported record_type {record_type!r}")
-        stmt = (
-            select(func.count())
-            .select_from(Phenopacket)
-            .where(Phenopacket.id == record_id)
-        )
-        count = int(
-            (
-                await self.db.execute(
-                    stmt,
-                    execution_options={"include_deleted": True},
-                )
-            ).scalar()
-            or 0
-        )
-        if count == 0:
+        stmt = select(Phenopacket).where(Phenopacket.id == record_id).with_for_update()
+        record = (
+            await self.db.execute(
+                stmt,
+                execution_options={"include_deleted": True},
+            )
+        ).scalar_one_or_none()
+        if record is None:
             raise self.RecordNotFound(f"No phenopacket with id {record_id}")
+        return record
 
     async def _validate_mentions(self, mention_user_ids: Sequence[int]) -> List[int]:
         """Dedup + verify each id points to an active curator/admin."""
@@ -118,9 +131,25 @@ class CommentsService:
         body_markdown: str,
         mention_user_ids: Sequence[int],
         actor: User,
+        record_revision: int | None = None,
+        review_revision_id: int | None = None,
     ) -> Comment:
         """Insert a new comment and its mention rows atomically."""
-        await self._check_record_exists(record_type, record_id)
+        record = await self._lock_record(record_type, record_id)
+        is_issue = review_revision_id is not None or record_revision is not None
+        if is_issue:
+            if review_revision_id is None or record_revision is None:
+                raise self.IssueInputInvalid(
+                    "record_revision and review_revision_id are required together"
+                )
+            candidate = await self._validate_issue_action(
+                record,
+                review_revision_id=review_revision_id,
+                record_revision=record_revision,
+                actor=actor,
+                action="create",
+            )
+            review_revision_id = candidate.id
         validated_mentions = await self._validate_mentions(mention_user_ids)
 
         comment = Comment(
@@ -128,6 +157,7 @@ class CommentsService:
             record_id=record_id,
             author_id=actor.id,
             body_markdown=body_markdown,
+            review_revision_id=review_revision_id,
         )
         self.db.add(comment)
         await self.db.flush()  # obtain comment.id
@@ -135,7 +165,7 @@ class CommentsService:
         for uid in validated_mentions:
             self.db.add(CommentMention(comment_id=comment.id, user_id=uid))
 
-        await self.db.commit()
+        await self.db.flush()
         return await self._load_for_response(comment.id)
 
     # ------------------------------------------------------------------
@@ -248,15 +278,101 @@ class CommentsService:
     # Mutations
     # ------------------------------------------------------------------
 
-    async def _fetch_live_or_404(self, comment_id: int) -> Comment:
-        """Lock FOR UPDATE; raise SoftDeleted (→ 404) if already removed."""
+    async def _probe_comment_identity(
+        self, comment_id: int
+    ) -> tuple[int, str, uuid.UUID]:
+        """Read only immutable routing identity before acquiring either row lock."""
+        stmt = select(Comment.id, Comment.record_type, Comment.record_id).where(
+            Comment.id == comment_id
+        )
+        identity = (await self.db.execute(stmt)).one_or_none()
+        if identity is None:
+            raise self.SoftDeleted(f"comment {comment_id} not found")
+        return identity.id, identity.record_type, identity.record_id
+
+    async def _lock_phenopacket_then_comment(self, comment_id: int) -> Comment:
+        """Apply the global owner-before-comment lock protocol."""
+        identity = await self._probe_comment_identity(comment_id)
+        await self._lock_record(identity[1], identity[2])
         stmt = select(Comment).where(Comment.id == comment_id).with_for_update()
         comment = (await self.db.execute(stmt)).scalar_one_or_none()
         if comment is None:
             raise self.SoftDeleted(f"comment {comment_id} not found")
+        if (comment.id, comment.record_type, comment.record_id) != identity:
+            raise self.SoftDeleted(f"comment {comment_id} identity changed")
         if comment.deleted_at is not None:
             raise self.SoftDeleted(f"comment {comment_id} is soft-deleted")
         return comment
+
+    async def _validate_issue_action(
+        self,
+        record: Phenopacket,
+        *,
+        review_revision_id: int,
+        record_revision: int,
+        actor: User,
+        action: IssueAction,
+    ) -> PhenopacketRevision:
+        """Validate optimistic identity, active cycle, state, and independence."""
+        if record.revision != record_revision:
+            raise self.RevisionMismatch(
+                f"expected record revision {record_revision}, found {record.revision}"
+            )
+        if record.editing_revision_id is None:
+            raise self.ReviewClosed("record has no active review cycle")
+
+        active = await self.db.get(PhenopacketRevision, record.editing_revision_id)
+        if active is None or active.record_id != record.id:
+            raise self.ReviewRevisionMismatch("active review revision is invalid")
+
+        effective_state = active.state
+        if action == "create":
+            if effective_state != "in_review":
+                raise self.ReviewClosed("review is not open for issue creation")
+            if review_revision_id != active.id:
+                raise self.ReviewRevisionMismatch(
+                    "review issue is not linked to the active candidate"
+                )
+        else:
+            if effective_state not in ("in_review", "changes_requested"):
+                raise self.ReviewClosed("review is not open for issue action")
+        candidate = await self.db.get(PhenopacketRevision, review_revision_id)
+        if (
+            candidate is None
+            or candidate.record_id != record.id
+            or candidate.state != "in_review"
+        ):
+            raise self.ReviewRevisionMismatch(
+                "review issue candidate does not belong to this record"
+            )
+        await ReviewPolicy.require_issue_action(
+            self.db,
+            record,
+            candidate,
+            actor,
+            action=action,
+        )
+        return candidate
+
+    @classmethod
+    def _resolve_request(cls, issue_input: Any) -> ReviewIssueResolveRequest:
+        """Validate a resolve body only after locked issue discrimination."""
+        try:
+            return ReviewIssueResolveRequest.model_validate(issue_input)
+        except ValidationError as exc:
+            raise cls.IssueInputInvalid(
+                "blocking issue resolve input is invalid"
+            ) from exc
+
+    @classmethod
+    def _reopen_request(cls, issue_input: Any) -> ReviewIssueReopenRequest:
+        """Validate a reopen body only after locked issue discrimination."""
+        try:
+            return ReviewIssueReopenRequest.model_validate(issue_input)
+        except ValidationError as exc:
+            raise cls.IssueInputInvalid(
+                "blocking issue reopen input is invalid"
+            ) from exc
 
     async def update_body(
         self,
@@ -267,7 +383,7 @@ class CommentsService:
         actor: User,
     ) -> Comment:
         """PATCH body (author-only). Writes comment_edits + replaces mentions."""
-        comment = await self._fetch_live_or_404(comment_id)
+        comment = await self._lock_phenopacket_then_comment(comment_id)
         if comment.author_id != actor.id:
             raise self.NotAuthor(
                 f"actor {actor.id} is not comment author {comment.author_id}"
@@ -292,38 +408,101 @@ class CommentsService:
         for uid in validated:
             self.db.add(CommentMention(comment_id=comment.id, user_id=uid))
 
-        await self.db.commit()
+        await self.db.flush()
         return await self._load_for_response(comment.id)
 
-    async def resolve(self, *, comment_id: int, actor: User) -> Comment:
+    async def resolve(
+        self, *, comment_id: int, actor: User, issue_input: Any = None
+    ) -> Comment:
         """Mark a comment resolved; raises AlreadyResolved if already so."""
-        comment = await self._fetch_live_or_404(comment_id)
+        comment = await self._lock_phenopacket_then_comment(comment_id)
         if comment.resolved_at is not None:
             raise self.AlreadyResolved(f"comment {comment_id} already resolved")
+        if comment.review_revision_id is not None:
+            request = self._resolve_request(issue_input)
+            record = await self._locked_record_for_comment(comment)
+            await self._validate_issue_action(
+                record,
+                review_revision_id=comment.review_revision_id,
+                record_revision=request.record_revision,
+                actor=actor,
+                action="resolve",
+            )
+            self.db.add(
+                CommentResolutionEvent(
+                    comment_id=comment.id,
+                    action="resolved",
+                    disposition=request.disposition,
+                    rationale=request.rationale,
+                    actor_id=actor.id,
+                    actor_role=actor.role,
+                )
+            )
+            await self.db.flush()
         comment.resolved_at = func.now()
         comment.resolved_by_id = actor.id
         comment.updated_at = func.now()
-        await self.db.commit()
+        await self.db.flush()
         return await self._load_for_response(comment_id)
 
-    async def unresolve(self, *, comment_id: int, actor: User) -> Comment:
+    async def unresolve(
+        self, *, comment_id: int, actor: User, issue_input: Any = None
+    ) -> Comment:
         """Clear the resolved flag; raises NotResolved if not currently resolved."""
-        comment = await self._fetch_live_or_404(comment_id)
+        comment = await self._lock_phenopacket_then_comment(comment_id)
         if comment.resolved_at is None:
             raise self.NotResolved(f"comment {comment_id} is not resolved")
+        if comment.review_revision_id is not None:
+            request = self._reopen_request(issue_input)
+            record = await self._locked_record_for_comment(comment)
+            await self._validate_issue_action(
+                record,
+                review_revision_id=comment.review_revision_id,
+                record_revision=request.record_revision,
+                actor=actor,
+                action="reopen",
+            )
+            self.db.add(
+                CommentResolutionEvent(
+                    comment_id=comment.id,
+                    action="reopened",
+                    disposition=None,
+                    rationale=request.rationale,
+                    actor_id=actor.id,
+                    actor_role=actor.role,
+                )
+            )
+            await self.db.flush()
         comment.resolved_at = None
         comment.resolved_by_id = None
         comment.updated_at = func.now()
-        await self.db.commit()
+        await self.db.flush()
         return await self._load_for_response(comment_id)
+
+    async def _locked_record_for_comment(self, comment: Comment) -> Phenopacket:
+        """Return the already owner-locked record without changing lock order."""
+        stmt = select(Phenopacket).where(Phenopacket.id == comment.record_id)
+        record = (
+            await self.db.execute(
+                stmt,
+                execution_options={"include_deleted": True},
+            )
+        ).scalar_one_or_none()
+        if record is None:
+            raise self.RecordNotFound(f"No phenopacket with id {comment.record_id}")
+        return record
 
     async def soft_delete(self, *, comment_id: int, actor: User) -> None:
         """Soft-delete a comment (author or admin only). Terminal write (C6)."""
-        comment = await self._fetch_live_or_404(comment_id)
+        comment = await self._lock_phenopacket_then_comment(comment_id)
+        if comment.review_revision_id is not None:
+            raise self.ReviewIssueDeleteForbidden(
+                "blocking review issues must be retracted, not deleted"
+            )
         is_admin = actor.role == "admin"
         if comment.author_id != actor.id and not is_admin:
             raise self.NotAuthorOrAdmin(f"actor {actor.id} is not author and not admin")
         comment.deleted_at = func.now()
         comment.deleted_by_id = actor.id
         comment.updated_at = func.now()
-        await self.db.commit()
+        await self.db.flush()

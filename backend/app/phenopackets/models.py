@@ -6,9 +6,10 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     Computed,
     DateTime,
     ForeignKey,
@@ -19,6 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.schema import conv
 
 from app.database import Base
 
@@ -37,6 +39,12 @@ class Phenopacket(Base):
     """
 
     __tablename__ = "phenopackets"
+    __table_args__ = (
+        CheckConstraint(
+            "editing_revision_id IS NULL OR draft_owner_id IS NOT NULL",
+            name=conv("ck_phenopackets_active_edit_owner"),
+        ),
+    )
 
     # Primary key
     id: Mapped[uuid.UUID] = mapped_column(
@@ -298,6 +306,25 @@ class PhenopacketRevision(Base):
     """
 
     __tablename__ = "phenopacket_revisions"
+    __table_args__ = (
+        CheckConstraint(
+            "actor_role IS NULL OR actor_role IN ('viewer', 'curator', 'admin')",
+            name=conv("ck_phenopacket_revisions_actor_role"),
+        ),
+        CheckConstraint(
+            "content_sha256 IS NULL OR content_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name=conv("ck_phenopacket_revisions_content_sha256"),
+        ),
+        CheckConstraint(
+            "ledger_version IS NULL OR ledger_version = 2",
+            name=conv("ck_phenopacket_revisions_ledger_version"),
+        ),
+        CheckConstraint(
+            "decision_metadata IS NULL OR "
+            "(ledger_version IS NOT NULL AND ledger_version = 2)",
+            name=conv("ck_phenopacket_revisions_decision_metadata_ledger"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     record_id: Mapped[uuid.UUID] = mapped_column(
@@ -334,6 +361,12 @@ class PhenopacketRevision(Base):
     projection_version: Mapped[Optional[str]] = mapped_column(String(40))
     ledger_hash: Mapped[Optional[str]] = mapped_column(String(128))
     projection_hash: Mapped[Optional[str]] = mapped_column(String(128))
+    actor_role: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    decision_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+    content_sha256: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ledger_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -693,6 +726,13 @@ class AggregationResult(BaseModel):
 # Wave 7 D.1: state-machine Pydantic schemas (§7.3)
 
 
+class ApprovalAttestation(BaseModel):
+    """Affirmative statements required for an independent approval decision."""
+
+    independent_review: Literal[True]
+    no_unmanaged_conflict: Literal[True]
+
+
 class TransitionRequest(BaseModel):
     """Request body for POST /phenopackets/{id}/transitions.
 
@@ -709,6 +749,61 @@ class TransitionRequest(BaseModel):
     ]
     reason: str = Field(..., min_length=1, max_length=500)
     revision: int
+    candidate_revision_id: Optional[int] = Field(None, gt=0)
+    candidate_content_sha256: Optional[str] = Field(
+        None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    approved_revision_id: Optional[int] = Field(None, gt=0)
+    approved_content_sha256: Optional[str] = Field(
+        None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    attestation: Optional[ApprovalAttestation] = None
+
+    @model_validator(mode="after")
+    def validate_conditional_fields(self) -> "TransitionRequest":
+        """Require only the exact-snapshot fields for the selected transition."""
+        candidate_fields_present = bool(
+            self.model_fields_set
+            & {
+                "candidate_revision_id",
+                "candidate_content_sha256",
+                "attestation",
+            }
+        )
+        approved_fields_present = bool(
+            self.model_fields_set
+            & {
+                "approved_revision_id",
+                "approved_content_sha256",
+            }
+        )
+
+        if self.to_state == "approved":
+            if approved_fields_present:
+                raise ValueError("approval rejects approved snapshot fields")
+            if (
+                self.candidate_revision_id is None
+                or self.candidate_content_sha256 is None
+                or self.attestation is None
+            ):
+                raise ValueError(
+                    "approval requires candidate snapshot fields and attestation"
+                )
+            return self
+
+        if self.to_state == "published":
+            if candidate_fields_present:
+                raise ValueError("publication rejects candidate and attestation fields")
+            if (
+                self.approved_revision_id is None
+                or self.approved_content_sha256 is None
+            ):
+                raise ValueError("publication requires approved snapshot fields")
+            return self
+
+        if candidate_fields_present or approved_fields_present:
+            raise ValueError("conditional snapshot fields are not allowed")
+        return self
 
 
 class RevisionResponse(BaseModel):
@@ -731,7 +826,18 @@ class RevisionResponse(BaseModel):
     change_reason: str
     actor_id: int
     actor_username: Optional[str] = None
+    actor_role: Optional[str] = None
+    actor_role_at_decision_recorded: bool = False
+    decision_metadata: Optional[Dict[str, Any]] = None
+    content_sha256: Optional[str] = None
+    ledger_version: Optional[int] = None
     change_patch: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
     # populated only on /{id}/revisions/{rev_id}
     content_jsonb: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def derive_recorded_role_flag(self) -> "RevisionResponse":
+        """Label only immutable role snapshots as recorded decision evidence."""
+        self.actor_role_at_decision_recorded = self.actor_role is not None
+        return self

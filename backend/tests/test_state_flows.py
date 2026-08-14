@@ -14,8 +14,35 @@ and shared with test_state_invariants.py (Nit #3).
 import pytest
 from sqlalchemy import select
 
-from app.phenopackets.models import PhenopacketRevision
+from app.comments.models import Comment
+from app.phenopackets.models import (
+    ApprovalAttestation,
+    Phenopacket,
+    PhenopacketRevision,
+)
+from app.phenopackets.review.policy import ReviewPolicyError
 from app.phenopackets.services.state_service import PhenopacketStateService
+
+
+def _approval_fields(candidate: PhenopacketRevision) -> dict:
+    """Echo the exact candidate identity and affirmative review attestation."""
+    return {
+        "candidate_revision_id": candidate.id,
+        "candidate_content_sha256": candidate.content_sha256,
+        "attestation": ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
+    }
+
+
+def _publication_fields(approved: PhenopacketRevision) -> dict:
+    """Echo the exact approved snapshot identity."""
+    return {
+        "approved_revision_id": approved.id,
+        "approved_content_sha256": approved.content_sha256,
+    }
+
 
 # ---------------------------------------------------------------------------
 # §6.1 — clone-to-draft on a published record
@@ -310,7 +337,7 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
     svc = PhenopacketStateService(db_session)
 
     # submit
-    await svc.transition(
+    _, candidate = await svc.transition(
         draft_record.id,
         to_state="in_review",
         reason="ready",
@@ -323,12 +350,13 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
     assert draft_record.draft_owner_id == curator_user.id  # preserved through submit
 
     # approve
-    await svc.transition(
+    _, approved = await svc.transition(
         draft_record.id,
         to_state="approved",
         reason="ok",
         expected_revision=draft_record.revision,
         actor=admin_user,
+        **_approval_fields(candidate),
     )
     await db_session.flush()
     await db_session.refresh(draft_record)
@@ -341,6 +369,7 @@ async def test_full_lifecycle(db_session, draft_record, curator_user, admin_user
         reason="go live",
         expected_revision=draft_record.revision,
         actor=admin_user,
+        **_publication_fields(approved),
     )
     await db_session.flush()
     await db_session.refresh(draft_record)
@@ -402,30 +431,295 @@ async def test_transition_revision_mismatch(db_session, draft_record, curator_us
 
 
 @pytest.mark.asyncio
-async def test_transition_forbidden_role(db_session, draft_record, curator_user):
-    """§6.4: curator cannot approve — raises PermissionError (forbidden_role).
-
-    The guard-matrix maps curator→approve to the 'forbidden_role' code, which
-    the service translates to PermissionError (not ForbiddenNotOwner, which is
-    reserved for the 'forbidden_not_owner' code path).
-    """
+async def test_direct_transition_cannot_bypass_independent_review(
+    db_session, draft_record, curator_user
+):
+    """The state service rejects an owner's direct self-approval attempt."""
     svc = PhenopacketStateService(db_session)
     # submit first to reach in_review
-    await svc.transition(
+    _, candidate = await svc.transition(
         draft_record.id,
         to_state="in_review",
         reason="go",
         expected_revision=1,
         actor=curator_user,
     )
-    with pytest.raises(PermissionError):
+    with pytest.raises(ReviewPolicyError) as exc_info:
         await svc.transition(
             draft_record.id,
             to_state="approved",
             reason="self-approve",
             expected_revision=2,
             actor=curator_user,
+            **_approval_fields(candidate),
         )
+    assert exc_info.value.code == "self_review_forbidden"
+    assert draft_record.revision == 2
+
+
+@pytest.mark.asyncio
+async def test_eligible_curator_can_request_changes_directly(
+    db_session, draft_record, curator_user, another_curator
+):
+    """A non-contributing curator may make a review decision through the service."""
+    svc = PhenopacketStateService(db_session)
+    await svc.transition(
+        draft_record.id,
+        to_state="in_review",
+        reason="ready",
+        expected_revision=1,
+        actor=curator_user,
+    )
+
+    _, decision = await svc.transition(
+        draft_record.id,
+        to_state="changes_requested",
+        reason="clarify evidence",
+        expected_revision=2,
+        actor=another_curator,
+    )
+
+    assert decision.state == "changes_requested"
+    assert decision.actor_id == another_curator.id
+
+
+@pytest.mark.asyncio
+async def test_unresolved_review_issue_blocks_direct_approval(
+    db_session, draft_record, curator_user, another_curator
+):
+    """The locked service derives the unresolved count from real issue rows."""
+    svc = PhenopacketStateService(db_session)
+    _, candidate = await svc.transition(
+        draft_record.id,
+        to_state="in_review",
+        reason="ready",
+        expected_revision=1,
+        actor=curator_user,
+    )
+    db_session.add(
+        Comment(
+            record_type="phenopacket",
+            record_id=draft_record.id,
+            author_id=another_curator.id,
+            body_markdown="Blocking review issue",
+            review_revision_id=candidate.id,
+        )
+    )
+    await db_session.flush()
+
+    with pytest.raises(ReviewPolicyError) as exc_info:
+        await svc.transition(
+            draft_record.id,
+            to_state="approved",
+            reason="cannot approve yet",
+            expected_revision=2,
+            actor=another_curator,
+            **_approval_fields(candidate),
+        )
+
+    assert exc_info.value.code == "unresolved_review_issues"
+    assert exc_info.value.context == {"unresolved_count": 1}
+
+
+@pytest.mark.asyncio
+async def test_approved_candidate_can_be_reopened_by_independent_curator(
+    db_session, draft_record, curator_user, another_curator, admin_user
+):
+    """An eligible independent curator can reopen approval before publication."""
+    svc = PhenopacketStateService(db_session)
+    _, candidate = await svc.transition(
+        draft_record.id,
+        to_state="in_review",
+        reason="ready",
+        expected_revision=1,
+        actor=curator_user,
+    )
+    await svc.transition(
+        draft_record.id,
+        to_state="approved",
+        reason="reviewed",
+        expected_revision=2,
+        actor=admin_user,
+        **_approval_fields(candidate),
+    )
+
+    _, reopened = await svc.transition(
+        draft_record.id,
+        to_state="changes_requested",
+        reason="new concern",
+        expected_revision=3,
+        actor=another_curator,
+    )
+
+    assert reopened.from_state == "approved"
+    assert reopened.to_state == "changes_requested"
+
+
+async def _approved_chain_with_competing_submission(
+    db_session,
+    *,
+    owner,
+    candidate_submitter,
+    approver,
+    parent_case: str,
+):
+    """Persist an approved row plus a disconnected, later-numbered submission."""
+    record = Phenopacket(
+        phenopacket_id=f"approved-parent-{parent_case}",
+        phenopacket={"id": f"approved-parent-{parent_case}"},
+        state="draft",
+        revision=0,
+        draft_owner_id=owner.id,
+        created_by_id=owner.id,
+    )
+    db_session.add(record)
+    await db_session.flush()
+
+    created = PhenopacketRevision(
+        record_id=record.id,
+        revision_number=1,
+        state="draft",
+        content_jsonb=record.phenopacket,
+        change_reason="created",
+        actor_id=owner.id,
+        from_state=None,
+        to_state="draft",
+        event_type="created",
+    )
+    db_session.add(created)
+    await db_session.flush()
+    inspected = PhenopacketRevision(
+        record_id=record.id,
+        parent_revision_id=created.id,
+        revision_number=2,
+        state="in_review",
+        content_jsonb=record.phenopacket,
+        change_reason="actual candidate",
+        actor_id=candidate_submitter.id,
+        from_state="draft",
+        to_state="in_review",
+        event_type="state_transition",
+    )
+    db_session.add(inspected)
+    await db_session.flush()
+    disconnected = PhenopacketRevision(
+        record_id=record.id,
+        parent_revision_id=created.id,
+        revision_number=3,
+        state="in_review",
+        content_jsonb=record.phenopacket,
+        change_reason="disconnected candidate",
+        actor_id=owner.id,
+        from_state="draft",
+        to_state="in_review",
+        event_type="state_transition",
+    )
+    db_session.add(disconnected)
+    await db_session.flush()
+
+    if parent_case == "valid":
+        approved_parent_id = inspected.id
+    elif parent_case == "missing":
+        approved_parent_id = None
+    elif parent_case == "wrong_state":
+        approved_parent_id = created.id
+    elif parent_case == "non_prior":
+        non_prior = PhenopacketRevision(
+            record_id=record.id,
+            parent_revision_id=disconnected.id,
+            revision_number=100,
+            state="in_review",
+            content_jsonb=record.phenopacket,
+            change_reason="non-prior parent",
+            actor_id=owner.id,
+            from_state="draft",
+            to_state="in_review",
+            event_type="state_transition",
+        )
+        db_session.add(non_prior)
+        await db_session.flush()
+        approved_parent_id = non_prior.id
+    else:
+        raise AssertionError(f"unknown parent case: {parent_case}")
+
+    approved = PhenopacketRevision(
+        record_id=record.id,
+        parent_revision_id=approved_parent_id,
+        revision_number=4,
+        state="approved",
+        content_jsonb=record.phenopacket,
+        change_reason="approved",
+        actor_id=approver.id,
+        from_state="in_review",
+        to_state="approved",
+        event_type="state_transition",
+    )
+    db_session.add(approved)
+    await db_session.flush()
+    record.state = "approved"
+    record.revision = 4
+    record.editing_revision_id = approved.id
+    await db_session.flush()
+    return record
+
+
+@pytest.mark.asyncio
+async def test_approved_reopen_uses_direct_parent_candidate_submitter(
+    db_session, curator_user, another_curator, admin_user
+):
+    """A disconnected later submission cannot hide the inspected submitter."""
+    record = await _approved_chain_with_competing_submission(
+        db_session,
+        owner=curator_user,
+        candidate_submitter=admin_user,
+        approver=another_curator,
+        parent_case="valid",
+    )
+    svc = PhenopacketStateService(db_session)
+
+    with pytest.raises(ReviewPolicyError) as exc_info:
+        await svc.transition(
+            record.id,
+            to_state="changes_requested",
+            reason="attempt submitter reopen",
+            expected_revision=4,
+            actor=admin_user,
+        )
+
+    assert exc_info.value.code == "reviewer_submitted"
+    assert record.revision == 4
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("parent_case", ["missing", "wrong_state", "non_prior"])
+async def test_approved_reopen_fails_closed_for_invalid_direct_parent(
+    db_session,
+    curator_user,
+    another_curator,
+    admin_user,
+    parent_case,
+):
+    """Approved ancestry is never reconstructed from revision ordering."""
+    record = await _approved_chain_with_competing_submission(
+        db_session,
+        owner=curator_user,
+        candidate_submitter=curator_user,
+        approver=admin_user,
+        parent_case=parent_case,
+    )
+    svc = PhenopacketStateService(db_session)
+
+    with pytest.raises(ReviewPolicyError) as exc_info:
+        await svc.transition(
+            record.id,
+            to_state="changes_requested",
+            reason="invalid ancestry",
+            expected_revision=4,
+            actor=another_curator,
+        )
+
+    assert exc_info.value.code == "review_author_unknown"
+    assert record.revision == 4
 
 
 @pytest.mark.asyncio
