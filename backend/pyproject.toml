@@ -16,7 +16,7 @@ dependencies = [
     "python-multipart>=0.0.27",
     "uvicorn[standard]>=0.52.1",
     # PostgreSQL and database dependencies
-    "sqlalchemy[asyncio]>=2.0.51",
+    "sqlalchemy[asyncio]>=2.0.52",
     "asyncpg>=0.29.0",
     "alembic>=1.13.1",
     "psycopg2-binary>=2.9.9",
