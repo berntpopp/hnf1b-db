@@ -18,7 +18,7 @@ dependencies = [
     # PostgreSQL and database dependencies
     "sqlalchemy[asyncio]>=2.0.51",
     "asyncpg>=0.29.0",
-    "alembic>=1.13.1",
+    "alembic>=1.19.1",
     "psycopg2-binary>=2.9.9",
     # HTTP client
     "requests>=2.31.0",
@@ -41,7 +41,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff==0.16.1",
+    "ruff==0.16.3",
     "mypy==2.3.0",
     "types-jsonschema>=4.25.1.20250822",
     "types-pyyaml>=6.0.12.20260724",  # Type stubs for PyYAML
