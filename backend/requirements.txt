@@ -8,7 +8,7 @@ aiosignal==1.4.0
     # via aiohttp
 aiosmtplib==5.1.2
     # via hnf1b-api
-alembic==1.19.0
+alembic==1.19.1
     # via hnf1b-api
 annotated-doc==0.0.5
     # via fastapi
@@ -51,7 +51,7 @@ cffi==2.1.1
     # via argon2-cffi-bindings
 chardet==5.2.0
     # via pronto
-charset-normalizer==3.4.9
+charset-normalizer==3.5.0
     # via requests
 click==8.4.2
     # via uvicorn
@@ -73,7 +73,7 @@ frozenlist==1.8.0
     #   aiosignal
 ga4gh-vrs==2.3.3
     # via hnf1b-api
-greenlet==3.5.4
+greenlet==3.5.5
     # via sqlalchemy
 h11==0.16.0
     # via
@@ -142,7 +142,7 @@ protobuf==6.33.6
     #   phenopackets
 psycopg2-binary==2.9.12
     # via hnf1b-api
-pwdlib==0.3.0
+pwdlib==0.3.1
     # via hnf1b-api
 pycparser==3.0 ; implementation_name != 'PyPy'
     # via cffi
@@ -152,7 +152,7 @@ pydantic==2.13.4
     #   ga4gh-vrs
     #   hnf1b-api
     #   pydantic-settings
-pydantic-core==2.46.4
+pydantic-core==2.48.0
     # via pydantic
 pydantic-settings==2.15.0
     # via hnf1b-api
@@ -200,7 +200,7 @@ sqlalchemy==2.0.52
     # via
     #   alembic
     #   hnf1b-api
-starlette==1.4.1
+starlette==1.6.0
     # via fastapi
 tomli==2.4.1 ; python_full_version < '3.11'
     # via alembic
@@ -222,7 +222,7 @@ typing-extensions==4.16.0
     #   starlette
     #   typing-inspection
     #   uvicorn
-typing-inspection==0.4.2
+typing-inspection==0.4.4
     # via
     #   fastapi
     #   pydantic
