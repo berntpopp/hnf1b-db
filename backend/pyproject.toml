@@ -8,15 +8,15 @@ dependencies = [
     "email-validator>=2.3.0",
     "fastapi>=0.116.1",
     "pandas>=2.3.2",
-    "pwdlib[argon2,bcrypt]>=0.2.1", # Argon2id primary + bcrypt verifier fallback (Wave 5b Task 11)
+    "pwdlib[argon2,bcrypt]>=0.3.1", # Argon2id primary + bcrypt verifier fallback (Wave 5b Task 11)
     "pydantic>=2.13.0",
     "pydantic-settings>=2.15.0",
     "pyjwt>=2.10.1",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.27",
-    "uvicorn[standard]>=0.52.1",
+    "uvicorn[standard]>=0.52.3",
     # PostgreSQL and database dependencies
-    "sqlalchemy[asyncio]>=2.0.51",
+    "sqlalchemy[asyncio]>=2.0.52",
     "asyncpg>=0.29.0",
     "alembic>=1.13.1",
     "psycopg2-binary>=2.9.9",
@@ -41,8 +41,8 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff==0.16.1",
-    "mypy==2.3.0",
+    "ruff==0.16.4",
+    "mypy==2.3.1",
     "types-jsonschema>=4.25.1.20250822",
     "types-pyyaml>=6.0.12.20260724",  # Type stubs for PyYAML
     "types-redis>=4.6.0",  # Type stubs for Redis
