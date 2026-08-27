@@ -18,23 +18,15 @@ export function assertTiptapDependencyConsistency(manifest, lock) {
         `${packageName} manifest version must be ${TIPTAP_VERSION}; found ${manifest.dependencies?.[packageName]}`
       );
     }
+  }
 
-    const lockVersion = lock.packages?.[`node_modules/${packageName}`]?.version;
-    if (lockVersion !== TIPTAP_VERSION) {
+  for (const [lockPath, packageData] of Object.entries(lock.packages ?? {})) {
+    const packageMatch = lockPath.match(/(?:^|\/)node_modules\/(@tiptap\/[^/]+)$/);
+    if (packageMatch && packageData.version !== TIPTAP_VERSION) {
+      const packageName = packageMatch[1];
       throw new Error(
-        `${packageName} root lock version must be ${TIPTAP_VERSION}; found ${lockVersion}`
+        `${packageName} lock version must be ${TIPTAP_VERSION}; found ${packageData.version} at ${lockPath}`
       );
-    }
-
-    for (const [lockPath, packageData] of Object.entries(lock.packages ?? {})) {
-      if (
-        lockPath.endsWith(`node_modules/${packageName}`) &&
-        packageData.version !== TIPTAP_VERSION
-      ) {
-        throw new Error(
-          `${packageName} nested lock version must be ${TIPTAP_VERSION}; found ${packageData.version} at ${lockPath}`
-        );
-      }
     }
   }
 }

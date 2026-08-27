@@ -53,7 +53,24 @@ describe('Tiptap dependency consistency', () => {
     };
 
     expect(() => assertTiptapDependencyConsistency(manifest, lock)).toThrow(
-      'nested lock version must be 3.30.1'
+      '@tiptap/core lock version must be 3.30.1; found 3.27.1 at node_modules/legacy-editor/node_modules/@tiptap/core'
+    );
+  });
+
+  it('rejects any mismatched Tiptap package in the lock graph', () => {
+    const manifest = {
+      dependencies: Object.fromEntries(tiptapPackages.map((name) => [name, '3.30.1'])),
+    };
+    const lock = {
+      ...lockWith('3.30.1'),
+      packages: {
+        ...lockWith('3.30.1').packages,
+        'node_modules/@tiptap/extension-bubble-menu': { version: '3.30.5' },
+      },
+    };
+
+    expect(() => assertTiptapDependencyConsistency(manifest, lock)).toThrow(
+      '@tiptap/extension-bubble-menu lock version must be 3.30.1'
     );
   });
 });
