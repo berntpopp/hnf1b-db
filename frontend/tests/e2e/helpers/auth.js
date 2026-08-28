@@ -129,6 +129,27 @@ export async function loginAsAdmin(req, apiBase) {
 }
 
 /**
+ * Log in as the independent curator used for review decisions.
+ * @param {import('@playwright/test').APIRequestContext} req
+ * @param {string} apiBase
+ * @returns {Promise<{accessToken: string, cookies: object[]}>}
+ */
+export async function loginAsReviewer(req, apiBase) {
+  const username = process.env.E2E_REVIEWER_USERNAME || 'dev-curator';
+  const password = process.env.E2E_REVIEWER_PASSWORD || 'DevCurator!2026';
+  try {
+    return await apiLogin(req, apiBase, username, password);
+  } catch (error) {
+    throw new Error(
+      `E2E reviewer login failed for ${username} against ${apiBase}. ` +
+        `Set E2E_REVIEWER_USERNAME / E2E_REVIEWER_PASSWORD to an independent ` +
+        `seeded curator. Details: ${error.message}`,
+      { cause: error }
+    );
+  }
+}
+
+/**
  * Seed the browser's auth cookies before the app bootstraps.
  * @param {import('@playwright/test').Page} page
  * @param {{ cookies: {name: string, value: string, url: string, httpOnly?: boolean}[] }} authState

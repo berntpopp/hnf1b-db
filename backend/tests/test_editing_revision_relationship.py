@@ -45,6 +45,7 @@ async def test_editing_revision_resolves_when_set(
     db_session.add(rev)
     await db_session.flush()
 
+    pp.draft_owner_id = admin_user.id
     pp.editing_revision_id = rev.id
     await db_session.commit()
 

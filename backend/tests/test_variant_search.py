@@ -399,20 +399,54 @@ def _variant_phenopacket_payload(
     }
 
 
-async def _create_and_publish(async_client, admin_headers, payload, pid) -> None:
+async def _create_and_publish(
+    async_client, admin_headers, curator_headers, payload, pid
+) -> None:
     resp = await async_client.post(
         "/api/v2/phenopackets/", json=payload, headers=admin_headers
     )
     assert resp.status_code == 200, resp.text
     rev = resp.json()["revision"]
-    for to_state in ("in_review", "approved", "published"):
-        r = await async_client.post(
-            _transitions_url(pid),
-            json={"to_state": to_state, "reason": f"test: {to_state}", "revision": rev},
-            headers=admin_headers,
-        )
-        assert r.status_code == 200, f"transition to {to_state} failed: {r.text}"
-        rev = r.json()["phenopacket"]["revision"]
+    submitted = await async_client.post(
+        _transitions_url(pid),
+        json={"to_state": "in_review", "reason": "test: submit", "revision": rev},
+        headers=admin_headers,
+    )
+    assert submitted.status_code == 200, submitted.text
+    candidate = submitted.json()["revision"]
+    rev = submitted.json()["phenopacket"]["revision"]
+
+    approved = await async_client.post(
+        _transitions_url(pid),
+        json={
+            "to_state": "approved",
+            "reason": "test: independent approval",
+            "revision": rev,
+            "candidate_revision_id": candidate["id"],
+            "candidate_content_sha256": candidate["content_sha256"],
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": True,
+            },
+        },
+        headers=curator_headers,
+    )
+    assert approved.status_code == 200, approved.text
+    approved_revision = approved.json()["revision"]
+    rev = approved.json()["phenopacket"]["revision"]
+
+    published = await async_client.post(
+        _transitions_url(pid),
+        json={
+            "to_state": "published",
+            "reason": "test: publish",
+            "revision": rev,
+            "approved_revision_id": approved_revision["id"],
+            "approved_content_sha256": approved_revision["content_sha256"],
+        },
+        headers=admin_headers,
+    )
+    assert published.status_code == 200, published.text
 
 
 @pytest.mark.asyncio
@@ -426,11 +460,12 @@ class TestAllVariantsConsequenceFilter:
     matches the request and ``totalRecords`` reflects the filtered count.
     """
 
-    async def _seed(self, async_client, admin_headers) -> None:
+    async def _seed(self, async_client, admin_headers, curator_headers) -> None:
         # Missense: p.Arg177Cys
         await _create_and_publish(
             async_client,
             admin_headers,
+            curator_headers,
             _variant_phenopacket_payload(
                 "consq-missense-001",
                 "consq-var-missense",
@@ -444,6 +479,7 @@ class TestAllVariantsConsequenceFilter:
         await _create_and_publish(
             async_client,
             admin_headers,
+            curator_headers,
             _variant_phenopacket_payload(
                 "consq-nonsense-001",
                 "consq-var-nonsense",
@@ -457,6 +493,7 @@ class TestAllVariantsConsequenceFilter:
         await _create_and_publish(
             async_client,
             admin_headers,
+            curator_headers,
             _variant_phenopacket_payload(
                 "consq-splice-001",
                 "consq-var-splice",
@@ -468,10 +505,10 @@ class TestAllVariantsConsequenceFilter:
         )
 
     async def test_missense_returns_only_missense_rows(
-        self, async_client, admin_headers
+        self, async_client, admin_headers, curator_headers
     ):
         """consequence=Missense returns ONLY rows whose computed value is Missense."""
-        await self._seed(async_client, admin_headers)
+        await self._seed(async_client, admin_headers, curator_headers)
 
         resp = await async_client.get(
             ALL_VARIANTS_PATH,
@@ -499,14 +536,14 @@ class TestAllVariantsConsequenceFilter:
         assert body["meta"]["page"]["totalRecords"] == len(rows)
 
     async def test_unmatched_consequence_returns_zero_rows(
-        self, async_client, admin_headers
+        self, async_client, admin_headers, curator_headers
     ):
         """A consequence with no matching data returns 0 rows (not all rows).
 
         This is the heart of the bug: before the fix the filter was ignored, so
         an unmatched consequence returned the entire unfiltered dataset.
         """
-        await self._seed(async_client, admin_headers)
+        await self._seed(async_client, admin_headers, curator_headers)
 
         # None of the seeded variants are in-frame deletions.
         resp = await async_client.get(
@@ -520,10 +557,10 @@ class TestAllVariantsConsequenceFilter:
         assert body["meta"]["page"]["totalRecords"] == 0
 
     async def test_splice_donor_filter_isolates_splice_rows(
-        self, async_client, admin_headers
+        self, async_client, admin_headers, curator_headers
     ):
         """consequence=Splice Donor returns only the splice-donor variant."""
-        await self._seed(async_client, admin_headers)
+        await self._seed(async_client, admin_headers, curator_headers)
 
         resp = await async_client.get(
             ALL_VARIANTS_PATH,

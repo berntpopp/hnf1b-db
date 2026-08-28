@@ -526,6 +526,39 @@ def _install_comment_and_event_triggers() -> None:
     )
     op.execute(
         """
+        CREATE FUNCTION project_comment_resolution_event()
+        RETURNS trigger AS $$
+        BEGIN
+            IF NEW.action = 'resolved' THEN
+                UPDATE comments
+                   SET resolved_at = NEW.created_at,
+                       resolved_by_id = NEW.actor_id,
+                       updated_at = NEW.created_at
+                 WHERE id = NEW.comment_id;
+            ELSE
+                UPDATE comments
+                   SET resolved_at = NULL,
+                       resolved_by_id = NULL,
+                       updated_at = NEW.created_at
+                 WHERE id = NEW.comment_id;
+            END IF;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'review_issue_resolution_projection_mismatch';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER comment_resolution_events_project_comment
+        AFTER INSERT ON comment_resolution_events
+        FOR EACH ROW EXECUTE FUNCTION project_comment_resolution_event();
+        """
+    )
+    op.execute(
+        """
         CREATE FUNCTION validate_resolution_event_projection()
         RETURNS trigger AS $$
         DECLARE
@@ -583,7 +616,7 @@ def _install_comment_and_event_triggers() -> None:
         """
         CREATE FUNCTION guard_review_issue_mutation()
         RETURNS trigger AS $$
-        DECLARE matching_event BOOLEAN;
+        DECLARE latest_event comment_resolution_events%ROWTYPE;
         BEGIN
             IF TG_OP = 'DELETE' THEN
                 IF OLD.review_revision_id IS NOT NULL THEN
@@ -607,34 +640,24 @@ def _install_comment_and_event_triggers() -> None:
 
             IF NEW.resolved_at IS DISTINCT FROM OLD.resolved_at
                OR NEW.resolved_by_id IS DISTINCT FROM OLD.resolved_by_id THEN
-                SELECT EXISTS (
-                    SELECT 1 FROM comment_resolution_events event
-                     WHERE event.comment_id = OLD.id
-                       -- MVCC exposes another transaction's uncommitted row to
-                       -- no one.  A visible event whose inserting xid is still
-                       -- absent from the current snapshot is therefore ours,
-                       -- including inserts made in a PostgreSQL subtransaction.
-                       AND NOT pg_visible_in_snapshot(
-                           (event.xmin::TEXT)::xid8,
-                           pg_current_snapshot()
-                       )
-                       AND (
-                           (
-                               OLD.resolved_at IS NULL
-                               AND NEW.resolved_at IS NOT NULL
-                               AND NEW.resolved_by_id IS NOT NULL
-                               AND event.action = 'resolved'
-                               AND event.actor_id = NEW.resolved_by_id
-                           ) OR (
-                               OLD.resolved_at IS NOT NULL
-                               AND NEW.resolved_at IS NULL
-                               AND NEW.resolved_by_id IS NULL
-                               AND event.action = 'reopened'
-                           )
-                       )
-                ) INTO matching_event;
-                IF NOT matching_event THEN
+                IF pg_trigger_depth() < 2 THEN
                     RAISE EXCEPTION 'review_issue_resolution_event_required';
+                END IF;
+                SELECT * INTO latest_event FROM comment_resolution_events event
+                 WHERE event.comment_id = OLD.id
+                 ORDER BY event.id DESC LIMIT 1;
+                IF NOT FOUND OR NOT (
+                    (
+                        latest_event.action = 'resolved'
+                        AND NEW.resolved_at IS NOT NULL
+                        AND NEW.resolved_by_id = latest_event.actor_id
+                    ) OR (
+                        latest_event.action = 'reopened'
+                        AND NEW.resolved_at IS NULL
+                        AND NEW.resolved_by_id IS NULL
+                    )
+                ) THEN
+                    RAISE EXCEPTION 'review_issue_resolution_projection_mismatch';
                 END IF;
             END IF;
             RETURN NEW;
@@ -843,6 +866,11 @@ def downgrade() -> None:
         "ON comment_resolution_events"
     )
     op.execute("DROP FUNCTION validate_resolution_event_projection()")
+    op.execute(
+        "DROP TRIGGER IF EXISTS comment_resolution_events_project_comment "
+        "ON comment_resolution_events"
+    )
+    op.execute("DROP FUNCTION IF EXISTS project_comment_resolution_event()")
     op.execute(
         "DROP TRIGGER comment_resolution_events_lock_record "
         "ON comment_resolution_events"

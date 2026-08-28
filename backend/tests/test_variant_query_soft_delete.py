@@ -27,6 +27,7 @@ def _transitions_url(phenopacket_id: str) -> str:
 async def test_soft_deleted_phenopacket_hidden_from_all_variants(
     async_client: AsyncClient,
     admin_headers: dict,
+    curator_headers: dict,
 ):
     """Soft-deleting a published phenopacket removes it from /aggregate/all-variants."""
     pid = "wave5b-softdel-variant-001"
@@ -98,16 +99,47 @@ async def test_soft_deleted_phenopacket_hidden_from_all_variants(
     assert create_resp.status_code == 200, create_resp.text
     rev = create_resp.json()["revision"]
 
-    # Publish: draft → in_review → approved → published (admin bypasses
-    # ownership checks and can drive the full workflow).
-    for to_state in ("in_review", "approved", "published"):
-        resp = await async_client.post(
-            _transitions_url(pid),
-            json={"to_state": to_state, "reason": f"test: {to_state}", "revision": rev},
-            headers=admin_headers,
-        )
-        assert resp.status_code == 200, f"transition to {to_state} failed: {resp.text}"
-        rev = resp.json()["phenopacket"]["revision"]
+    submitted = await async_client.post(
+        _transitions_url(pid),
+        json={"to_state": "in_review", "reason": "test: submit", "revision": rev},
+        headers=admin_headers,
+    )
+    assert submitted.status_code == 200, submitted.text
+    candidate = submitted.json()["revision"]
+    rev = submitted.json()["phenopacket"]["revision"]
+
+    approved = await async_client.post(
+        _transitions_url(pid),
+        json={
+            "to_state": "approved",
+            "reason": "test: independent approval",
+            "revision": rev,
+            "candidate_revision_id": candidate["id"],
+            "candidate_content_sha256": candidate["content_sha256"],
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": True,
+            },
+        },
+        headers=curator_headers,
+    )
+    assert approved.status_code == 200, approved.text
+    approved_revision = approved.json()["revision"]
+    rev = approved.json()["phenopacket"]["revision"]
+
+    published = await async_client.post(
+        _transitions_url(pid),
+        json={
+            "to_state": "published",
+            "reason": "test: publish",
+            "revision": rev,
+            "approved_revision_id": approved_revision["id"],
+            "approved_content_sha256": approved_revision["content_sha256"],
+        },
+        headers=admin_headers,
+    )
+    assert published.status_code == 200, published.text
+    rev = published.json()["phenopacket"]["revision"]
 
     # Capture baseline: the published variant must appear in the aggregation.
     before = await async_client.get(

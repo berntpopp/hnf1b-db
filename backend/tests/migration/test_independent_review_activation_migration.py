@@ -118,7 +118,8 @@ def _isolated_schema():
                             record_id UUID NOT NULL, author_id BIGINT NOT NULL,
                             body_markdown TEXT NOT NULL, resolved_at TIMESTAMPTZ,
                             resolved_by_id BIGINT, deleted_at TIMESTAMPTZ,
-                            deleted_by_id BIGINT, review_revision_id BIGINT
+                            deleted_by_id BIGINT, review_revision_id BIGINT,
+                            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                         );
                         CREATE TABLE comment_resolution_events (
                             id BIGSERIAL PRIMARY KEY, comment_id BIGINT NOT NULL,
@@ -317,6 +318,10 @@ def test_upgrade_backfills_owner_and_preserves_pointer_trigger_identity() -> Non
                 "comment_resolution_events",
                 "comment_resolution_events_projection_final_state",
             ),
+            (
+                "comment_resolution_events",
+                "comment_resolution_events_project_comment",
+            ),
             ("comment_resolution_events", "comment_resolution_events_immutable"),
         } <= names
         final_trigger = next(
@@ -348,7 +353,9 @@ def test_upgrade_backfills_owner_and_preserves_pointer_trigger_identity() -> Non
         assert _pointer_trigger(connection, schema) == before
 
 
-def test_database_requires_event_first_and_rejects_issue_erasure() -> None:
+def test_database_event_atomically_projects_resolution_and_rejects_issue_erasure() -> (
+    None
+):
     with _isolated_schema() as (connection, _schema, migration):
         record_id = uuid.uuid4()
         _seed_active_review(connection, record_id, 1)
@@ -378,9 +385,11 @@ def test_database_requires_event_first_and_rejects_issue_erasure() -> None:
                 VALUES (1,'resolved','addressed','fixed',2,'curator')"""
             )
         )
-        connection.execute(
-            text("UPDATE comments SET resolved_at=now(), resolved_by_id=2 WHERE id=1")
-        )
+        assert connection.execute(
+            text(
+                "SELECT resolved_at IS NOT NULL, resolved_by_id FROM comments WHERE id=1"
+            )
+        ).one() == (True, 2)
         connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         for statement in (
             "UPDATE comments SET review_revision_id=NULL WHERE id=1",
@@ -399,8 +408,8 @@ def test_database_requires_event_first_and_rejects_issue_erasure() -> None:
                     connection.execute(text(statement))
 
 
-def test_database_rejects_duplicate_event_before_projection_update() -> None:
-    """The comment re-lock observes an unprojected event in the same transaction."""
+def test_database_rejects_duplicate_event_after_atomic_projection() -> None:
+    """An event projects immediately, so a duplicate action is rejected."""
     with _isolated_schema() as (connection, _schema, migration):
         record_id = uuid.uuid4()
         _seed_active_review(connection, record_id, 1)
@@ -423,9 +432,7 @@ def test_database_rejects_duplicate_event_before_projection_update() -> None:
             )
         )
 
-        with pytest.raises(
-            DBAPIError, match="review_issue_resolution_projection_mismatch"
-        ):
+        with pytest.raises(DBAPIError, match="review_issue_already_resolved"):
             with connection.begin_nested():
                 connection.execute(
                     text(
@@ -436,64 +443,16 @@ def test_database_rejects_duplicate_event_before_projection_update() -> None:
                 )
 
         connection.execute(
-            text("UPDATE comments SET resolved_at=now(),resolved_by_id=2 WHERE id=1")
-        )
-        connection.execute(
             text(
                 """INSERT INTO comment_resolution_events
                 (comment_id,action,disposition,rationale,actor_id,actor_role)
                 VALUES (1,'reopened',NULL,'supported reopen',2,'curator')"""
             )
         )
-        connection.execute(
-            text("UPDATE comments SET resolved_at=NULL,resolved_by_id=NULL WHERE id=1")
-        )
+        assert connection.execute(
+            text("SELECT resolved_at, resolved_by_id FROM comments WHERE id=1")
+        ).one() == (None, None)
         connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
-
-
-@pytest.mark.parametrize(
-    "projection_sql",
-    [None, "UPDATE comments SET resolved_at=now(),resolved_by_id=2 WHERE id=999"],
-    ids=["event-only", "zero-row-projection"],
-)
-def test_deferred_event_projection_check_rejects_unprojected_commit(
-    projection_sql: str | None,
-) -> None:
-    """An event cannot commit unless its target projection reflects it."""
-    with _isolated_schema() as (connection, _schema, migration):
-        record_id = uuid.uuid4()
-        _seed_active_review(connection, record_id, 1)
-        _install_existing_triggers(connection)
-        _bind(connection, migration)
-        migration.upgrade()
-        connection.execute(
-            text(
-                """INSERT INTO comments
-                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
-                VALUES (1,'phenopacket',:id,2,'issue',2)"""
-            ),
-            {"id": record_id},
-        )
-        with pytest.raises(
-            DBAPIError, match="review_issue_resolution_projection_mismatch"
-        ):
-            with connection.begin_nested():
-                connection.execute(
-                    text(
-                        """INSERT INTO comment_resolution_events
-                        (comment_id,action,disposition,rationale,actor_id,actor_role)
-                        VALUES (1,'resolved','addressed','must project',2,'curator')"""
-                    )
-                )
-                if projection_sql is not None:
-                    connection.execute(text(projection_sql))
-                connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
-        assert (
-            connection.execute(
-                text("SELECT count(*) FROM comment_resolution_events")
-            ).scalar_one()
-            == 0
-        )
 
 
 def test_database_enforces_issue_author_independence_and_role() -> None:
@@ -596,13 +555,6 @@ def test_database_enforces_resolution_event_actor_independence_and_role() -> Non
                     "actor_role": actor_role,
                 },
             )
-            connection.execute(
-                text(
-                    """UPDATE comments SET resolved_at=now(),resolved_by_id=:actor_id
-                    WHERE id=:comment_id"""
-                ),
-                {"comment_id": comment_id, "actor_id": actor_id},
-            )
         assert (
             connection.execute(
                 text("SELECT count(*) FROM comment_resolution_events")
@@ -689,9 +641,6 @@ def test_old_issue_in_never_published_active_ancestry_can_resolve() -> None:
             )
         )
         connection.execute(
-            text("UPDATE comments SET resolved_at=now(),resolved_by_id=2 WHERE id=1")
-        )
-        connection.execute(
             text(
                 """INSERT INTO comment_resolution_events
                 (comment_id,action,disposition,rationale,actor_id,actor_role)
@@ -699,17 +648,11 @@ def test_old_issue_in_never_published_active_ancestry_can_resolve() -> None:
             )
         )
         connection.execute(
-            text("UPDATE comments SET resolved_at=NULL,resolved_by_id=NULL WHERE id=1")
-        )
-        connection.execute(
             text(
                 """INSERT INTO comment_resolution_events
                 (comment_id,action,disposition,rationale,actor_id,actor_role)
                 VALUES (1,'resolved','addressed','verified',2,'curator')"""
             )
-        )
-        connection.execute(
-            text("UPDATE comments SET resolved_at=now(),resolved_by_id=2 WHERE id=1")
         )
         connection.execute(
             text(

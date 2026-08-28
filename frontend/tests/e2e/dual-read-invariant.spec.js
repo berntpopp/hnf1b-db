@@ -40,7 +40,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, loginAsReviewer, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
@@ -60,18 +60,18 @@ const DRAFT_SUBJECT_ID = `draft-subject-${Date.now()}`;
  * @param {string} toState
  * @param {string} reason
  * @param {number} revision
- * @returns {Promise<number>} Updated revision
+ * @param {object} [evidence]
+ * @returns {Promise<object>} Transition response body
  */
-async function apiTransition(req, token, phenopacketId, toState, reason, revision) {
+async function apiTransition(req, token, phenopacketId, toState, reason, revision, evidence = {}) {
   const resp = await req.post(`${API_BASE}/phenopackets/${phenopacketId}/transitions`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: { to_state: toState, reason, revision },
+    data: { to_state: toState, reason, revision, ...evidence },
   });
   if (!resp.ok()) {
     throw new Error(`Transition to ${toState} failed: ${resp.status()} ${await resp.text()}`);
   }
-  const body = await resp.json();
-  return body.phenopacket?.revision ?? revision + 1;
+  return resp.json();
 }
 
 /**
@@ -105,6 +105,7 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // -------------------------------------------------------------------------
   const adminTokens = await loginAsAdmin(request, API_BASE);
   const adminToken = adminTokens.accessToken;
+  const reviewerToken = (await loginAsReviewer(request, API_BASE)).accessToken;
 
   // Create draft
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {
@@ -135,9 +136,35 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   let revision = (await createResp.json()).revision ?? 1;
 
   // draft → in_review → approved → published
-  revision = await apiTransition(request, adminToken, RECORD_ID, 'in_review', 'submit', revision);
-  revision = await apiTransition(request, adminToken, RECORD_ID, 'approved', 'approve', revision);
-  await apiTransition(request, adminToken, RECORD_ID, 'published', 'go live', revision);
+  const submitted = await apiTransition(
+    request,
+    adminToken,
+    RECORD_ID,
+    'in_review',
+    'submit',
+    revision
+  );
+  const candidate = submitted.revision;
+  revision = submitted.phenopacket.revision;
+  const approved = await apiTransition(
+    request,
+    reviewerToken,
+    RECORD_ID,
+    'approved',
+    'approve',
+    revision,
+    {
+      candidate_revision_id: candidate.id,
+      candidate_content_sha256: candidate.content_sha256,
+      attestation: { independent_review: true, no_unmanaged_conflict: true },
+    }
+  );
+  const approvedRevision = approved.revision;
+  revision = approved.phenopacket.revision;
+  await apiTransition(request, adminToken, RECORD_ID, 'published', 'go live', revision, {
+    approved_revision_id: approvedRevision.id,
+    approved_content_sha256: approvedRevision.content_sha256,
+  });
 
   // Verify it is published and head_published_revision_id is set
   const publishedDetail = await apiGetCurator(request, adminToken, RECORD_ID);
@@ -222,11 +249,9 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   // head). This is the key test of the D.2 effective-state routing: the
   // whole review cycle must work while pp.state stays 'published' (I8).
   // -------------------------------------------------------------------------
-  const curatorToken = (await loginAsAdmin(request, API_BASE)).accessToken;
-
   // Read the current revision from the API (after clone, pp.revision has advanced).
   const detailResp = await request.get(`${API_BASE}/phenopackets/${RECORD_ID}`, {
-    headers: { Authorization: `Bearer ${curatorToken}` },
+    headers: { Authorization: `Bearer ${adminToken}` },
   });
   if (!detailResp.ok()) {
     throw new Error(`Phase 5 setup GET failed: ${detailResp.status()} ${await detailResp.text()}`);
@@ -234,30 +259,35 @@ test('I1: anonymous sees old head while curator sees new draft after clone-to-dr
   const detail = await detailResp.json();
   let workingRevision = detail.revision;
 
-  workingRevision = await apiTransition(
+  const resubmitted = await apiTransition(
     request,
-    curatorToken,
+    adminToken,
     RECORD_ID,
     'in_review',
     'ready for re-review',
     workingRevision
   );
-  workingRevision = await apiTransition(
+  const newCandidate = resubmitted.revision;
+  workingRevision = resubmitted.phenopacket.revision;
+  const reapproved = await apiTransition(
     request,
-    curatorToken,
+    reviewerToken,
     RECORD_ID,
     'approved',
     'looks good',
-    workingRevision
+    workingRevision,
+    {
+      candidate_revision_id: newCandidate.id,
+      candidate_content_sha256: newCandidate.content_sha256,
+      attestation: { independent_review: true, no_unmanaged_conflict: true },
+    }
   );
-  await apiTransition(
-    request,
-    curatorToken,
-    RECORD_ID,
-    'published',
-    'shipping it',
-    workingRevision
-  );
+  const newApproval = reapproved.revision;
+  workingRevision = reapproved.phenopacket.revision;
+  await apiTransition(request, adminToken, RECORD_ID, 'published', 'shipping it', workingRevision, {
+    approved_revision_id: newApproval.id,
+    approved_content_sha256: newApproval.content_sha256,
+  });
 
   // Anon context now sees the NEW head
   const anonCtx2 = await context.browser().newContext();

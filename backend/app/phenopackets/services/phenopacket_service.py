@@ -248,7 +248,7 @@ class PhenopacketService:
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
             created_by_id=actor_id,
-            draft_owner_id=actor_id,
+            draft_owner_id=revision_actor_id,
         )
         self._repo.add(phenopacket)
 

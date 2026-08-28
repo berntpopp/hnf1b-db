@@ -439,10 +439,15 @@ class CommentsService:
                 )
             )
             await self.db.flush()
-        comment.resolved_at = func.now()
-        comment.resolved_by_id = actor.id
-        comment.updated_at = func.now()
-        await self.db.flush()
+            await self.db.refresh(
+                comment,
+                attribute_names=["resolved_at", "resolved_by_id", "updated_at"],
+            )
+        else:
+            comment.resolved_at = func.now()
+            comment.resolved_by_id = actor.id
+            comment.updated_at = func.now()
+            await self.db.flush()
         return await self._load_for_response(comment_id)
 
     async def unresolve(
@@ -473,10 +478,15 @@ class CommentsService:
                 )
             )
             await self.db.flush()
-        comment.resolved_at = None
-        comment.resolved_by_id = None
-        comment.updated_at = func.now()
-        await self.db.flush()
+            await self.db.refresh(
+                comment,
+                attribute_names=["resolved_at", "resolved_by_id", "updated_at"],
+            )
+        else:
+            comment.resolved_at = None
+            comment.resolved_by_id = None
+            comment.updated_at = func.now()
+            await self.db.flush()
         return await self._load_for_response(comment_id)
 
     async def _locked_record_for_comment(self, comment: Comment) -> Phenopacket:

@@ -90,6 +90,7 @@ async def test_database_rejects_published_editing_pointer_and_archived_edit(
     db_session, published_record, admin_user
 ):
     """Editing pointers must refer to an editable revision and never survive archive."""
+    published_record.draft_owner_id = admin_user.id
     published_record.editing_revision_id = published_record.head_published_revision_id
     with pytest.raises(DBAPIError, match="editable revision"):
         await db_session.commit()

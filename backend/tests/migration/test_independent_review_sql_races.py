@@ -118,15 +118,6 @@ async def _reopen(connection, issue_id, actor_id):
         ),
         {"issue_id": issue_id, "actor_id": actor_id},
     )
-    await connection.execute(
-        text(
-            """
-            UPDATE comments SET resolved_at=NULL, resolved_by_id=NULL
-            WHERE id=:issue_id
-            """
-        ),
-        {"issue_id": issue_id},
-    )
 
 
 async def _wait_until_blocked(observer, winner_pid: int, loser_pid: int) -> None:

@@ -48,7 +48,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, loginAsReviewer, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
@@ -67,18 +67,18 @@ const RECORD_ID = `e2e-wave7-d2-comments-${Date.now()}`;
  * @param {string} toState
  * @param {string} reason
  * @param {number} revision
- * @returns {Promise<number>} Updated revision
+ * @param {object} [evidence]
+ * @returns {Promise<object>} Transition response body
  */
-async function apiTransition(req, token, phenopacketId, toState, reason, revision) {
+async function apiTransition(req, token, phenopacketId, toState, reason, revision, evidence = {}) {
   const resp = await req.post(`${API_BASE}/phenopackets/${phenopacketId}/transitions`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: { to_state: toState, reason, revision },
+    data: { to_state: toState, reason, revision, ...evidence },
   });
   if (!resp.ok()) {
     throw new Error(`Transition to ${toState} failed: ${resp.status()} ${await resp.text()}`);
   }
-  const body = await resp.json();
-  return body.phenopacket?.revision ?? revision + 1;
+  return resp.json();
 }
 
 /**
@@ -114,6 +114,7 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   // -------------------------------------------------------------------------
   const adminTokens = await loginAsAdmin(request, API_BASE);
   const adminToken = adminTokens.accessToken;
+  const reviewerToken = (await loginAsReviewer(request, API_BASE)).accessToken;
 
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {
     headers: { Authorization: `Bearer ${adminToken}` },
@@ -143,19 +144,45 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   let revision = (await createResp.json()).revision ?? 1;
 
   // draft → in_review → approved → published
-  revision = await apiTransition(request, adminToken, RECORD_ID, 'in_review', 'submit', revision);
-  revision = await apiTransition(request, adminToken, RECORD_ID, 'approved', 'approve', revision);
-  await apiTransition(request, adminToken, RECORD_ID, 'published', 'go live', revision);
+  const submitted = await apiTransition(
+    request,
+    adminToken,
+    RECORD_ID,
+    'in_review',
+    'submit',
+    revision
+  );
+  const candidate = submitted.revision;
+  revision = submitted.phenopacket.revision;
+  const approved = await apiTransition(
+    request,
+    reviewerToken,
+    RECORD_ID,
+    'approved',
+    'approve',
+    revision,
+    {
+      candidate_revision_id: candidate.id,
+      candidate_content_sha256: candidate.content_sha256,
+      attestation: { independent_review: true, no_unmanaged_conflict: true },
+    }
+  );
+  const approvedRevision = approved.revision;
+  revision = approved.phenopacket.revision;
+  await apiTransition(request, adminToken, RECORD_ID, 'published', 'go live', revision, {
+    approved_revision_id: approvedRevision.id,
+    approved_content_sha256: approvedRevision.content_sha256,
+  });
 
   // -------------------------------------------------------------------------
   // Phase 2 — Browser login + open Discussion tab
   //
-  // NOTE: we use admin for the whole browser flow. The permissions matrix
+  // NOTE: we use admin for the browser flow. The API setup uses the separately
+  // seeded curator for the independent approval decision. The permissions matrix
   // (curator vs admin vs viewer) is exhaustively tested at the backend
   // level in `test_comments_permissions.py`. The E2E spec exists to verify
   // the UI wires the full write surface (POST, PATCH, DELETE) correctly,
-  // not to re-test role permissions. CI only seeds an admin user, so this
-  // also avoids fixture-dependency drift.
+  // not to re-test role permissions.
   // -------------------------------------------------------------------------
   await primeAuthSession(page, adminTokens);
   await openDiscussionTab(page, RECORD_ID);

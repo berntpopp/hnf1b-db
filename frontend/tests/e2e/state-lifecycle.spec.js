@@ -37,7 +37,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, loginAsReviewer, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
@@ -56,12 +56,13 @@ const RECORD_ID = `e2e-wave7-lifecycle-${Date.now()}`;
  * @param {string} toState
  * @param {string} reason
  * @param {number} revision  Current revision for optimistic-locking
- * @returns {Promise<{state: string, revision: number}>}
+ * @param {object} [evidence]
+ * @returns {Promise<{state: string, revision: number, snapshot: object}>}
  */
-async function apiTransition(req, token, phenopacketId, toState, reason, revision) {
+async function apiTransition(req, token, phenopacketId, toState, reason, revision, evidence = {}) {
   const resp = await req.post(`${API_BASE}/phenopackets/${phenopacketId}/transitions`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: { to_state: toState, reason, revision },
+    data: { to_state: toState, reason, revision, ...evidence },
   });
   if (!resp.ok()) {
     throw new Error(`Transition to ${toState} failed: ${resp.status()} ${await resp.text()}`);
@@ -70,6 +71,7 @@ async function apiTransition(req, token, phenopacketId, toState, reason, revisio
   return {
     state: body.phenopacket?.state ?? toState,
     revision: body.phenopacket?.revision ?? revision + 1,
+    snapshot: body.revision,
   };
 }
 
@@ -87,6 +89,7 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   // -------------------------------------------------------------------------
   const adminTokens = await loginAsAdmin(request, API_BASE);
   const adminToken = adminTokens.accessToken;
+  const reviewerToken = (await loginAsReviewer(request, API_BASE)).accessToken;
 
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {
     headers: { Authorization: `Bearer ${adminToken}` },
@@ -152,8 +155,8 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   });
 
   // -------------------------------------------------------------------------
-  // Step 4 — API: advance to approved then published
-  // (admin approves + publishes — done via API to stay fast)
+  // Step 4 — API: independent curator approves, then admin publishes
+  // (done via API to keep the browser portion focused and fast)
   // -------------------------------------------------------------------------
 
   // Re-fetch current revision from the API (the browser transition already
@@ -163,20 +166,34 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   });
   const detail = await detailResp.json();
   revision = detail.revision;
+  const candidateResp = await request.get(
+    `${API_BASE}/phenopackets/${RECORD_ID}/revisions/${detail.editing_revision_id}`,
+    { headers: { Authorization: `Bearer ${adminToken}` } }
+  );
+  expect(candidateResp.ok(), `Candidate lookup failed: ${await candidateResp.text()}`).toBeTruthy();
+  const candidate = await candidateResp.json();
 
   // Approve
   const approved = await apiTransition(
     request,
-    adminToken,
+    reviewerToken,
     RECORD_ID,
     'approved',
     'LGTM (E2E test)',
-    revision
+    revision,
+    {
+      candidate_revision_id: candidate.id,
+      candidate_content_sha256: candidate.content_sha256,
+      attestation: { independent_review: true, no_unmanaged_conflict: true },
+    }
   );
   revision = approved.revision;
 
   // Publish
-  await apiTransition(request, adminToken, RECORD_ID, 'published', 'Go live (E2E test)', revision);
+  await apiTransition(request, adminToken, RECORD_ID, 'published', 'Go live (E2E test)', revision, {
+    approved_revision_id: approved.snapshot.id,
+    approved_content_sha256: approved.snapshot.content_sha256,
+  });
 
   // -------------------------------------------------------------------------
   // Step 5 — Browser: curator sees published badge after page refresh
