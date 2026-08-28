@@ -309,7 +309,7 @@ onBeforeUnmount(() => {
 }
 
 .version-text {
-  opacity: 0.7;
+  opacity: 0.85;
   font-weight: 500;
 }
 
