@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Build-time argument for API URL (Vite embeds this at build time)
 ARG VITE_API_URL=http://localhost:8000/api/v2

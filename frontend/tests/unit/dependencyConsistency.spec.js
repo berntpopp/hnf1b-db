@@ -19,41 +19,58 @@ function lockWith(version) {
 }
 
 describe('Tiptap dependency consistency', () => {
-  it('accepts manifest and root lock versions aligned at 3.29.2', () => {
+  it('accepts manifest and root lock versions aligned at 3.30.1', () => {
     const manifest = {
-      dependencies: Object.fromEntries(tiptapPackages.map((name) => [name, '3.29.2'])),
+      dependencies: Object.fromEntries(tiptapPackages.map((name) => [name, '3.30.1'])),
     };
 
-    expect(() => assertTiptapDependencyConsistency(manifest, lockWith('3.29.2'))).not.toThrow();
+    expect(() => assertTiptapDependencyConsistency(manifest, lockWith('3.30.1'))).not.toThrow();
   });
 
   it('rejects a direct package that drifts from the aligned Tiptap version', () => {
     const manifest = {
       dependencies: {
-        ...Object.fromEntries(tiptapPackages.map((name) => [name, '3.29.2'])),
+        ...Object.fromEntries(tiptapPackages.map((name) => [name, '3.30.1'])),
         '@tiptap/vue-3': '3.27.1',
       },
     };
 
-    expect(() => assertTiptapDependencyConsistency(manifest, lockWith('3.29.2'))).toThrow(
-      '@tiptap/vue-3 manifest version must be 3.29.2'
+    expect(() => assertTiptapDependencyConsistency(manifest, lockWith('3.30.1'))).toThrow(
+      '@tiptap/vue-3 manifest version must be 3.30.1'
     );
   });
 
   it('rejects a nested lockfile Tiptap package that creates a split graph', () => {
     const manifest = {
-      dependencies: Object.fromEntries(tiptapPackages.map((name) => [name, '3.29.2'])),
+      dependencies: Object.fromEntries(tiptapPackages.map((name) => [name, '3.30.1'])),
     };
     const lock = {
-      ...lockWith('3.29.2'),
+      ...lockWith('3.30.1'),
       packages: {
-        ...lockWith('3.29.2').packages,
+        ...lockWith('3.30.1').packages,
         'node_modules/legacy-editor/node_modules/@tiptap/core': { version: '3.27.1' },
       },
     };
 
     expect(() => assertTiptapDependencyConsistency(manifest, lock)).toThrow(
-      'nested lock version must be 3.29.2'
+      '@tiptap/core lock version must be 3.30.1; found 3.27.1 at node_modules/legacy-editor/node_modules/@tiptap/core'
+    );
+  });
+
+  it('rejects any mismatched Tiptap package in the lock graph', () => {
+    const manifest = {
+      dependencies: Object.fromEntries(tiptapPackages.map((name) => [name, '3.30.1'])),
+    };
+    const lock = {
+      ...lockWith('3.30.1'),
+      packages: {
+        ...lockWith('3.30.1').packages,
+        'node_modules/@tiptap/extension-bubble-menu': { version: '3.30.5' },
+      },
+    };
+
+    expect(() => assertTiptapDependencyConsistency(manifest, lock)).toThrow(
+      '@tiptap/extension-bubble-menu lock version must be 3.30.1'
     );
   });
 });

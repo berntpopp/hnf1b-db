@@ -103,7 +103,7 @@
         <v-menu location="bottom">
           <template #activator="{ props }">
             <v-btn icon v-bind="props" aria-label="User menu">
-              <v-avatar v-if="authStore.user" color="primary" size="small">
+              <v-avatar v-if="authStore.user" color="primary-darken-2" size="small">
                 <span class="text-white">{{ getUserInitials }}</span>
               </v-avatar>
               <v-icon v-else>mdi-account</v-icon>

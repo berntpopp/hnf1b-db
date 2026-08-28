@@ -42,6 +42,7 @@ const hnf1bTheme = {
     surface: '#FFFFFF',
     primary: '#009688',
     'primary-darken-1': '#00796B',
+    'primary-darken-2': '#00695C',
     secondary: '#37474F',
     'secondary-darken-1': '#263238',
     accent: '#FF8A65',
@@ -82,6 +83,7 @@ const hnf1bThemeDark = {
     // (contrast ratio ≈ 4.9 for large text against surface).
     primary: '#4DB6AC',
     'primary-darken-1': '#00897B',
+    'primary-darken-2': '#00695C',
     secondary: '#B0BEC5',
     'secondary-darken-1': '#78909C',
     accent: '#FFAB91',
