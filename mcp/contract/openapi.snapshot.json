@@ -4739,10 +4739,10 @@
         "description": "One literal, sectioned server-computed candidate change.",
         "properties": {
           "after": {
-            "title": "After"
+            "$ref": "#/components/schemas/SemanticJsonValue"
           },
           "before": {
-            "title": "Before"
+            "$ref": "#/components/schemas/SemanticJsonValue"
           },
           "operation": {
             "enum": [
@@ -4773,10 +4773,43 @@
         "required": [
           "section",
           "operation",
-          "path"
+          "path",
+          "before",
+          "after"
         ],
         "title": "SemanticChange",
         "type": "object"
+      },
+      "SemanticJsonValue": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/SemanticJsonValue"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SemanticJsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "SourceManifestRef": {
         "additionalProperties": false,

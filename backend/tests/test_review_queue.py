@@ -34,6 +34,8 @@ async def _seed_queue_record(
     effective_state: str = "in_review",
     published: bool = False,
     submitted_at: datetime | None = None,
+    subject_id: str | None = None,
+    subject_label: str | None = None,
 ) -> tuple[Phenopacket, PhenopacketRevision]:
     """Persist one active cycle with literal old-head and candidate content."""
     baseline = {
@@ -43,7 +45,10 @@ async def _seed_queue_record(
     }
     candidate_content = {
         "id": slug,
-        "subject": {"id": f"{slug}-subject", "label": f"Label {slug}"},
+        "subject": {
+            "id": subject_id or f"{slug}-subject",
+            "label": subject_label or f"Label {slug}",
+        },
         "metaData": {"createdBy": "fixture", "extension": slug},
     }
     record = Phenopacket(
@@ -194,6 +199,40 @@ async def test_review_queue_non_disclosure_and_strict_optional_auth(
     assert anonymous.status_code == 404
     assert viewer.status_code == 404
     assert invalid.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_malformed_queue_queries_remain_hidden_from_anonymous_and_viewer(
+    async_client, viewer_headers
+):
+    """Private query validation cannot disclose the queue to unauthorized users."""
+    invalid_queries = [
+        "filter[state]=published",
+        "page[number]=0",
+        f"q={'x' * 201}",
+    ]
+
+    for headers in (None, viewer_headers):
+        for query in invalid_queries:
+            response = await async_client.get(f"{QUEUE_URL}?{query}", headers=headers)
+            assert response.status_code == 404, response.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "query",
+    [
+        "filter[state]=published",
+        "page[number]=0",
+        f"q={'x' * 201}",
+    ],
+)
+async def test_malformed_queue_queries_stay_validated_for_curators(
+    async_client, curator_headers, query
+):
+    """Authorized callers still receive normal request validation errors."""
+    response = await async_client.get(f"{QUEUE_URL}?{query}", headers=curator_headers)
+    assert response.status_code == 422, response.text
 
 
 @pytest.mark.asyncio
@@ -359,6 +398,36 @@ async def test_queue_default_order_filters_search_facets_and_disabled_own_row(
         "reviewer_submitted",
         "reviewer_contributed",
     ]
+
+
+@pytest.mark.asyncio
+async def test_queue_search_matches_subject_id_when_label_is_present(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+):
+    """Subject ID remains searchable when a different subject label is present."""
+    await _seed_queue_record(
+        db_session,
+        slug="unrelated-record-slug",
+        owner=curator_user,
+        submitter=curator_user,
+        subject_id="subject-id-only-match",
+        subject_label="Different visible label",
+    )
+    await db_session.commit()
+    headers = await _headers_for(async_client, another_curator.username)
+
+    response = await async_client.get(
+        f"{QUEUE_URL}?q=subject-id-only-match", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert [row["phenopacket_id"] for row in response.json()["data"]] == [
+        "unrelated-record-slug"
+    ]
+    assert response.json()["data"][0]["subject_label"] == "Different visible label"
 
 
 @pytest.mark.asyncio

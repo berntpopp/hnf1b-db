@@ -168,9 +168,10 @@ class ReviewRepository:
             ),
             JSONB,
         )
+        subject_id = candidate_content["subject"]["id"].astext
         subject_label = func.coalesce(
             candidate_content["subject"]["label"].astext,
-            candidate_content["subject"]["id"].astext,
+            subject_id,
             Phenopacket.phenopacket_id,
         )
 
@@ -194,6 +195,7 @@ class ReviewRepository:
                 approved.c.id.label("approved_revision_id"),
                 approved.c.content_sha256.label("approved_content_sha256"),
                 subject_label.label("subject_label"),
+                subject_id.label("subject_id"),
                 change_count.label("active_cycle_change_count"),
                 open_issue_count.label("open_issue_count"),
                 actor_contributed.label("actor_contributed"),
@@ -249,6 +251,7 @@ class ReviewRepository:
                 or_(
                     base.c.phenopacket_id.ilike(pattern),
                     base.c.subject_label.ilike(pattern),
+                    base.c.subject_id.ilike(pattern),
                 )
             )
         return statement

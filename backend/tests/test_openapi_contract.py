@@ -160,3 +160,36 @@ def test_review_routes_and_comment_issue_fields_are_typed() -> None:
     assert "review_revision_id" in comment_properties
     assert "is_blocking_issue" in comment_properties
     assert "resolution_events" in comment_properties
+
+
+def test_semantic_change_before_and_after_are_required_typed_json_values() -> None:
+    """Semantic diffs distinguish explicit JSON null from an omitted field."""
+    schemas = app.openapi()["components"]["schemas"]
+    semantic_change = schemas["SemanticChange"]
+
+    assert {"before", "after"}.issubset(semantic_change["required"])
+    assert semantic_change["properties"]["before"] == {
+        "$ref": "#/components/schemas/SemanticJsonValue"
+    }
+    assert semantic_change["properties"]["after"] == {
+        "$ref": "#/components/schemas/SemanticJsonValue"
+    }
+    assert schemas["SemanticJsonValue"] == {
+        "anyOf": [
+            {
+                "items": {"$ref": "#/components/schemas/SemanticJsonValue"},
+                "type": "array",
+            },
+            {
+                "additionalProperties": {
+                    "$ref": "#/components/schemas/SemanticJsonValue"
+                },
+                "type": "object",
+            },
+            {"type": "string"},
+            {"type": "integer"},
+            {"type": "number"},
+            {"type": "boolean"},
+            {"type": "null"},
+        ]
+    }

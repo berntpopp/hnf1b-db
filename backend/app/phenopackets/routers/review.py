@@ -21,7 +21,9 @@ from app.phenopackets.review.schemas import (
 router = APIRouter(tags=["phenopackets-review"])
 
 
-def _require_review_actor(actor: User | None) -> User:
+def _require_review_actor(
+    actor: User | None = Depends(get_optional_user),
+) -> User:
     """Return an active review actor or the content-free non-disclosure error."""
     if not is_curator_or_admin(actor):
         raise HTTPException(status_code=404, detail="Phenopacket not found")
@@ -50,10 +52,9 @@ async def list_review_queue(
     q: str | None = Query(None, max_length=200),
     sort: str | None = Query(None, max_length=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_optional_user),
+    actor: User = Depends(_require_review_actor),
 ) -> ReviewQueueResponse:
     """Return a fully SQL-filtered queue with actor-specific capabilities."""
-    actor = _require_review_actor(current_user)
     if filter_owner is not None and filter_owner != "mine":
         if not filter_owner.isdecimal() or int(filter_owner) <= 0:
             raise HTTPException(status_code=422, detail="Invalid owner filter")
@@ -99,10 +100,9 @@ async def list_review_queue(
 async def get_review_context(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_optional_user),
+    actor: User = Depends(_require_review_actor),
 ) -> ReviewContext:
     """Return candidate/head/issues/audit materialized under a share lock."""
-    actor = _require_review_actor(current_user)
     context = await ReviewRepository(db).get_context(record_id, actor)
     if context is None:
         raise HTTPException(status_code=404, detail="Phenopacket not found")

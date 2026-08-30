@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from typing_extensions import TypeAliasType
 
 from app.comments.schemas import CommentResponse
 
@@ -36,6 +37,18 @@ SemanticSection = Literal[
     "Metadata",
 ]
 SemanticOperation = Literal["added", "removed", "changed"]
+SemanticJsonValue = TypeAliasType(  # type: ignore[misc]
+    "SemanticJsonValue",
+    Union[
+        list["SemanticJsonValue"],  # type: ignore[misc]
+        dict[str, "SemanticJsonValue"],  # type: ignore[misc]
+        str,
+        int,
+        float,
+        bool,
+        None,
+    ],
+)
 
 
 class ActionCapability(BaseModel):
@@ -131,8 +144,8 @@ class SemanticChange(BaseModel):
     section: SemanticSection
     operation: SemanticOperation
     path: str
-    before: Any = None
-    after: Any = None
+    before: SemanticJsonValue
+    after: SemanticJsonValue
 
 
 class ReviewRevisionSummary(BaseModel):
