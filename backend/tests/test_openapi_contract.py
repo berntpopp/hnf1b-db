@@ -379,7 +379,11 @@ def test_workflow_routes_document_runtime_error_envelope_and_actual_statuses() -
     spec = app.openapi()
     schemas = spec["components"]["schemas"]
     error_envelope = schemas["ApiErrorEnvelope"]
-    assert set(error_envelope["required"]) == {"detail", "error_code"}
+    assert set(error_envelope["required"]) == {
+        "detail",
+        "error_code",
+        "request_id",
+    }
     assert error_envelope["properties"]["detail"] == {
         "$ref": "#/components/schemas/ApiJsonValue"
     }

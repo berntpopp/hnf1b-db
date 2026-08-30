@@ -26,4 +26,4 @@ class ApiErrorEnvelope(BaseModel):
 
     detail: ApiJsonValue
     error_code: str
-    request_id: str | None = None
+    request_id: str | None

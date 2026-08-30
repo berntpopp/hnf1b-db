@@ -157,7 +157,8 @@
         },
         "required": [
           "detail",
-          "error_code"
+          "error_code",
+          "request_id"
         ],
         "title": "ApiErrorEnvelope",
         "type": "object"
