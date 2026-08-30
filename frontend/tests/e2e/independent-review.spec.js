@@ -13,7 +13,7 @@ import { archiveE2ERecord } from './helpers/records';
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
 const authHeader = (token) => ({ Authorization: `Bearer ${token}` });
 
-function content(recordId, subjectId) {
+function content(recordId, subjectId, pmid, variantId) {
   return {
     id: recordId,
     subject: { id: subjectId, sex: 'UNKNOWN_SEX' },
@@ -21,6 +21,21 @@ function content(recordId, subjectId) {
       {
         type: { id: 'HP:0001250', label: 'Seizure' },
         excluded: false,
+      },
+    ],
+    interpretations: [
+      {
+        id: `interpretation-${recordId}`,
+        progressStatus: 'SOLVED',
+        diagnosis: {
+          genomicInterpretations: [
+            {
+              subjectOrBiosampleId: subjectId,
+              interpretationStatus: 'PATHOGENIC',
+              variantInterpretation: { variationDescriptor: { id: variantId } },
+            },
+          ],
+        },
       },
     ],
     metaData: {
@@ -37,6 +52,7 @@ function content(recordId, subjectId) {
         },
       ],
       phenopacketSchemaVersion: '2.0',
+      externalReferences: [{ id: `PMID:${pmid}` }],
     },
   };
 }
@@ -138,6 +154,39 @@ async function assertPublicHead(request, recordId, expectedContent, publicQuery,
   }
 }
 
+async function assertPublicIdentifiers(request, visible, hidden) {
+  const publications = await expectJson(
+    await request.get(`${API_BASE}/publications/?page[size]=1000`),
+    'anonymous publications list'
+  );
+  const pmids = new Set(publications.data.map((item) => item.pmid));
+  const publicationSitemap = await expectJsonText(
+    await request.get(`${API_BASE}/seo/sitemap-publications.xml`),
+    'publication sitemap'
+  );
+  const variantSitemap = await expectJsonText(
+    await request.get(`${API_BASE}/seo/sitemap-variants.xml`),
+    'variant sitemap'
+  );
+
+  if (visible) {
+    expect(pmids.has(visible.pmid)).toBe(true);
+    expect(publicationSitemap).toContain(`/publications/${visible.pmid}`);
+    expect(variantSitemap).toContain(encodeURIComponent(visible.variantId));
+  }
+  if (hidden) {
+    expect(pmids.has(hidden.pmid)).toBe(false);
+    expect(publicationSitemap).not.toContain(`/publications/${hidden.pmid}`);
+    expect(variantSitemap).not.toContain(encodeURIComponent(hidden.variantId));
+  }
+}
+
+async function expectJsonText(response, label) {
+  const text = await response.text();
+  expect(response.ok(), `${label}: ${response.status()} ${text}`).toBeTruthy();
+  return text;
+}
+
 test('independent curator lifecycle keeps exact candidates private through two review cycles', async ({
   browser,
   page,
@@ -151,6 +200,15 @@ test('independent curator lifecycle keeps exact candidates private through two r
   const subjectV1 = `review-subject-v1-${suffix}`;
   const subjectV2 = `review-subject-v2-${suffix}`;
   const subjectV3 = `review-subject-v3-${suffix}`;
+  const identifierSeed = String(Date.now()).slice(-7);
+  const firstIdentifiers = {
+    pmid: `91${identifierSeed}`,
+    variantId: `runtime-public:${suffix}`,
+  };
+  const replacementIdentifiers = {
+    pmid: `92${identifierSeed}`,
+    variantId: `runtime-private:${suffix}`,
+  };
 
   const adminAuth = await loginAsAdmin(request, API_BASE);
   const curatorAAuth = await loginAsCuratorA(request, API_BASE);
@@ -171,7 +229,14 @@ test('independent curator lifecycle keeps exact candidates private through two r
   try {
     const createResponse = await request.post(`${API_BASE}/phenopackets/`, {
       headers: authHeader(curatorAToken),
-      data: { phenopacket: content(recordId, subjectV1) },
+      data: {
+        phenopacket: content(
+          recordId,
+          subjectV1,
+          firstIdentifiers.pmid,
+          firstIdentifiers.variantId
+        ),
+      },
     });
     recordCreated = createResponse.ok();
     const created = await expectJson(createResponse, 'curator A creates draft');
@@ -187,6 +252,7 @@ test('independent curator lifecycle keeps exact candidates private through two r
     );
     expect(submitted.phenopacket.effective_state).toBe('in_review');
     await assertPrivate(request, recordId, viewerAuth.accessToken, subjectV1);
+    await assertPublicIdentifiers(request, null, firstIdentifiers);
 
     const ownerContext = await reviewContext(request, curatorAToken, recordId);
     expect(ownerContext.audit.owner).toMatchObject({
@@ -431,10 +497,16 @@ test('independent curator lifecycle keeps exact candidates private through two r
     );
     expect(firstPublic.phenopacket).toEqual(exactCandidate.content);
     await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
+    await assertPublicIdentifiers(request, firstIdentifiers, replacementIdentifiers);
 
     const publishedForOwner = await detail(request, curatorAToken, recordId);
     const secondCycleContent = structuredClone(publishedForOwner.phenopacket);
     secondCycleContent.subject.id = subjectV3;
+    secondCycleContent.metaData.externalReferences = [
+      { id: `PMID:${replacementIdentifiers.pmid}` },
+    ];
+    secondCycleContent.interpretations[0].diagnosis.genomicInterpretations[0].variantInterpretation.variationDescriptor.id =
+      replacementIdentifiers.variantId;
     const secondDraft = await expectJson(
       await request.put(`${API_BASE}/phenopackets/${recordId}`, {
         headers: authHeader(curatorAToken),
@@ -448,6 +520,7 @@ test('independent curator lifecycle keeps exact candidates private through two r
     );
     expect(secondDraft.effective_state).toBe('draft');
     await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
+    await assertPublicIdentifiers(request, firstIdentifiers, replacementIdentifiers);
 
     const secondSubmission = await transition(
       request,
@@ -478,6 +551,7 @@ test('independent curator lifecycle keeps exact candidates private through two r
     expect(secondApproval.phenopacket.effective_state).toBe('approved');
     expect(secondApproval.revision.content_jsonb).toEqual(replacementCandidate);
     await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
+    await assertPublicIdentifiers(request, firstIdentifiers, replacementIdentifiers);
 
     const reopened = await transition(
       request,
@@ -545,6 +619,7 @@ test('independent curator lifecycle keeps exact candidates private through two r
     expect(replacementDiscovery.listing?.subject).toEqual(replacementCandidate.subject);
     expect(replacementDiscovery.search?.attributes?.subject).toEqual(replacementCandidate.subject);
     expect((await publicDiscovery(request, recordId, subjectV2)).search).toBeUndefined();
+    await assertPublicIdentifiers(request, replacementIdentifiers, firstIdentifiers);
   } catch (error) {
     primaryError = error;
     throw error;
