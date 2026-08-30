@@ -23,15 +23,20 @@ SCRIPT_PATH = REPO_ROOT / "scripts" / "seed_dev_users.py"
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
 def test_seed_script_refuses_non_development_env(environment: str):
-    """Running the script with ENVIRONMENT=production exits non-zero.
+    """The script's own guard refuses a fully valid non-development config.
 
-    The script's model_validator will actually let Settings load since
-    enable_dev_auth is not set (default False). The script's OWN
-    environment check is what blocks it.
+    Staging and production Settings have independent secure-cookie and SMTP
+    requirements. Satisfy those here so an earlier Settings validator cannot
+    mask the seed script's separate environment guard.
     """
     env = os.environ.copy()
     env["ENVIRONMENT"] = environment
-    # Must provide the other required env vars so Settings can load
+    env["AUTH_COOKIE_SECURE"] = "true"
+    env["EMAIL_BACKEND"] = "smtp"
+    env["SMTP_HOST"] = "smtp.example.test"
+    env["SMTP_USERNAME"] = "test-user"
+    env["SMTP_PASSWORD"] = "test-password"
+    env["ALLOW_REDIS_FALLBACK"] = "false"
     env.setdefault("JWT_SECRET", "x" * 32)
     env.setdefault("ADMIN_PASSWORD", "A" * 20)
 
@@ -45,9 +50,9 @@ def test_seed_script_refuses_non_development_env(environment: str):
         f"Expected non-zero exit, got {result.returncode}. "
         f"stdout: {result.stdout!r}, stderr: {result.stderr!r}"
     )
-    combined = (result.stdout + result.stderr).lower()
-    assert (
-        "refuses" in combined or "development" in combined or "production" in combined
+    assert result.stderr.strip() == (
+        "seed_dev_users refuses to run outside development "
+        f"(ENVIRONMENT={environment!r})"
     )
 
 
