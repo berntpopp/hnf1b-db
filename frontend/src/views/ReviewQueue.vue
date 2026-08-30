@@ -51,6 +51,7 @@
             :result-count="queue.meta.value.total"
             result-label="records"
             search-placeholder="Search case ID or subject"
+            @search="commitSearch"
             @clear-search="clearSearch"
           >
             <template #actions>
@@ -96,7 +97,7 @@
         </template>
 
         <template #item.open_issue_count="{ item }">
-          <span :aria-label="`${item.open_issue_count} open issues`">
+          <span :aria-label="issueLabel(item.open_issue_count)">
             {{ issueLabel(item.open_issue_count) }}
           </span>
         </template>
@@ -139,7 +140,7 @@
               No records match the active filters.
               <v-btn variant="text" size="small" @click="queue.clearFilters">Clear filters</v-btn>
             </template>
-            <template v-else>No records are currently awaiting review.</template>
+            <template v-else>{{ emptyMessage }}</template>
           </div>
         </template>
       </AppDataTable>
@@ -148,7 +149,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import AppDataTable from '@/components/common/AppDataTable.vue';
@@ -160,6 +161,7 @@ import { buildSortParameter } from '@/utils/pagination';
 
 const queue = useReviewQueue();
 const route = useRoute();
+const searchInput = ref(queue.search.value);
 
 const headers = [
   { title: 'Case', value: 'phenopacket_id', sortable: true },
@@ -192,11 +194,20 @@ const sortFieldMap = {
 };
 
 const searchModel = computed({
-  get: () => queue.search.value,
+  get: () => searchInput.value,
   set: (value) => {
-    queue.search.value = value || '';
+    searchInput.value = value || '';
   },
 });
+const emptyMessage = computed(
+  () =>
+    ({
+      'needs-review': 'No records are currently awaiting review.',
+      'changes-requested': 'No records currently require changes.',
+      approved: 'No records are currently approved for publication.',
+      'my-drafts': 'You have no draft records in the review queue.',
+    })[queue.tab.value] || 'No records are currently awaiting review.'
+);
 const sortBy = computed(() => {
   const value = queue.sort.value;
   if (!value) return [];
@@ -218,7 +229,12 @@ function setFilter(name, value) {
 }
 
 function clearSearch() {
+  searchInput.value = '';
   queue.search.value = '';
+}
+
+function commitSearch(value) {
+  queue.search.value = value || '';
 }
 
 function setPageSize(pageSize) {
@@ -255,6 +271,10 @@ function reviewLocation(item) {
     query: { return_to: route.fullPath },
   };
 }
+
+watch(queue.search, (value) => {
+  searchInput.value = value;
+});
 </script>
 
 <style scoped></style>

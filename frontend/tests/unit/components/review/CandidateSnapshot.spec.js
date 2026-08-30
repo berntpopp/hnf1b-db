@@ -15,6 +15,12 @@ const content = {
 };
 
 describe('CandidateSnapshot', () => {
+  it('renders the candidate Phenopacket identifier as first-class content', () => {
+    const wrapper = shallowMount(CandidateSnapshot, { props: { candidate: { id: 42, content } } });
+
+    expect(wrapper.get('[data-testid="candidate-phenopacket-id"]').text()).toBe('PP-1');
+  });
+
   it('passes the complete candidate to every established display card', () => {
     const wrapper = shallowMount(CandidateSnapshot, { props: { candidate: { id: 42, content } } });
 

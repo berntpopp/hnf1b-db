@@ -75,4 +75,64 @@ describe('useReviewContext', () => {
     review.clearConflict();
     expect(review.conflict.value).toBeNull();
   });
+
+  it('ignores an out-of-order stale success after a newer context owns state', async () => {
+    let resolveOlder;
+    let resolveNewer;
+    getReviewContext
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOlder = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNewer = resolve;
+          })
+      );
+    const review = useReviewContext('PP-1');
+    const older = review.load();
+    const newer = review.load();
+    const newestPayload = { ...contextFixture(0), record_revision: 12 };
+
+    resolveNewer({ data: newestPayload });
+    await newer;
+    resolveOlder({ data: { ...contextFixture(2), record_revision: 11 } });
+    await older;
+
+    expect(review.context.value).toEqual(newestPayload);
+    expect(review.error.value).toBeNull();
+  });
+
+  it('ignores an out-of-order stale error after a newer context owns state', async () => {
+    let rejectOlder;
+    let resolveNewer;
+    getReviewContext
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectOlder = reject;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNewer = resolve;
+          })
+      );
+    const review = useReviewContext('PP-1');
+    const older = review.load();
+    const newer = review.load();
+    const newestPayload = { ...contextFixture(0), record_revision: 12 };
+
+    resolveNewer({ data: newestPayload });
+    await newer;
+    rejectOlder(new Error('stale request failed'));
+    await older;
+
+    expect(review.context.value).toEqual(newestPayload);
+    expect(review.error.value).toBeNull();
+  });
 });

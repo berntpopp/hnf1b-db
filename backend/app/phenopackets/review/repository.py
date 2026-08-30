@@ -713,7 +713,9 @@ class ReviewRepository:
                 ordinary_comments=sum(
                     comment.review_revision_id is None for comment in comments
                 ),
-                blocking_issues=len(issues),
+                blocking_issues=sum(
+                    comment.review_revision_id is not None for comment in comments
+                ),
                 open_blocking_issues=open_issue_count,
             ),
             issues=issue_dtos,

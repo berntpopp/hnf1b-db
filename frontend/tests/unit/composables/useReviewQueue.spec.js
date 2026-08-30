@@ -119,6 +119,19 @@ describe('useReviewQueue', () => {
       q: 'HNF1B',
       eligibility: 'reviewable_by_me',
     });
+
+    state.page.value = 3;
+    await flush();
+    state.setTab('changes-requested');
+    await flush();
+    expect(state.page.value).toBe(1);
+    expect(getReviewQueue).toHaveBeenLastCalledWith({
+      pageNumber: 1,
+      pageSize: 25,
+      state: 'changes_requested',
+      q: 'HNF1B',
+      eligibility: 'reviewable_by_me',
+    });
     scope.stop();
   });
 

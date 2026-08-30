@@ -1,6 +1,10 @@
 <template>
   <section class="candidate-snapshot" aria-labelledby="candidate-snapshot-title">
     <h2 id="candidate-snapshot-title" class="text-h6 mb-3">Candidate snapshot</h2>
+    <p v-if="content.id" class="candidate-snapshot__identifier text-body-2 mb-3">
+      <span class="font-weight-medium">Phenopacket ID:</span>
+      <code data-testid="candidate-phenopacket-id">{{ content.id }}</code>
+    </p>
     <div class="candidate-snapshot__cards">
       <SubjectCard v-if="content.subject" :subject="content.subject" />
       <PhenotypicFeaturesCard :features="content.phenotypicFeatures || []" />

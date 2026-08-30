@@ -120,6 +120,54 @@ describe('review and curator route access', () => {
     ).resolves.toEqual({ name: 'NotFound' });
   });
 
+  it.each([
+    ['CreatePhenopacket', '/phenopackets/create'],
+    ['EditPhenopacket', '/phenopackets/PP-317/edit'],
+  ])('preserves the exact anonymous return URL for %s', async (name, fullPath) => {
+    const authStore = makeStore({
+      accessToken: null,
+      hasInitialized: false,
+      user: null,
+      initialize: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await expect(
+      resolveRouteAccess(
+        {
+          name,
+          path: fullPath,
+          fullPath: `${fullPath}?from=registry`,
+          meta: { requiresAuth: true, requiresCurator: true },
+        },
+        from,
+        authStore
+      )
+    ).resolves.toEqual({
+      name: 'Login',
+      query: { redirect: `${fullPath}?from=registry` },
+    });
+  });
+
+  it.each(['curator', 'admin'])('allows %s users to open create and edit forms', async (role) => {
+    for (const [name, fullPath] of [
+      ['CreatePhenopacket', '/phenopackets/create'],
+      ['EditPhenopacket', '/phenopackets/PP-317/edit'],
+    ]) {
+      await expect(
+        resolveRouteAccess(
+          {
+            name,
+            path: fullPath,
+            fullPath,
+            meta: { requiresAuth: true, requiresCurator: true },
+          },
+          from,
+          makeStore({ user: { role } })
+        )
+      ).resolves.toBeUndefined();
+    }
+  });
+
   it.each(['curator', 'admin'])('allows %s users to open review routes', async (role) => {
     const result = await resolveRouteAccess(
       {

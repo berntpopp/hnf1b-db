@@ -138,7 +138,7 @@ def _reconcile_latest_resolution_events() -> None:
         UPDATE comments issue
            SET resolved_at = latest.created_at,
                resolved_by_id = latest.actor_id,
-               updated_at = latest.created_at
+               updated_at = GREATEST(issue.updated_at, latest.created_at)
           FROM latest
          WHERE issue.id = latest.comment_id
            AND latest.action = 'resolved'
@@ -162,7 +162,7 @@ def _reconcile_latest_resolution_events() -> None:
         UPDATE comments issue
            SET resolved_at = NULL,
                resolved_by_id = NULL,
-               updated_at = latest.created_at
+               updated_at = GREATEST(issue.updated_at, latest.created_at)
           FROM latest
          WHERE issue.id = latest.comment_id
            AND latest.action = 'reopened'

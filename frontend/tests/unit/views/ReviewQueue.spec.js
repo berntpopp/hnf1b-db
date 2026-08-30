@@ -43,9 +43,26 @@ const AppDataTableStub = {
   `,
 };
 
+const AppTableToolbarStub = {
+  name: 'AppTableToolbar',
+  props: ['searchQuery'],
+  emits: ['update:searchQuery', 'search', 'clear-search'],
+  template: `
+    <div>
+      <button data-testid="search-input-event" @click="$emit('update:searchQuery', 'renal')">
+        Input
+      </button>
+      <button data-testid="debounced-search-event" @click="$emit('search', 'renal')">
+        Search
+      </button>
+      <slot name="actions" />
+    </div>
+  `,
+};
+
 const stubs = {
   AppDataTable: AppDataTableStub,
-  AppTableToolbar: { template: '<div><slot name="actions" /></div>' },
+  AppTableToolbar: AppTableToolbarStub,
   AppPagination: { template: '<div class="pagination-stub" />' },
   StateBadge: { props: ['state'], template: '<span class="state-badge">{{ state }}</span>' },
   'v-container': { template: '<main><slot /></main>' },
@@ -77,6 +94,8 @@ describe('ReviewQueue', () => {
     queue.meta.value = { total: 0, total_pages: 0, state_counts: {} };
     queue.loading.value = false;
     queue.error.value = null;
+    queue.search.value = '';
+    queue.tab.value = 'needs-review';
     queue.hasFilters = computed(() => false);
     mockRoute.fullPath = '/review?tab=approved&page=2';
     queue.retry.mockClear();
@@ -162,5 +181,29 @@ describe('ReviewQueue', () => {
 
     expect(wrapper.text()).toContain('changes_requested');
     expect(wrapper.text()).toContain('1 open issue');
+    expect(wrapper.get('.queue-row [aria-label]').attributes('aria-label')).toBe('1 open issue');
+  });
+
+  it('commits search only when the toolbar emits its debounced search event', async () => {
+    const wrapper = mountQueue();
+
+    await wrapper.get('[data-testid="search-input-event"]').trigger('click');
+    expect(queue.search.value).toBe('');
+
+    await wrapper.get('[data-testid="debounced-search-event"]').trigger('click');
+    expect(queue.search.value).toBe('renal');
+  });
+
+  it.each([
+    ['needs-review', 'No records are currently awaiting review.'],
+    ['changes-requested', 'No records currently require changes.'],
+    ['approved', 'No records are currently approved for publication.'],
+    ['my-drafts', 'You have no draft records in the review queue.'],
+  ])('renders tab-aware unfiltered empty copy for %s', (tab, expected) => {
+    queue.tab.value = tab;
+
+    const wrapper = mountQueue();
+
+    expect(wrapper.text()).toContain(expected);
   });
 });

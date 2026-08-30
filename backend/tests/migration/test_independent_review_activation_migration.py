@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -642,9 +643,10 @@ def test_forward_reconciliation_repairs_old_e0_missing_projection_trigger() -> N
             ).scalar_one()
             == 2
         )
-        assert connection.execute(
-            text(
-                """
+        assert (
+            connection.execute(
+                text(
+                    """
                 SELECT count(*) FROM pg_trigger t
                 JOIN pg_class c ON c.oid = t.tgrelid
                 JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -652,9 +654,67 @@ def test_forward_reconciliation_repairs_old_e0_missing_projection_trigger() -> N
                   AND c.relname = 'comment_resolution_events'
                   AND t.tgname = 'comment_resolution_events_project_comment'
                 """
+                ),
+                {"schema": schema},
+            ).scalar_one()
+            == 1
+        )
+        with pytest.raises(DBAPIError, match="review_issue_mutation_forbidden"):
+            with connection.begin_nested():
+                connection.execute(text("UPDATE comments SET author_id=1 WHERE id=1"))
+        for statement in (
+            "UPDATE comment_resolution_events SET rationale='tampered' WHERE id=1",
+            "DELETE FROM comment_resolution_events WHERE id=1",
+        ):
+            with pytest.raises(DBAPIError, match="resolution events are append-only"):
+                with connection.begin_nested():
+                    connection.execute(text(statement))
+
+
+def test_forward_reconciliation_preserves_later_comment_update_timestamp() -> None:
+    """Repairing an old event projection must not rewind a later issue edit."""
+    with _isolated_schema() as (connection, _schema, migration):
+        forward = _migration_module(
+            "f0f422b00007_reconcile_independent_review_activation"
+        )
+        record_id = uuid.uuid4()
+        _seed_active_review(connection, record_id, 1)
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+        _drop_projection_trigger_for_old_e0(connection)
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'issue',2)"""
             ),
-            {"schema": schema},
-        ).scalar_one() == 1
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role,created_at)
+                VALUES
+                (1,'resolved','addressed','old resolution',2,'curator',
+                 '2026-08-01T10:00:00Z')"""
+            )
+        )
+        later_update = datetime(2026, 8, 2, 10, tzinfo=timezone.utc)
+        connection.execute(
+            text("UPDATE comments SET updated_at=:updated_at WHERE id=1"),
+            {"updated_at": later_update},
+        )
+
+        _bind(connection, forward)
+        forward.upgrade()
+
+        assert (
+            connection.execute(
+                text("SELECT updated_at FROM comments WHERE id=1")
+            ).scalar_one()
+            == later_update
+        )
 
 
 def test_forward_reconciliation_repairs_same_actor_resolved_timestamp_drift() -> None:

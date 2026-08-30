@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
 from app.comments.models import Comment, CommentResolutionEvent
@@ -482,6 +482,145 @@ async def test_context_issues_are_unresolved_first_with_events_and_capabilities(
         "allowed": False,
         "blocked_by": ["unresolved_review_issues"],
     }
+
+
+@pytest.mark.asyncio
+async def test_context_discussion_counts_include_historical_blocking_issues(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+):
+    """Record-wide totals report old issues while only active issues gate review."""
+    record, candidate = await _seed_queue_record(
+        db_session,
+        slug="context-historical-issue-count",
+        owner=curator_user,
+        submitter=curator_user,
+        published=True,
+    )
+    historical_revision = PhenopacketRevision(
+        record_id=record.id,
+        revision_number=0,
+        state="in_review",
+        content_jsonb={"id": record.phenopacket_id},
+        change_patch=[],
+        change_reason="historical review fixture",
+        actor_id=curator_user.id,
+        actor_role=curator_user.role,
+        from_state="draft",
+        to_state="in_review",
+        event_type="state_transition",
+    )
+    db_session.add(historical_revision)
+    await db_session.flush()
+    await db_session.execute(
+        text("ALTER TABLE comments DISABLE TRIGGER comments_review_issue_guard")
+    )
+    historical_issue = Comment(
+        record_type="phenopacket",
+        record_id=record.id,
+        author_id=another_curator.id,
+        body_markdown="Historical blocking issue",
+        review_revision_id=historical_revision.id,
+        resolved_at=datetime(2026, 8, 12, tzinfo=timezone.utc),
+        resolved_by_id=another_curator.id,
+    )
+    active_issue = Comment(
+        record_type="phenopacket",
+        record_id=record.id,
+        author_id=another_curator.id,
+        body_markdown="Active blocking issue",
+        review_revision_id=candidate.id,
+    )
+    ordinary = Comment(
+        record_type="phenopacket",
+        record_id=record.id,
+        author_id=curator_user.id,
+        body_markdown="Ordinary discussion",
+    )
+    db_session.add_all([historical_issue, active_issue, ordinary])
+    await db_session.flush()
+    await db_session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    await db_session.execute(
+        text("ALTER TABLE comments ENABLE TRIGGER comments_review_issue_guard")
+    )
+    await db_session.commit()
+
+    response = await async_client.get(
+        f"/api/v2/phenopackets/{record.phenopacket_id}/review-context",
+        headers=(await _headers_for(async_client, another_curator.username)),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [issue["id"] for issue in body["issues"]] == [active_issue.id]
+    assert body["discussion_summary"] == {
+        "total_comments": 3,
+        "ordinary_comments": 1,
+        "blocking_issues": 2,
+        "open_blocking_issues": 1,
+    }
+
+
+@pytest.mark.asyncio
+async def test_context_contributors_are_active_cycle_ordered_and_deduplicated(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+    admin_user,
+):
+    """A distinct repeated contributor appears once in first-contribution order."""
+    record, candidate = await _seed_queue_record(
+        db_session,
+        slug="context-contributor-audit",
+        owner=curator_user,
+        submitter=curator_user,
+    )
+    first = PhenopacketRevision(
+        record_id=record.id,
+        parent_revision_id=candidate.id,
+        revision_number=candidate.revision_number + 1,
+        state="draft",
+        content_jsonb=candidate.content_jsonb,
+        change_patch=[],
+        change_reason="distinct contributor first edit",
+        actor_id=admin_user.id,
+        actor_role=admin_user.role,
+        from_state="in_review",
+        to_state="draft",
+        event_type="draft_saved",
+    )
+    db_session.add(first)
+    await db_session.flush()
+    db_session.add(
+        PhenopacketRevision(
+            record_id=record.id,
+            parent_revision_id=first.id,
+            revision_number=candidate.revision_number + 2,
+            state="draft",
+            content_jsonb=candidate.content_jsonb,
+            change_patch=[],
+            change_reason="same contributor second edit",
+            actor_id=admin_user.id,
+            actor_role=admin_user.role,
+            from_state="draft",
+            to_state="draft",
+            event_type="draft_saved",
+        )
+    )
+    await db_session.commit()
+
+    response = await async_client.get(
+        f"/api/v2/phenopackets/{record.phenopacket_id}/review-context",
+        headers=(await _headers_for(async_client, another_curator.username)),
+    )
+
+    assert response.status_code == 200, response.text
+    contributors = response.json()["audit"]["contributors"]
+    assert [actor["id"] for actor in contributors] == [curator_user.id, admin_user.id]
+    assert contributors[1]["username"] == admin_user.username
 
 
 @pytest.mark.asyncio

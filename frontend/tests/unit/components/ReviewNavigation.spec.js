@@ -80,6 +80,14 @@ describe('review navigation', () => {
     expect(wrapper.text()).toContain('Review Queue');
   });
 
+  it('shows review queue navigation to desktop admins', () => {
+    authStore.user = { username: 'admin', role: 'admin' };
+
+    const wrapper = mountWithStubs(AppBar);
+
+    expect(wrapper.text()).toContain('Review Queue');
+  });
+
   it('hides review queue navigation from desktop viewers', () => {
     authStore.user = { username: 'viewer', role: 'viewer' };
 
@@ -92,6 +100,22 @@ describe('review navigation', () => {
     const wrapper = mountWithStubs(MobileDrawer, { props: { modelValue: true } });
 
     expect(wrapper.text()).toContain('Review Queue');
+  });
+
+  it('shows review queue navigation in the mobile drawer for admins', () => {
+    authStore.user = { username: 'admin', role: 'admin' };
+
+    const wrapper = mountWithStubs(MobileDrawer, { props: { modelValue: true } });
+
+    expect(wrapper.text()).toContain('Review Queue');
+  });
+
+  it('hides review queue navigation from mobile viewers', () => {
+    authStore.user = { username: 'viewer', role: 'viewer' };
+
+    const wrapper = mountWithStubs(MobileDrawer, { props: { modelValue: true } });
+
+    expect(wrapper.text()).not.toContain('Review Queue');
   });
 
   it('closes the drawer when a curator opens the review queue', async () => {
