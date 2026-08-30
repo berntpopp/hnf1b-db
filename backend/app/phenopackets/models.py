@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
@@ -760,6 +761,24 @@ class TransitionRequest(BaseModel):
         None, pattern=r"^sha256:[0-9a-f]{64}$"
     )
     attestation: Optional[ApprovalAttestation] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_approval_attestation(cls, value: Any) -> Any:
+        """Give every missing/false approval attestation one stable error code."""
+        if not isinstance(value, dict) or value.get("to_state") != "approved":
+            return value
+        attestation = value.get("attestation")
+        if not isinstance(attestation, dict) or any(
+            attestation.get(field) is not True
+            for field in ("independent_review", "no_unmanaged_conflict")
+        ):
+            raise PydanticCustomError(
+                "attestation_required",
+                "Approval requires affirmative independent-review and "
+                "no-conflict attestations.",
+            )
+        return value
 
     @model_validator(mode="after")
     def validate_conditional_fields(self) -> "TransitionRequest":

@@ -381,6 +381,118 @@ async def test_stale_well_formed_candidate_digest_returns_stable_409(
     assert response.json()["detail"]["code"] == "review_revision_mismatch"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"to_state": "changes_requested"},
+        {
+            "to_state": "approved",
+            "candidate_revision_id": 1,
+            "candidate_content_sha256": "sha256:" + "1" * 64,
+            "attestation": {
+                "independent_review": True,
+                "no_unmanaged_conflict": True,
+            },
+        },
+        {
+            "to_state": "published",
+            "approved_revision_id": 1,
+            "approved_content_sha256": "sha256:" + "1" * 64,
+        },
+    ],
+)
+async def test_transition_whitespace_rationale_is_stable_422_without_mutation(
+    async_client,
+    db_session,
+    draft_record,
+    admin_headers,
+    payload,
+):
+    """Decision/publication rationales must contain normalized text."""
+    before = (
+        draft_record.revision,
+        draft_record.editing_revision_id,
+        draft_record.head_published_revision_id,
+    )
+    response = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json={"reason": " \t\n ", "revision": draft_record.revision, **payload},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_rationale"
+    await db_session.refresh(draft_record)
+    assert (
+        draft_record.revision,
+        draft_record.editing_revision_id,
+        draft_record.head_published_revision_id,
+    ) == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "attestation",
+    [
+        None,
+        {"independent_review": False, "no_unmanaged_conflict": True},
+        {"independent_review": True, "no_unmanaged_conflict": False},
+    ],
+)
+async def test_approval_attestation_failures_use_exact_stable_422_envelope(
+    async_client,
+    draft_record,
+    admin_headers,
+    attestation,
+):
+    """Missing or false attestation is malformed, not a snapshot conflict."""
+    payload = {
+        "to_state": "approved",
+        "reason": "Exact review",
+        "revision": draft_record.revision,
+        "candidate_revision_id": 1,
+        "candidate_content_sha256": "sha256:" + "1" * 64,
+    }
+    if attestation is not None:
+        payload["attestation"] = attestation
+
+    response = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json=payload,
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+    assert set(response.json()) == {"detail", "error_code", "request_id"}
+    assert response.json()["detail"] == {
+        "code": "attestation_required",
+        "message": (
+            "Approval requires affirmative independent-review and "
+            "no-conflict attestations."
+        ),
+    }
+    assert response.json()["error_code"] == "validation_error"
+
+
+@pytest.mark.asyncio
+async def test_unrelated_transition_validation_keeps_generic_envelope(
+    async_client,
+    draft_record,
+    admin_headers,
+):
+    """The attestation mapping must not rewrite unrelated validation errors."""
+    response = await async_client.post(
+        _transitions_url(draft_record.phenopacket_id),
+        json={"to_state": "in_review", "reason": "valid", "revision": "invalid"},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], str)
+    assert response.json()["error_code"] == "validation_error"
+
+
 # ---------------------------------------------------------------------------
 # GET /revisions — list
 # ---------------------------------------------------------------------------

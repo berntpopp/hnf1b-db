@@ -484,6 +484,116 @@ async def test_eligible_curator_can_request_changes_directly(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("to_state", "extra"),
+    [
+        ("changes_requested", {}),
+        (
+            "approved",
+            {
+                "candidate_revision_id": 1,
+                "candidate_content_sha256": "sha256:" + "1" * 64,
+                "attestation": ApprovalAttestation(
+                    independent_review=True,
+                    no_unmanaged_conflict=True,
+                ),
+            },
+        ),
+        (
+            "published",
+            {
+                "approved_revision_id": 1,
+                "approved_content_sha256": "sha256:" + "1" * 64,
+            },
+        ),
+    ],
+)
+async def test_direct_transition_rejects_whitespace_rationale_without_mutation(
+    db_session,
+    draft_record,
+    admin_user,
+    to_state,
+    extra,
+):
+    """The shared service boundary normalizes rationale before locking/writing."""
+    service = PhenopacketStateService(db_session)
+    before = (
+        draft_record.revision,
+        draft_record.editing_revision_id,
+        draft_record.head_published_revision_id,
+    )
+
+    with pytest.raises(service.InvalidRationale):
+        await service.transition(
+            draft_record.id,
+            to_state=to_state,
+            reason=" \t\n ",
+            expected_revision=draft_record.revision,
+            actor=admin_user,
+            **extra,
+        )
+
+    assert (
+        draft_record.revision,
+        draft_record.editing_revision_id,
+        draft_record.head_published_revision_id,
+    ) == before
+
+
+@pytest.mark.asyncio
+async def test_direct_approval_requires_attestation_without_mutation(
+    db_session,
+    draft_record,
+    admin_user,
+):
+    """Direct callers receive the dedicated attestation validation failure."""
+    service = PhenopacketStateService(db_session)
+    before = (
+        draft_record.revision,
+        draft_record.editing_revision_id,
+        draft_record.head_published_revision_id,
+    )
+
+    with pytest.raises(service.AttestationRequired):
+        await service.transition(
+            draft_record.id,
+            to_state="approved",
+            reason="Exact review",
+            expected_revision=draft_record.revision,
+            actor=admin_user,
+            candidate_revision_id=1,
+            candidate_content_sha256="sha256:" + "1" * 64,
+            attestation=None,
+        )
+
+    assert (
+        draft_record.revision,
+        draft_record.editing_revision_id,
+        draft_record.head_published_revision_id,
+    ) == before
+
+
+@pytest.mark.asyncio
+async def test_direct_transition_stores_normalized_rationale(
+    db_session,
+    draft_record,
+    curator_user,
+):
+    """Audit and decision fields store the shared boundary's stripped text."""
+    service = PhenopacketStateService(db_session)
+
+    _, revision = await service.transition(
+        draft_record.id,
+        to_state="in_review",
+        reason="  Ready for exact review. \t",
+        expected_revision=draft_record.revision,
+        actor=curator_user,
+    )
+
+    assert revision.change_reason == "Ready for exact review."
+
+
+@pytest.mark.asyncio
 async def test_unresolved_review_issue_blocks_direct_approval(
     db_session, draft_record, curator_user, another_curator
 ):

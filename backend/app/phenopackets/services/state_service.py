@@ -60,6 +60,12 @@ class PhenopacketStateService:
     class ReviewRevisionMismatch(Exception):
         """The nominated immutable review snapshot is no longer active or exact."""
 
+    class InvalidRationale(Exception):
+        """A transition rationale is empty after normalization or too long."""
+
+    class AttestationRequired(Exception):
+        """Approval lacks the affirmative independent-review attestations."""
+
     class EditInProgress(Exception):
         """Record already has a clone-to-draft edit open (editing_revision_id set)."""
 
@@ -410,6 +416,18 @@ class PhenopacketStateService:
         Delegates to :meth:`_publish` for ``to_state='published'`` (§6.2).
         All other transitions follow the §6.4 simple-transition path.
         """
+        reason = reason.strip()
+        if not reason or len(reason) > 500:
+            raise self.InvalidRationale(
+                "Transition rationale must contain 1 to 500 non-whitespace characters."
+            )
+        if to_state == "approved" and not isinstance(
+            attestation, ApprovalAttestation
+        ):
+            raise self.AttestationRequired(
+                "Approval requires affirmative independent-review and "
+                "no-conflict attestations."
+            )
         pp = await self._lock_and_check(record_id, expected_revision)
 
         # §4.2.1: guard matrix reads the *effective* state (revision row if a

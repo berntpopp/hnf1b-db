@@ -160,6 +160,18 @@ async def post_transition(
             status_code=409,
             detail={"code": "review_revision_mismatch", "message": str(exc)},
         ) from exc
+    except PhenopacketStateService.InvalidRationale as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_rationale", "message": str(exc)},
+        ) from exc
+    except PhenopacketStateService.AttestationRequired as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "attestation_required", "message": str(exc)},
+        ) from exc
     except PhenopacketStateService.InvalidTransition as exc:
         await db.rollback()
         raise HTTPException(
