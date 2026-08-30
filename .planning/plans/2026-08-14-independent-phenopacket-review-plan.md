@@ -891,7 +891,7 @@ git commit -m "test(review): prove independent curation lifecycle"
 - One independent `gpt-5.6-sol` xhigh reviewer performs the requested one-pass adversarial PR review; it reports only and does not edit.
 - The primary agent adjudicates every finding, fixes accepted findings with TDD, reruns relevant/full checks, and records dispositions once; there is no second independent review pass.
 
-- [ ] **Step 1: Run backend formatting, lint, typing, migrations, and full tests**
+- [x] **Step 1: Run backend formatting, lint, typing, migrations, and full tests**
 
 ```bash
 make lint
@@ -904,7 +904,7 @@ Exercise expand -> backend-compatible -> activation -> forward reconciliation/he
 
 The rollout order is exact: apply `d0f422b00005`, deploy the v2-writing backend, apply `e0f422b00006`, then apply `f0f422b00007` to reconcile already-stamped activation schemas. The migration proof must also demonstrate empty-data downgrade success and post-audit downgrade refusal.
 
-- [ ] **Step 2: Run frontend formatting, lint, tests, build, and focused E2E**
+- [x] **Step 2: Run frontend formatting, lint, tests, build, and focused E2E**
 
 ```bash
 cd frontend
@@ -915,11 +915,11 @@ npm run build
 npm run e2e -- tests/e2e/independent-review.spec.js tests/e2e/review-workspace-accessibility.spec.js
 ```
 
-- [ ] **Step 3: Perform runtime smoke checks**
+- [x] **Step 3: Perform runtime smoke checks**
 
 Start the isolated backend/frontend against migrated dev services. Verify queue loading, distinct-user decisions, issue gate, public privacy before publication, old-head behavior during re-review, exact digest/approval/publication equality, desktop/mobile rendering, and structured conflicts. Capture only non-sensitive evidence.
 
-- [ ] **Step 4: Run the requirement-by-requirement completion audit**
+- [x] **Step 4: Run the requirement-by-requirement completion audit**
 
 For every design acceptance criterion, record authoritative evidence and mark proven/missing/contradicted. Continue implementation for every missing or indirect item; do not infer completion from broad green suites.
 
