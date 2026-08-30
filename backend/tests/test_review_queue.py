@@ -10,7 +10,10 @@ from sqlalchemy import event, null
 
 import app.database as app_database
 from app.comments.models import Comment
+from app.database import async_session_maker
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.review.repository import ReviewRepository
+from app.phenopackets.review.schemas import ReviewQueueQuery
 from app.phenopackets.services.revision_ledger import content_sha256
 
 QUEUE_URL = "/api/v2/phenopackets/review-queue"
@@ -655,3 +658,87 @@ async def test_queue_select_count_is_independent_of_returned_row_count(
     assert len(full.json()["data"]) == 4
     assert one_count == full_count
     assert full_count <= 4
+
+
+@pytest.mark.asyncio
+async def test_queue_page_total_and_facets_share_one_statement_snapshot(
+    db_session,
+    curator_user,
+    another_curator,
+):
+    """A commit after the queue statement cannot split rows from its metadata."""
+    await _seed_queue_record(
+        db_session,
+        slug="snapshot-before-interleave",
+        owner=curator_user,
+        submitter=curator_user,
+    )
+    await db_session.commit()
+
+    class InterleavingSession:
+        def __init__(self):
+            self.execute_count = 0
+
+        async def execute(self, statement):
+            self.execute_count += 1
+            result = await db_session.execute(statement)
+            if self.execute_count == 1:
+                async with async_session_maker() as writer:
+                    await _seed_queue_record(
+                        writer,
+                        slug="snapshot-after-interleave",
+                        owner=curator_user,
+                        submitter=curator_user,
+                    )
+                    await writer.commit()
+            return result
+
+    interleaving = InterleavingSession()
+    repository = ReviewRepository(interleaving)  # type: ignore[arg-type]
+    rows, total, facets = await repository.list_queue(
+        another_curator,
+        ReviewQueueQuery(page_number=1, page_size=25, state="in_review"),
+    )
+
+    assert [row.phenopacket_id for row in rows] == ["snapshot-before-interleave"]
+    assert total == 1
+    assert facets.in_review == 1
+    assert interleaving.execute_count == 1
+
+
+@pytest.mark.asyncio
+async def test_queue_out_of_range_page_keeps_total_and_facets(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+):
+    """The metadata anchor survives when the requested page has no rows."""
+    await _seed_queue_record(
+        db_session,
+        slug="out-of-range-metadata",
+        owner=curator_user,
+        submitter=curator_user,
+    )
+    await db_session.commit()
+    headers = await _headers_for(async_client, another_curator.username)
+
+    response = await async_client.get(
+        f"{QUEUE_URL}?page[number]=2&page[size]=1",
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"] == []
+    assert response.json()["meta"] == {
+        "page_number": 2,
+        "page_size": 1,
+        "total": 1,
+        "total_pages": 1,
+        "state_counts": {
+            "draft": 0,
+            "in_review": 1,
+            "changes_requested": 0,
+            "approved": 0,
+        },
+    }

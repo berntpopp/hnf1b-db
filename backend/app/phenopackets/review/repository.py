@@ -303,36 +303,50 @@ class ReviewRepository:
     async def list_queue(
         self, actor: User, query: ReviewQueueQuery
     ) -> tuple[list[ReviewQueueRow], int, StateCounts]:
-        """Return a filtered page, exact count, and same-filter state facets."""
+        """Return page, total, and facets from one database statement snapshot."""
         base = self._queue_base(actor)
-        data_stmt = self._apply_queue_filters(
+        state_filtered = self._apply_queue_filters(
             select(base), base, actor, query, include_state=True
-        )
-        data_stmt = (
-            data_stmt.order_by(*self._queue_order(base, query))
+        ).cte("review_queue_state_filtered")
+        facet_filtered = self._apply_queue_filters(
+            select(base), base, actor, query, include_state=False
+        ).cte("review_queue_facet_filtered")
+        page = (
+            select(state_filtered)
+            .order_by(*self._queue_order(state_filtered, query))
             .offset((query.page_number - 1) * query.page_size)
             .limit(query.page_size)
+            .cte("review_queue_page")
         )
-        count_stmt = self._apply_queue_filters(
-            select(func.count()).select_from(base),
-            base,
-            actor,
-            query,
-            include_state=True,
+        metadata = (
+            select(
+                select(func.count())
+                .select_from(state_filtered)
+                .scalar_subquery()
+                .label("queue_total"),
+                *(
+                    func.count()
+                    .filter(facet_filtered.c.effective_state == state)
+                    .label(f"queue_{state}_count")
+                    for state in _QUEUE_STATES
+                ),
+            )
+            .select_from(facet_filtered)
+            .cte("review_queue_metadata")
         )
-        facets_stmt = self._apply_queue_filters(
-            select(base.c.effective_state, func.count()).select_from(base),
-            base,
-            actor,
-            query,
-            include_state=False,
-        ).group_by(base.c.effective_state)
+        statement = (
+            select(page, metadata)
+            .select_from(metadata.outerjoin(page, true()))
+            .order_by(*self._queue_order(page, query))
+        )
 
-        raw_rows = (await self.db.execute(data_stmt)).mappings().all()
-        total = int((await self.db.execute(count_stmt)).scalar_one())
-        facet_rows = (await self.db.execute(facets_stmt)).all()
-        counts = {state: 0 for state in _QUEUE_STATES}
-        counts.update({str(state): int(count) for state, count in facet_rows})
+        result_rows = (await self.db.execute(statement)).mappings().all()
+        metadata_row = result_rows[0]
+        total = int(metadata_row.queue_total)
+        counts = {
+            state: int(metadata_row[f"queue_{state}_count"]) for state in _QUEUE_STATES
+        }
+        raw_rows = [row for row in result_rows if row.record_id is not None]
 
         rows: list[ReviewQueueRow] = []
         for row in raw_rows:
