@@ -3,9 +3,10 @@
  * D.2 comments — end-to-end flow.
  *
  * Flow:
- *   1. API setup: admin creates + publishes a test phenopacket so the
+ *   1. API setup: curator A creates/submits, curator B approves, and admin
+ *      publishes a test phenopacket so the
  *      Discussion tab is available to authenticated users.
- *   2. Admin logs in via the browser form.
+ *   2. Curator A logs in via the browser form.
  *   3. Navigates to the phenopacket detail page and clicks the Discussion tab.
  *   4. Posts a comment — verifies the comment text appears in the list.
  *   5. Edits that comment (appends " edited") — verifies the updated text
@@ -22,8 +23,8 @@
  * browser tests only need to exercise the UI surfaces that matter.
  *
  *   1. API layer  (request / apiLogin) — authenticate and create the
- *      test record, then advance it to 'published' so both curator and
- *      admin can navigate to its detail page.
+ *      test record, then advance it with independent review to 'published'
+ *      so authenticated actors can navigate to its detail page.
  *
  *   2. Browser layer — Playwright drives the Vuetify Discussion tab:
  *        - CommentComposer (.comment-composer / .composer-editor .ProseMirror)
@@ -41,14 +42,13 @@
  *   Playwright `baseURL` defaults to http://localhost:5173
  *   VITE_API_URL        defaults to http://localhost:8000/api/v2
  *
- * Admin auth is resolved by `loginAsAdmin` (helpers/auth.js): it uses the
- * E2E_ADMIN_USERNAME/E2E_ADMIN_PASSWORD pair when set (CI), else falls back to
- * the local-dev admins (admin/ChangeMe!Admin2025, dev-admin/DevAdmin!2026).
- * See tests/e2e/README.md.
+ * Curator A owns/submits, curator B independently approves, and admin
+ * publishes. Each helper requires a complete environment credential pair or
+ * uses its deterministic development fallback. See tests/e2e/README.md.
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, loginAsReviewer, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, loginAsCuratorA, loginAsCuratorB, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
@@ -114,10 +114,12 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   // -------------------------------------------------------------------------
   const adminTokens = await loginAsAdmin(request, API_BASE);
   const adminToken = adminTokens.accessToken;
-  const reviewerToken = (await loginAsReviewer(request, API_BASE)).accessToken;
+  const curatorATokens = await loginAsCuratorA(request, API_BASE);
+  const curatorAToken = curatorATokens.accessToken;
+  const curatorBToken = (await loginAsCuratorB(request, API_BASE)).accessToken;
 
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+    headers: { Authorization: `Bearer ${curatorAToken}` },
     data: {
       phenopacket: {
         id: RECORD_ID,
@@ -146,7 +148,7 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   // draft → in_review → approved → published
   const submitted = await apiTransition(
     request,
-    adminToken,
+    curatorAToken,
     RECORD_ID,
     'in_review',
     'submit',
@@ -156,7 +158,7 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   revision = submitted.phenopacket.revision;
   const approved = await apiTransition(
     request,
-    reviewerToken,
+    curatorBToken,
     RECORD_ID,
     'approved',
     'approve',
@@ -177,14 +179,14 @@ test('comments end-to-end: post, edit, soft-delete', async ({ page, request }) =
   // -------------------------------------------------------------------------
   // Phase 2 — Browser login + open Discussion tab
   //
-  // NOTE: we use admin for the browser flow. The API setup uses the separately
-  // seeded curator for the independent approval decision. The permissions matrix
+  // NOTE: curator A owns the record and drives the browser flow; curator B made
+  // the independent approval decision, while admin only published. The permissions matrix
   // (curator vs admin vs viewer) is exhaustively tested at the backend
   // level in `test_comments_permissions.py`. The E2E spec exists to verify
   // the UI wires the full write surface (POST, PATCH, DELETE) correctly,
   // not to re-test role permissions.
   // -------------------------------------------------------------------------
-  await primeAuthSession(page, adminTokens);
+  await primeAuthSession(page, curatorATokens);
   await openDiscussionTab(page, RECORD_ID);
 
   // -------------------------------------------------------------------------

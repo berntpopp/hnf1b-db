@@ -174,7 +174,7 @@ db-init:  ## Initialize database (run migrations + create admin user)
 db-create-admin:  ## Create or update admin user
 	cd backend && make db-create-admin
 
-dev-seed-users:  ## Seed dev-mode fixture users (dev-admin/dev-curator/dev-viewer)
+dev-seed-users:  ## Seed dev-mode admin, curator A/B, legacy curator, and viewer fixtures
 	@$(MAKE) -C backend dev-seed-users
 
 # Phenopackets Migration Commands (Primary method for data import)

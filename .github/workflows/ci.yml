@@ -364,6 +364,10 @@ jobs:
           CI: "true"
           E2E_ADMIN_USERNAME: admin
           E2E_ADMIN_PASSWORD: ci_test_admin_password_2026
+          E2E_CURATOR_A_USERNAME: dev-curator-a
+          E2E_CURATOR_A_PASSWORD: DevCuratorA!2026
+          E2E_CURATOR_B_USERNAME: dev-curator-b
+          E2E_CURATOR_B_PASSWORD: DevCuratorB!2026
           E2E_REVIEWER_USERNAME: dev-curator
           E2E_REVIEWER_PASSWORD: DevCurator!2026
         working-directory: frontend

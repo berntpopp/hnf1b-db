@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, null
 
 import app.database as app_database
 from app.comments.models import Comment
@@ -14,6 +14,7 @@ from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.services.revision_ledger import content_sha256
 
 QUEUE_URL = "/api/v2/phenopackets/review-queue"
+_DEFAULT_CANDIDATE_PATCH = object()
 
 
 async def _headers_for(client, username: str) -> dict[str, str]:
@@ -37,6 +38,7 @@ async def _seed_queue_record(
     subject_id: str | None = None,
     subject_label: str | None = None,
     historical_publication_role_missing: bool = False,
+    candidate_change_patch: Any = _DEFAULT_CANDIDATE_PATCH,
 ) -> tuple[Phenopacket, PhenopacketRevision]:
     """Persist one active cycle with literal old-head and candidate content."""
     baseline = {
@@ -143,7 +145,11 @@ async def _seed_queue_record(
         state="in_review",
         content_jsonb=candidate_content,
         content_sha256=content_sha256(candidate_content),
-        change_patch=[{"op": "replace", "path": "/metaData/extension", "value": slug}],
+        change_patch=(
+            [{"op": "replace", "path": "/metaData/extension", "value": slug}]
+            if candidate_change_patch is _DEFAULT_CANDIDATE_PATCH
+            else candidate_change_patch
+        ),
         change_reason="submit exact candidate",
         actor_id=submitter.id,
         actor_role=submitter.role,
@@ -184,6 +190,61 @@ async def _seed_queue_record(
         record.state = effective_state
     await db_session.flush()
     return record, candidate
+
+
+@pytest.mark.asyncio
+async def test_queue_counts_only_array_change_patches_and_tolerates_json_scalars(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+):
+    """Normal JSON-null transitions and malformed legacy scalars count as zero."""
+    await _seed_queue_record(
+        db_session,
+        slug="non-array-patch-json-null",
+        owner=curator_user,
+        submitter=curator_user,
+        candidate_change_patch=None,
+    )
+    await _seed_queue_record(
+        db_session,
+        slug="non-array-patch-sql-null",
+        owner=curator_user,
+        submitter=curator_user,
+        candidate_change_patch=null(),
+    )
+    await _seed_queue_record(
+        db_session,
+        slug="non-array-patch-object",
+        owner=curator_user,
+        submitter=curator_user,
+        candidate_change_patch={"unexpected": "legacy scalar"},
+    )
+    await _seed_queue_record(
+        db_session,
+        slug="non-array-patch-scalar",
+        owner=curator_user,
+        submitter=curator_user,
+        candidate_change_patch="legacy scalar",
+    )
+    await db_session.commit()
+    headers = await _headers_for(async_client, another_curator.username)
+
+    response = await async_client.get(
+        f"{QUEUE_URL}?q=non-array-patch&sort=phenopacket_id", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert [
+        (row["phenopacket_id"], row["active_cycle_change_count"])
+        for row in response.json()["data"]
+    ] == [
+        ("non-array-patch-json-null", 1),
+        ("non-array-patch-object", 1),
+        ("non-array-patch-scalar", 1),
+        ("non-array-patch-sql-null", 1),
+    ]
 
 
 @pytest.mark.asyncio

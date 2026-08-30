@@ -140,7 +140,16 @@ class ReviewRepository:
         change_count = (
             select(
                 func.coalesce(
-                    func.sum(func.jsonb_array_length(revision.change_patch)), 0
+                    func.sum(
+                        case(
+                            (
+                                func.jsonb_typeof(revision.change_patch) == "array",
+                                func.jsonb_array_length(revision.change_patch),
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
                 )
             )
             .where(revision.record_id == Phenopacket.id, after_head)

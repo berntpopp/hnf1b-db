@@ -11,8 +11,9 @@
  * The spec uses two layers:
  *
  *   1. API layer  (request.newContext) — quick backend calls to:
- *        - Authenticate as admin  (POST /api/v2/auth/login)
- *        - Create a fresh test phenopacket  (POST /api/v2/phenopackets/)
+ *        - Authenticate curator A, curator B, and admin
+ *        - Have curator A create and submit a fresh test phenopacket
+ *        - Have curator B approve and admin publish it
  *        - Perform every transition via the REST endpoint so the browser
  *          tests start from a known state rather than fighting flaky form
  *          rendering for the creation step.
@@ -27,17 +28,13 @@
  *
  * Credentials
  * -----------
- * Uses the admin account created by `make db-create-admin` /
- * `scripts/create_admin_user.py` (CI runs that step before Playwright).
- *
- * Admin auth is resolved by `loginAsAdmin` (helpers/auth.js): the
- * E2E_ADMIN_USERNAME/E2E_ADMIN_PASSWORD pair when set (CI), else the local-dev
- * admins (admin/ChangeMe!Admin2025, dev-admin/DevAdmin!2026). API_URL
- * (VITE_API_URL) defaults to http://localhost:8000/api/v2. See README.md.
+ * Curator A owns/submits, curator B independently approves, and admin
+ * publishes. Each helper requires a complete environment credential pair or
+ * uses its deterministic development fallback. See README.md.
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, loginAsReviewer, primeAuthSession } from './helpers/auth';
+import { loginAsAdmin, loginAsCuratorA, loginAsCuratorB, primeAuthSession } from './helpers/auth';
 
 // ---------------------------------------------------------------------------
 // Constants / helpers
@@ -85,14 +82,16 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   request,
 }) => {
   // -------------------------------------------------------------------------
-  // Step 1 — API: authenticate as admin + create test phenopacket
+  // Step 1 — API: authenticate three principals; curator A owns the draft
   // -------------------------------------------------------------------------
   const adminTokens = await loginAsAdmin(request, API_BASE);
   const adminToken = adminTokens.accessToken;
-  const reviewerToken = (await loginAsReviewer(request, API_BASE)).accessToken;
+  const curatorATokens = await loginAsCuratorA(request, API_BASE);
+  const curatorAToken = curatorATokens.accessToken;
+  const curatorBToken = (await loginAsCuratorB(request, API_BASE)).accessToken;
 
   const createResp = await request.post(`${API_BASE}/phenopackets/`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+    headers: { Authorization: `Bearer ${curatorAToken}` },
     data: {
       phenopacket: {
         id: RECORD_ID,
@@ -125,7 +124,7 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   // -------------------------------------------------------------------------
   // Step 2 — Browser: prime an authenticated session, navigate to detail page, verify badge
   // -------------------------------------------------------------------------
-  await primeAuthSession(page, adminTokens);
+  await primeAuthSession(page, curatorATokens);
 
   // Navigate to the detail page for our new record
   await page.goto(`/phenopackets/${RECORD_ID}`, { waitUntil: 'networkidle' });
@@ -162,13 +161,13 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   // Re-fetch current revision from the API (the browser transition already
   // bumped it; get the fresh value)
   const detailResp = await request.get(`${API_BASE}/phenopackets/${RECORD_ID}`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+    headers: { Authorization: `Bearer ${curatorAToken}` },
   });
   const detail = await detailResp.json();
   revision = detail.revision;
   const candidateResp = await request.get(
     `${API_BASE}/phenopackets/${RECORD_ID}/revisions/${detail.editing_revision_id}`,
-    { headers: { Authorization: `Bearer ${adminToken}` } }
+    { headers: { Authorization: `Bearer ${curatorAToken}` } }
   );
   expect(candidateResp.ok(), `Candidate lookup failed: ${await candidateResp.text()}`).toBeTruthy();
   const candidate = await candidateResp.json();
@@ -176,7 +175,7 @@ test('full state lifecycle: create draft → in_review → approved → publishe
   // Approve
   const approved = await apiTransition(
     request,
-    reviewerToken,
+    curatorBToken,
     RECORD_ID,
     'approved',
     'LGTM (E2E test)',
