@@ -929,7 +929,7 @@ Write `docs/curation-review-workflow.md` with the operator-visible state lifecyc
 
 Give the reviewer the design, spec-review artifact, implementation plan, complete diff, test evidence, and current code. Save its report and primary-agent dispositions in `.planning/reviews/2026-08-14-independent-phenopacket-review-pr-review.md`.
 
-- [ ] **Step 6: Address accepted review findings with focused failing tests and rerun all impacted checks**
+- [x] **Step 6: Address accepted review findings with focused failing tests and rerun all impacted checks**
 
 Commit fixes intentionally. Document any rejected finding with code/test evidence, not preference.
 

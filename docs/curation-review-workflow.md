@@ -68,6 +68,9 @@ canonicalize, default, normalize, or add timestamps at publish time.
 Until publication commits, a new record is absent from public reads. During a
 replacement cycle, public list, detail, search, aggregate, export, and MCP reads stay
 pinned to `head_published_revision_id`, so the old published head remains visible.
+Anonymous publication lists and publication, variant, and Phenopacket sitemaps use the
+same immutable head content and head timestamp; private replacement identifiers and
+working-copy update times are not discovery metadata.
 
 ## Reviewer independence
 
@@ -128,7 +131,15 @@ provides:
 
 The workspace supports keyboard operation and its single-column mobile layout. After a
 stale revision, digest, or record-version conflict, reload the authoritative context
-before making another decision.
+before making another decision. Issue creation, resolution, and reopening are
+single-flight. A recognized review conflict replaces mutation controls with an explicit,
+focused reload action and is never retried automatically. Navigating directly between
+review record IDs resets the tab, completion, mutation, error, and conflict state before
+loading the new record.
+
+All decision rationales are trimmed and must contain meaningful text. Approval also
+requires both affirmative attestations; a missing or false attestation returns the
+stable `attestation_required` code without advancing a revision or pointer.
 
 ## Database rollout
 
