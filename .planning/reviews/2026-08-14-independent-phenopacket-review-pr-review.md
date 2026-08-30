@@ -95,7 +95,7 @@ dispositions below close that verdict without performing a second independent pa
 | 7 | Effective-state queue remains server driven. | Proven | Single-statement queue repository tests, query-count tests, URL/table Vitest, and runtime filter/pagination. |
 | 8 | Workspace is complete and responsive. | Proven | Component/view/composable Vitest, real-router reuse tests, production build, and 375x812 keyboard/non-overflow Playwright. |
 | 9 | Historical comments remain non-blocking. | Proven | Migration compatibility, review-context count tests, and ordinary-response lifecycle assertions. |
-| 10 | All verification layers pass. | Proven locally | See final verification below. GitHub Actions are deliberately not claimed here. |
+| 10 | All verification layers pass. | Proven | See final verification and GitHub Actions evidence below. The complete code-bearing head `e6d8e51` passed every required CI, Docker, and E2E check. |
 | 11 | Independent reviews are adjudicated once. | Proven | The spec-review artifact and this one-pass PR finding ledger; every reported finding has one disposition and no second review pass occurred. |
 
 No acceptance criterion is missing or contradicted in the verified local tree.
@@ -128,6 +128,31 @@ therefore redirected to login. The fixtures were archived, the owned backend was
 restarted with the explicit 5174 origin, and the exact test set passed. This was a
 runtime harness configuration issue, not a product assertion failure.
 
+## GitHub Actions and final CI dispositions
+
+- The first published evidence head, `1d541be`, exposed two real delivery gaps:
+  Ruff formatting drift in the comments router and review state service, and stale MCP
+  generated path/enum constants. Formatting was applied in `f03d79d`. Regenerating the
+  MCP contract then revealed that the curator-only review queue was accidentally
+  accepted by the generic public Phenopacket path pattern and the review-context route
+  lacked an explicit policy. Regression tests were written first; `e1477b4` explicitly
+  denies both curator-only route families. The superseded CI run was cancelled after
+  the corrective push; its Docker workflow passed.
+- On `e1477b4`, Docker, MCP, frontend, E2E, hygiene, and production guards passed. The
+  backend job exposed a test that only passed locally because the checkout path
+  contained the word `development`. Commit `e6d8e51` supplies a valid staging or
+  production configuration to reach the seed script's own fail-closed guard and
+  asserts its exact stderr, eliminating the path-dependent false positive.
+- The complete code-bearing head `e6d8e51bbb5bbf5d6497a2108f3644c94339f078`
+  passed the CI workflow run
+  [33321927720](https://github.com/berntpopp/hnf1b-db/actions/runs/33321927720)
+  and Docker workflow run
+  [33321927726](https://github.com/berntpopp/hnf1b-db/actions/runs/33321927726):
+  12 checks succeeded, the non-publishing validation path intentionally skipped the
+  image-publish matrix, and no check failed. This includes backend (4m58s), frontend
+  (1m51s), MCP (37s), Playwright E2E (6m42s), all three Docker validations, production
+  guards, hygiene, path detection, and the required CI gate.
+
 ## Verification performed by the independent reviewer
 
 - Confirmed the base/head identities, ancestor relationship, 46 commits, 131 changed
@@ -148,4 +173,6 @@ runtime harness configuration issue, not a product assertion failure.
 - Backend warnings are the existing event-loop, Starlette/httpx, pgvector,
   autogenerate, short-test-key, and mocked-coroutine warnings recorded by the full run.
 - Build reports existing large chunks and Vite native-config compatibility warnings.
-- Local verification does not claim push, PR publication, or GitHub Actions completion.
+- The final evidence commit changes planning/review prose only. Its exact PR head is
+  checked separately before the draft flag is removed; the code-bearing tree attested
+  above is unchanged.

@@ -933,15 +933,15 @@ Give the reviewer the design, spec-review artifact, implementation plan, complet
 
 Commit fixes intentionally. Document any rejected finding with code/test evidence, not preference.
 
-- [ ] **Step 7: Publish the branch and open a draft PR**
+- [x] **Step 7: Publish the branch and open a draft PR**
 
 Use the repository's GitHub publication workflow: inspect status/diff, commit remaining intentional changes, push `feat/peer-review-workflow`, open a draft PR with design/verification/review links, and never include secrets or local environment symlinks.
 
-- [ ] **Step 8: Inspect GitHub Actions and drive the PR green**
+- [x] **Step 8: Inspect GitHub Actions and drive the PR green**
 
 Inspect every required check. For any failure, use systematic debugging, fix with a regression test, push, and re-run until all required Actions are green or a deliberate external blocker is documented.
 
-- [ ] **Step 9: Final commit of planning/review evidence**
+- [x] **Step 9: Final commit of planning/review evidence**
 
 ```bash
 git add .planning/plans/2026-08-14-independent-phenopacket-review-plan.md \
