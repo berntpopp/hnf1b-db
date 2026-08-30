@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_optional_user, is_curator_or_admin
+from app.core.api_models import ApiErrorEnvelope
 from app.database import get_db
 from app.models.user import User
 from app.phenopackets.review.repository import ReviewRepository
@@ -34,6 +35,7 @@ def _require_review_actor(
 @router.get(
     "/review-queue",
     response_model=ReviewQueueResponse,
+    responses={status: {"model": ApiErrorEnvelope} for status in (400, 401, 404, 422)},
     summary="List the server-driven curator review queue",
 )
 async def list_review_queue(
@@ -95,6 +97,9 @@ async def list_review_queue(
 @router.get(
     "/{record_id}/review-context",
     response_model=ReviewContext,
+    # Keep FastAPI's harmless path-validation 422, but override its schema so
+    # the operation documents the envelope emitted by our global handler.
+    responses={status: {"model": ApiErrorEnvelope} for status in (401, 404, 422)},
     summary="Get one coherent curator review context",
 )
 async def get_review_context(

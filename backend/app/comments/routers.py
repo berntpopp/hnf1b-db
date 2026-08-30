@@ -31,6 +31,7 @@ from app.comments.schemas import (
     ReviewIssueResolveRequest,
 )
 from app.comments.service import CommentsService
+from app.core.api_models import ApiErrorEnvelope
 from app.database import get_db
 from app.models.user import User
 from app.phenopackets.review.policy import ReviewPolicyError
@@ -343,7 +344,13 @@ async def update_comment(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/{comment_id}/resolve", response_model=CommentResponse)
+@router.post(
+    "/{comment_id}/resolve",
+    response_model=CommentResponse,
+    responses={
+        status: {"model": ApiErrorEnvelope} for status in (401, 403, 404, 409, 422, 500)
+    },
+)
 async def resolve_comment(
     comment_id: int,
     body: ReviewIssueResolveRequest | dict[str, Any] | None = Body(default=None),
@@ -366,7 +373,13 @@ async def resolve_comment(
         raise _map_service_error(exc) from exc
 
 
-@router.post("/{comment_id}/unresolve", response_model=CommentResponse)
+@router.post(
+    "/{comment_id}/unresolve",
+    response_model=CommentResponse,
+    responses={
+        status: {"model": ApiErrorEnvelope} for status in (401, 403, 404, 409, 422, 500)
+    },
+)
 async def unresolve_comment(
     comment_id: int,
     body: ReviewIssueReopenRequest | dict[str, Any] | None = Body(default=None),

@@ -8,6 +8,7 @@ import {
   loginAsCuratorB,
   primeAuthSession,
 } from './helpers/auth';
+import { archiveE2ERecord } from './helpers/records';
 
 const API_BASE = process.env.VITE_API_URL || 'http://localhost:8000/api/v2';
 const authHeader = (token) => ({ Authorization: `Bearer ${token}` });
@@ -72,6 +73,13 @@ async function reviewContext(request, token, recordId) {
   );
 }
 
+async function currentActor(request, token, label) {
+  return expectJson(
+    await request.get(`${API_BASE}/auth/me`, { headers: authHeader(token) }),
+    `${label} identity`
+  );
+}
+
 async function publicDiscovery(request, recordId, query, token = undefined) {
   const options = token ? { headers: authHeader(token) } : undefined;
   const audience = token ? 'viewer' : 'anonymous';
@@ -115,6 +123,21 @@ async function assertPrivate(request, recordId, viewerToken, query) {
   expect(viewerDiscovery).toEqual({ listing: undefined, search: undefined });
 }
 
+async function assertPublicHead(request, recordId, expectedContent, publicQuery, hiddenQuery) {
+  const publicDetail = await expectJson(
+    await request.get(`${API_BASE}/phenopackets/${recordId}`),
+    `public head for ${recordId}`
+  );
+  expect(publicDetail.phenopacket).toEqual(expectedContent);
+
+  const visible = await publicDiscovery(request, recordId, publicQuery);
+  expect(visible.listing?.subject).toEqual(expectedContent.subject);
+  expect(visible.search?.attributes?.subject).toEqual(expectedContent.subject);
+  if (hiddenQuery) {
+    expect((await publicDiscovery(request, recordId, hiddenQuery)).search).toBeUndefined();
+  }
+}
+
 test('independent curator lifecycle keeps exact candidates private through two review cycles', async ({
   browser,
   page,
@@ -136,16 +159,23 @@ test('independent curator lifecycle keeps exact candidates private through two r
   const adminToken = adminAuth.accessToken;
   const curatorAToken = curatorAAuth.accessToken;
   const curatorBToken = curatorBAuth.accessToken;
+  const curatorA = await currentActor(request, curatorAToken, 'curator A');
+  const curatorB = await currentActor(request, curatorBToken, 'curator B');
+  expect(curatorA).toMatchObject({ role: 'curator', is_active: true, is_verified: true });
+  expect(curatorB).toMatchObject({ role: 'curator', is_active: true, is_verified: true });
+  expect(curatorA.id).not.toBe(curatorB.id);
+  expect(curatorA.username).not.toBe(curatorB.username);
+  let recordCreated = false;
+  let primaryError = null;
 
   try {
-    const created = await expectJson(
-      await request.post(`${API_BASE}/phenopackets/`, {
-        headers: authHeader(curatorAToken),
-        data: { phenopacket: content(recordId, subjectV1) },
-      }),
-      'curator A creates draft'
-    );
-    expect(created).toMatchObject({ state: 'draft', draft_owner_username: 'dev-curator-a' });
+    const createResponse = await request.post(`${API_BASE}/phenopackets/`, {
+      headers: authHeader(curatorAToken),
+      data: { phenopacket: content(recordId, subjectV1) },
+    });
+    recordCreated = createResponse.ok();
+    const created = await expectJson(createResponse, 'curator A creates draft');
+    expect(created).toMatchObject({ state: 'draft', draft_owner_username: curatorA.username });
 
     const submitted = await transition(
       request,
@@ -159,8 +189,14 @@ test('independent curator lifecycle keeps exact candidates private through two r
     await assertPrivate(request, recordId, viewerAuth.accessToken, subjectV1);
 
     const ownerContext = await reviewContext(request, curatorAToken, recordId);
-    expect(ownerContext.audit.owner.username).toBe('dev-curator-a');
-    expect(ownerContext.audit.submission.actor.username).toBe('dev-curator-a');
+    expect(ownerContext.audit.owner).toMatchObject({
+      id: curatorA.id,
+      username: curatorA.username,
+    });
+    expect(ownerContext.audit.submission.actor).toMatchObject({
+      id: curatorA.id,
+      username: curatorA.username,
+    });
     const ownerApproval = ownerContext.capabilities.find((item) => item.action === 'approve');
     expect(ownerApproval).toMatchObject({ action: 'approve', allowed: false });
     expect(ownerApproval.blocked_by).toContain('self_review_forbidden');
@@ -192,7 +228,7 @@ test('independent curator lifecycle keeps exact candidates private through two r
     expect(queue.data[0]).toMatchObject({
       phenopacket_id: recordId,
       effective_state: 'in_review',
-      owner: { username: 'dev-curator-a' },
+      owner: { id: curatorA.id, username: curatorA.username },
     });
     expect(queue.data[0].capabilities).toContainEqual(
       expect.objectContaining({ action: 'approve', allowed: true })
@@ -239,7 +275,8 @@ test('independent curator lifecycle keeps exact candidates private through two r
     );
     expect(reply).toMatchObject({
       body_markdown: replyText,
-      author_username: 'dev-curator-a',
+      author_id: curatorA.id,
+      author_username: curatorA.username,
       review_revision_id: null,
       is_blocking_issue: false,
     });
@@ -296,8 +333,10 @@ test('independent curator lifecycle keeps exact candidates private through two r
     await expect(page.getByTestId('resolution-event')).toContainText('Addressed');
 
     const exactCandidate = (await reviewContext(request, curatorBToken, recordId)).candidate;
+    expect(exactCandidate.content).toEqual(resubmitted.revision.content_jsonb);
+    const firstApprovalRationale = 'Independent review confirms this candidate.';
     await page.getByTestId('action-approve').click();
-    await page.getByLabel('Decision rationale').fill('Independent review confirms this candidate.');
+    await page.getByLabel('Decision rationale').fill(firstApprovalRationale);
     await page.getByLabel('I independently reviewed this exact candidate revision.').check();
     await page.getByLabel('I have no unmanaged conflict of interest for this decision.').check();
     const approvalRequestPromise = page.waitForRequest(
@@ -305,6 +344,12 @@ test('independent curator lifecycle keeps exact candidates private through two r
         candidate.method() === 'POST' &&
         candidate.url().endsWith(`/phenopackets/${recordId}/transitions`)
     );
+    const approvalResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith(`/phenopackets/${recordId}/transitions`)
+    );
+    const approvalStartedAt = Date.now();
     await page.getByTestId('decision-submit').click();
     const approvalRequest = await approvalRequestPromise;
     expect(approvalRequest.postDataJSON()).toMatchObject({
@@ -313,8 +358,41 @@ test('independent curator lifecycle keeps exact candidates private through two r
       candidate_content_sha256: exactCandidate.content_sha256,
       attestation: { independent_review: true, no_unmanaged_conflict: true },
     });
+    const approvalResult = await expectJson(await approvalResponsePromise, 'first exact approval');
+    expect(approvalResult.revision).toMatchObject({
+      state: 'approved',
+      actor_id: curatorB.id,
+      actor_username: curatorB.username,
+      actor_role: 'curator',
+      actor_role_at_decision_recorded: true,
+      change_reason: firstApprovalRationale,
+      content_sha256: exactCandidate.content_sha256,
+      decision_metadata: {
+        schemaVersion: 1,
+        candidate_revision_id: exactCandidate.id,
+        candidate_content_sha256: exactCandidate.content_sha256,
+        attestation: { independent_review: true, no_unmanaged_conflict: true },
+        rationale: firstApprovalRationale,
+      },
+    });
+    expect(approvalResult.revision.content_jsonb).toEqual(exactCandidate.content);
+    const approvalTime = Date.parse(approvalResult.revision.created_at);
+    expect(approvalTime).toBeGreaterThanOrEqual(approvalStartedAt - 1_000);
+    expect(approvalTime).toBeLessThanOrEqual(Date.now() + 1_000);
     await expect(page.getByText('Approved').first()).toBeVisible({ timeout: 15_000 });
     await assertPrivate(request, recordId, viewerAuth.accessToken, subjectV2);
+
+    const approvedContext = await reviewContext(request, curatorBToken, recordId);
+    expect(approvedContext.approved.content).toEqual(exactCandidate.content);
+    expect(approvedContext.audit.approval).toMatchObject({
+      id: approvalResult.revision.id,
+      state: 'approved',
+      content_sha256: exactCandidate.content_sha256,
+      created_at: approvalResult.revision.created_at,
+      actor: { id: curatorB.id, username: curatorB.username },
+      actor_role: 'curator',
+      actor_role_at_decision_recorded: true,
+    });
 
     const viewerContext = await browser.newContext();
     const viewerPage = await viewerContext.newPage();
@@ -351,10 +429,8 @@ test('independent curator lifecycle keeps exact candidates private through two r
       await request.get(`${API_BASE}/phenopackets/${recordId}`),
       'first public head'
     );
-    expect(firstPublic.phenopacket.subject.id).toBe(subjectV2);
-    const firstDiscovery = await publicDiscovery(request, recordId, subjectV2);
-    expect(firstDiscovery.listing?.subject?.id).toBe(subjectV2);
-    expect(firstDiscovery.search?.attributes?.subject?.id).toBe(subjectV2);
+    expect(firstPublic.phenopacket).toEqual(exactCandidate.content);
+    await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
 
     const publishedForOwner = await detail(request, curatorAToken, recordId);
     const secondCycleContent = structuredClone(publishedForOwner.phenopacket);
@@ -370,15 +446,8 @@ test('independent curator lifecycle keeps exact candidates private through two r
       }),
       'second-cycle edit'
     );
-    const oldHeadDuringEdit = await expectJson(
-      await request.get(`${API_BASE}/phenopackets/${recordId}`),
-      'old public head during second-cycle edit'
-    );
-    expect(oldHeadDuringEdit.phenopacket.subject.id).toBe(subjectV2);
-    const discoveryDuringEdit = await publicDiscovery(request, recordId, subjectV2);
-    expect(discoveryDuringEdit.listing?.subject?.id).toBe(subjectV2);
-    expect(discoveryDuringEdit.search?.attributes?.subject?.id).toBe(subjectV2);
-    expect((await publicDiscovery(request, recordId, subjectV3)).search).toBeUndefined();
+    expect(secondDraft.effective_state).toBe('draft');
+    await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
 
     const secondSubmission = await transition(
       request,
@@ -389,6 +458,10 @@ test('independent curator lifecycle keeps exact candidates private through two r
       secondDraft.revision
     );
     let secondContext = await reviewContext(request, curatorBToken, recordId);
+    const replacementCandidate = structuredClone(secondContext.candidate.content);
+    expect(replacementCandidate).toEqual(secondSubmission.revision.content_jsonb);
+    expect(replacementCandidate.subject.id).toBe(subjectV3);
+    await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
     const secondApproval = await transition(
       request,
       curatorBToken,
@@ -403,6 +476,8 @@ test('independent curator lifecycle keeps exact candidates private through two r
       }
     );
     expect(secondApproval.phenopacket.effective_state).toBe('approved');
+    expect(secondApproval.revision.content_jsonb).toEqual(replacementCandidate);
+    await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
 
     const reopened = await transition(
       request,
@@ -413,6 +488,8 @@ test('independent curator lifecycle keeps exact candidates private through two r
       secondApproval.phenopacket.revision
     );
     expect(reopened.phenopacket.effective_state).toBe('changes_requested');
+    expect(reopened.revision.content_jsonb).toEqual(replacementCandidate);
+    await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
     const secondResubmission = await transition(
       request,
       curatorAToken,
@@ -421,7 +498,10 @@ test('independent curator lifecycle keeps exact candidates private through two r
       'Curator A resubmits after approved-review reopening',
       reopened.phenopacket.revision
     );
+    expect(secondResubmission.revision.content_jsonb).toEqual(replacementCandidate);
+    await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
     secondContext = await reviewContext(request, curatorBToken, recordId);
+    expect(secondContext.candidate.content).toEqual(replacementCandidate);
     const finalApproval = await transition(
       request,
       curatorBToken,
@@ -441,15 +521,8 @@ test('independent curator lifecycle keeps exact candidates private through two r
     );
     expect(secondContext.candidate.id).toBe(secondResubmission.revision.id);
     expect(secondContext.candidate.content_sha256).toBe(secondResubmission.revision.content_sha256);
-    const oldHeadWhileApproved = await expectJson(
-      await request.get(`${API_BASE}/phenopackets/${recordId}`),
-      'old public head while replacement approved'
-    );
-    expect(oldHeadWhileApproved.phenopacket.subject.id).toBe(subjectV2);
-    const discoveryWhileApproved = await publicDiscovery(request, recordId, subjectV2);
-    expect(discoveryWhileApproved.listing?.subject?.id).toBe(subjectV2);
-    expect(discoveryWhileApproved.search?.attributes?.subject?.id).toBe(subjectV2);
-    expect((await publicDiscovery(request, recordId, subjectV3)).search).toBeUndefined();
+    expect(finalApproval.revision.content_jsonb).toEqual(replacementCandidate);
+    await assertPublicHead(request, recordId, exactCandidate.content, subjectV2, subjectV3);
 
     await transition(
       request,
@@ -467,29 +540,18 @@ test('independent curator lifecycle keeps exact candidates private through two r
       await request.get(`${API_BASE}/phenopackets/${recordId}`),
       'replacement public head'
     );
-    expect(replacementPublic.phenopacket.subject.id).toBe(subjectV3);
+    expect(replacementPublic.phenopacket).toEqual(replacementCandidate);
     const replacementDiscovery = await publicDiscovery(request, recordId, subjectV3);
-    expect(replacementDiscovery.listing?.subject?.id).toBe(subjectV3);
-    expect(replacementDiscovery.search?.attributes?.subject?.id).toBe(subjectV3);
+    expect(replacementDiscovery.listing?.subject).toEqual(replacementCandidate.subject);
+    expect(replacementDiscovery.search?.attributes?.subject).toEqual(replacementCandidate.subject);
+    expect((await publicDiscovery(request, recordId, subjectV2)).search).toBeUndefined();
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
-    // Unlike synthetic e2e-* fixtures, this record is publicly discoverable
-    // after publication. Always archive it through the normal transition API,
-    // including when a later assertion fails.
-    const cleanup = await request.get(`${API_BASE}/phenopackets/${recordId}`, {
-      headers: authHeader(adminToken),
+    await archiveE2ERecord(request, API_BASE, adminToken, recordId, {
+      recordCreated,
+      primaryError,
     });
-    if (cleanup.ok()) {
-      const current = await cleanup.json();
-      if (current.effective_state !== 'archived') {
-        await request.post(`${API_BASE}/phenopackets/${recordId}/transitions`, {
-          headers: authHeader(adminToken),
-          data: {
-            to_state: 'archived',
-            reason: 'Archive completed independent-review E2E record',
-            revision: current.revision,
-          },
-        });
-      }
-    }
   }
 });

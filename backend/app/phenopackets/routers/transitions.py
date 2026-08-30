@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import get_current_user, is_curator_or_admin, require_curator
+from app.core.api_models import ApiErrorEnvelope
 from app.database import get_db
 from app.models.user import User
 from app.phenopackets.models import (
@@ -102,6 +103,9 @@ async def _get_phenopacket_or_404(
 @router.post(
     "/{phenopacket_id}/transitions",
     response_model=Dict[str, Any],
+    responses={
+        status: {"model": ApiErrorEnvelope} for status in (401, 403, 404, 409, 422, 500)
+    },
     summary="Perform a state transition",
 )
 async def post_transition(

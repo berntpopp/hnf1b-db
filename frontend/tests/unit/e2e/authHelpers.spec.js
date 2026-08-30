@@ -74,6 +74,68 @@ describe('e2e auth helpers', () => {
     });
   });
 
+  it('keeps loginAsReviewer as a direct alias for the curator B fallback', async () => {
+    vi.stubEnv('E2E_CURATOR_B_USERNAME', '');
+    vi.stubEnv('E2E_CURATOR_B_PASSWORD', '');
+    vi.stubEnv('E2E_REVIEWER_USERNAME', '');
+    vi.stubEnv('E2E_REVIEWER_PASSWORD', '');
+    const req = {
+      post: vi.fn().mockResolvedValue({
+        ok: () => true,
+        json: async () => ({ access_token: 'reviewer-token' }),
+        headersArray: () => [
+          { name: 'set-cookie', value: 'refresh_token=refresh-value; Path=/api/v2; HttpOnly' },
+          { name: 'set-cookie', value: 'csrf_token=csrf-value; Path=/' },
+        ],
+      }),
+    };
+
+    await authHelpers.loginAsReviewer(req, 'http://localhost:8000/api/v2');
+
+    expect(req.post).toHaveBeenCalledWith('http://localhost:8000/api/v2/auth/login', {
+      data: { username: 'dev-curator-b', password: 'DevCuratorB!2026' },
+    });
+  });
+
+  it('honors a complete legacy reviewer credential override', async () => {
+    vi.stubEnv('E2E_REVIEWER_USERNAME', 'legacy-independent-reviewer');
+    vi.stubEnv('E2E_REVIEWER_PASSWORD', 'LegacyReviewer!2026');
+    const req = {
+      post: vi.fn().mockResolvedValue({
+        ok: () => true,
+        json: async () => ({ access_token: 'legacy-reviewer-token' }),
+        headersArray: () => [
+          { name: 'set-cookie', value: 'refresh_token=refresh-value; Path=/api/v2; HttpOnly' },
+          { name: 'set-cookie', value: 'csrf_token=csrf-value; Path=/' },
+        ],
+      }),
+    };
+
+    await authHelpers.loginAsReviewer(req, 'http://localhost:8000/api/v2');
+
+    expect(req.post).toHaveBeenCalledWith('http://localhost:8000/api/v2/auth/login', {
+      data: {
+        username: 'legacy-independent-reviewer',
+        password: 'LegacyReviewer!2026',
+      },
+    });
+  });
+
+  it.each([
+    ['E2E_REVIEWER_USERNAME', 'legacy-independent-reviewer'],
+    ['E2E_REVIEWER_PASSWORD', 'LegacyReviewer!2026'],
+  ])('rejects a partial legacy reviewer pair before any network call (%s)', async (key, value) => {
+    vi.stubEnv('E2E_REVIEWER_USERNAME', '');
+    vi.stubEnv('E2E_REVIEWER_PASSWORD', '');
+    vi.stubEnv(key, value);
+    const req = { post: vi.fn() };
+
+    await expect(authHelpers.loginAsReviewer(req, 'http://localhost:8000/api/v2')).rejects.toThrow(
+      'E2E_REVIEWER_USERNAME and E2E_REVIEWER_PASSWORD must be set together'
+    );
+    expect(req.post).not.toHaveBeenCalled();
+  });
+
   it('returns Playwright cookie objects without mixing url and path', async () => {
     const req = {
       post: vi.fn().mockResolvedValue({

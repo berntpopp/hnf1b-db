@@ -41,7 +41,6 @@ REVIEW_QUEUE_PATH = "/api/v2/phenopackets/review-queue"
 REVIEW_CONTEXT_PATH = "/api/v2/phenopackets/{record_id}/review-context"
 TRANSITION_PATH = "/api/v2/phenopackets/{phenopacket_id}/transitions"
 PHENOPACKET_DETAIL_PATH = "/api/v2/phenopackets/{phenopacket_id}"
-CURATION_PATH = "/api/v2/phenopackets/{phenopacket_id}/curation"
 
 
 def _live_openapi() -> Dict[str, Any]:
@@ -292,7 +291,7 @@ def test_comment_mutations_document_bodyless_discussion_and_typed_blocking_input
         ] == {"$ref": "#/components/schemas/CommentResponse"}
         assert operation["responses"]["422"]["content"]["application/json"][
             "schema"
-        ] == {"$ref": "#/components/schemas/HTTPValidationError"}
+        ] == {"$ref": "#/components/schemas/ApiErrorEnvelope"}
 
     resolve = schemas["ReviewIssueResolveRequest"]
     assert resolve["additionalProperties"] is False
@@ -375,39 +374,72 @@ def test_transition_and_actor_capability_contracts_are_structural_and_exact() ->
     ] == {"$ref": "#/components/schemas/ActionCapability"}
 
 
-def test_review_routes_document_validation_and_structured_error_responses() -> None:
-    """Review validation and curator-ledger errors remain machine-readable."""
+def test_workflow_routes_document_runtime_error_envelope_and_actual_statuses() -> None:
+    """Workflow operations expose the shared handler envelope at real statuses."""
     spec = app.openapi()
-    validation_error = {"$ref": "#/components/schemas/HTTPValidationError"}
-    for path, method in (
-        (REVIEW_QUEUE_PATH, "get"),
-        (REVIEW_CONTEXT_PATH, "get"),
-        (TRANSITION_PATH, "post"),
-        (COMMENT_RESOLVE_PATH, "post"),
-        (COMMENT_UNRESOLVE_PATH, "post"),
-    ):
-        operation = spec["paths"][path][method]
-        assert (
-            operation["responses"]["422"]["content"]["application/json"]["schema"]
-            == validation_error
-        )
-
     schemas = spec["components"]["schemas"]
-    error_envelope = schemas["CurationErrorEnvelope"]
+    error_envelope = schemas["ApiErrorEnvelope"]
     assert set(error_envelope["required"]) == {"detail", "error_code"}
     assert error_envelope["properties"]["detail"] == {
-        "$ref": "#/components/schemas/CurationError"
+        "$ref": "#/components/schemas/ApiJsonValue"
     }
-    assert {
+    assert set(error_envelope["properties"]) == {
         "detail",
         "error_code",
         "request_id",
-    } == set(error_envelope["properties"])
-    curation_operation = spec["paths"][CURATION_PATH]["get"]
-    for status in ("404", "409", "422", "428"):
-        assert curation_operation["responses"][status]["content"]["application/json"][
-            "schema"
-        ] == {"$ref": "#/components/schemas/CurationErrorEnvelope"}
+    }
+    json_value = schemas["ApiJsonValue"]
+    assert {item.get("type") for item in json_value["anyOf"]} == {
+        "array",
+        "object",
+        "string",
+        "integer",
+        "number",
+        "boolean",
+        "null",
+    }
+
+    expected_statuses = {
+        (REVIEW_QUEUE_PATH, "get"): {"200", "400", "401", "404", "422"},
+        # FastAPI retains its framework-generated 422 for the string path
+        # parameter; it uses the same runtime envelope as deliberate errors.
+        (REVIEW_CONTEXT_PATH, "get"): {"200", "401", "404", "422"},
+        (TRANSITION_PATH, "post"): {
+            "200",
+            "401",
+            "403",
+            "404",
+            "409",
+            "422",
+            "500",
+        },
+        (COMMENT_RESOLVE_PATH, "post"): {
+            "200",
+            "401",
+            "403",
+            "404",
+            "409",
+            "422",
+            "500",
+        },
+        (COMMENT_UNRESOLVE_PATH, "post"): {
+            "200",
+            "401",
+            "403",
+            "404",
+            "409",
+            "422",
+            "500",
+        },
+    }
+    error_ref = {"$ref": "#/components/schemas/ApiErrorEnvelope"}
+    for (path, method), statuses in expected_statuses.items():
+        responses = spec["paths"][path][method]["responses"]
+        assert set(responses) == statuses
+        for status in statuses - {"200"}:
+            assert responses[status]["content"]["application/json"]["schema"] == (
+                error_ref
+            )
 
 
 def test_semantic_change_before_and_after_are_required_typed_json_values() -> None:
