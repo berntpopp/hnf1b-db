@@ -71,8 +71,11 @@ _DENY = [
         # Build/version info — not data.
         r"^/info$",
         r"^/version$",
+        # Review queue is a curator-only collection route; deny it before the
+        # generic public /phenopackets/{id} rule can treat its slug as an ID.
+        r"^/phenopackets/review-queue$",
         # Per-phenopacket workflow/audit/revision routes — curation internals.
-        r"^/phenopackets/[^/]+/(audit|curation|reports|revisions|timeline|transitions)(/|$)",
+        r"^/phenopackets/[^/]+/(audit|curation|reports|review-context|revisions|timeline|transitions)(/|$)",
         # Statistical-comparison endpoint — not in the curated metric set.
         r"^/phenopackets/compare/",
         # SEO sitemaps — XML, not data.

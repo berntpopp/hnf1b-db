@@ -62,6 +62,8 @@ _DENIED_PATHS = [
     "/seo/sitemap-index.xml",
     "/publications/sync",
     "/phenopackets/compare/variant-types",
+    "/phenopackets/review-queue",
+    "/phenopackets/record-123/review-context",
 ]
 
 # ---------------------------------------------------------------------------
