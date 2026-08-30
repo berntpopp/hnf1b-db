@@ -37,6 +37,7 @@ SNAPSHOT_PATH = (
 ALL_VARIANTS_PATH = "/api/v2/phenopackets/aggregate/all-variants"
 COMMENT_RESOLVE_PATH = "/api/v2/comments/{comment_id}/resolve"
 COMMENT_UNRESOLVE_PATH = "/api/v2/comments/{comment_id}/unresolve"
+COMMENT_CREATE_PATH = "/api/v2/comments"
 REVIEW_QUEUE_PATH = "/api/v2/phenopackets/review-queue"
 REVIEW_CONTEXT_PATH = "/api/v2/phenopackets/{record_id}/review-context"
 TRANSITION_PATH = "/api/v2/phenopackets/{phenopacket_id}/transitions"
@@ -417,6 +418,15 @@ def test_workflow_routes_document_runtime_error_envelope_and_actual_statuses() -
             "422",
             "500",
         },
+        (COMMENT_CREATE_PATH, "post"): {
+            "201",
+            "401",
+            "403",
+            "404",
+            "409",
+            "422",
+            "500",
+        },
         (COMMENT_RESOLVE_PATH, "post"): {
             "200",
             "401",
@@ -440,7 +450,7 @@ def test_workflow_routes_document_runtime_error_envelope_and_actual_statuses() -
     for (path, method), statuses in expected_statuses.items():
         responses = spec["paths"][path][method]["responses"]
         assert set(responses) == statuses
-        for status in statuses - {"200"}:
+        for status in statuses - {"200", "201"}:
             assert responses[status]["content"]["application/json"]["schema"] == (
                 error_ref
             )
