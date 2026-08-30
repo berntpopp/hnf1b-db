@@ -60,6 +60,7 @@ describe('HistoryTab', () => {
         ],
         loading: false,
         error: null,
+        total: 2,
       },
     });
 
@@ -68,5 +69,6 @@ describe('HistoryTab', () => {
     expect(wrapper.text()).toContain('curator.alice');
     expect(wrapper.text()).toContain('Approved after review');
     expect(wrapper.text()).toContain('Imported legacy record');
+    expect(wrapper.text()).toContain('2 of 2 revisions loaded.');
   });
 });

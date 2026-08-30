@@ -7,31 +7,38 @@
     <p v-else-if="entries.length === 0" class="history-tab__status">
       No revision history is available yet.
     </p>
-    <table v-else class="history-tab__table">
-      <thead>
-        <tr>
-          <th scope="col">Revision</th>
-          <th scope="col">State</th>
-          <th scope="col">Actor</th>
-          <th scope="col">Changed</th>
-          <th scope="col">Reason</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="entry in entries" :key="entry.id">
-          <td>{{ formatRevision(entry.revisionNumber) }}</td>
-          <td>{{ entry.state || 'Unknown' }}</td>
-          <td>{{ entry.actor || 'Unknown' }}</td>
-          <td>{{ formatTimestamp(entry.timestamp) }}</td>
-          <td>{{ entry.summary || 'No summary provided' }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <template v-else>
+      <p class="history-tab__summary">
+        {{ entries.length }} of {{ displayTotal }} revisions loaded.
+      </p>
+      <table class="history-tab__table">
+        <thead>
+          <tr>
+            <th scope="col">Revision</th>
+            <th scope="col">State</th>
+            <th scope="col">Actor</th>
+            <th scope="col">Changed</th>
+            <th scope="col">Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in entries" :key="entry.id">
+            <td>{{ formatRevision(entry.revisionNumber) }}</td>
+            <td>{{ entry.state || 'Unknown' }}</td>
+            <td>{{ entry.actor || 'Unknown' }}</td>
+            <td>{{ formatTimestamp(entry.timestamp) }}</td>
+            <td>{{ entry.summary || 'No summary provided' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
   </section>
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue';
+
+const props = defineProps({
   entries: {
     type: Array,
     default: () => [],
@@ -44,7 +51,13 @@ defineProps({
     type: [String, Object],
     default: null,
   },
+  total: {
+    type: Number,
+    default: 0,
+  },
 });
+
+const displayTotal = computed(() => props.total || props.entries.length);
 
 function formatRevision(revisionNumber) {
   if (revisionNumber == null) {
@@ -86,6 +99,10 @@ function formatTimestamp(timestamp) {
 
 .history-tab__status--error {
   color: rgb(var(--v-theme-error, 176 0 32));
+}
+
+.history-tab__summary {
+  margin: 0 0 8px;
 }
 
 .history-tab__table {

@@ -32,6 +32,7 @@ export function usePhenopacketState(phenopacketId) {
   const loading = ref(false);
   const error = ref(null);
   const historyEntries = ref([]);
+  const historyTotal = ref(0);
   const historyLoading = ref(false);
   const historyError = ref(null);
   let recordGeneration = 0;
@@ -48,6 +49,7 @@ export function usePhenopacketState(phenopacketId) {
       loading.value = false;
       error.value = null;
       historyEntries.value = [];
+      historyTotal.value = 0;
       historyLoading.value = false;
       historyError.value = null;
     },
@@ -109,11 +111,37 @@ export function usePhenopacketState(phenopacketId) {
     historyError.value = null;
 
     try {
-      const [{ data: revisionData }, { data: auditData }] = await Promise.all([
+      const [{ data: firstRevisionPage }, { data: auditData }] = await Promise.all([
         fetchRevisions(id, opts),
         getPhenopacketAuditHistory(id),
       ]);
       if (!ownsOperation(generation, id)) return;
+
+      const revisionRows = [...(firstRevisionPage.data ?? [])];
+      const declaredTotal = Number(firstRevisionPage.meta?.total);
+      const total =
+        Number.isInteger(declaredTotal) && declaredTotal >= revisionRows.length
+          ? declaredTotal
+          : revisionRows.length;
+      const pageSize =
+        Number(firstRevisionPage.meta?.page_size) || opts?.pageSize || revisionRows.length || 50;
+      let pageNumber = Number(firstRevisionPage.meta?.page) || opts?.pageNumber || 1;
+      let fetchedPages = 1;
+
+      while (revisionRows.length < total) {
+        if (fetchedPages >= 100) {
+          throw new Error('Revision history exceeds the supported 100-page safety bound.');
+        }
+        pageNumber += 1;
+        const { data: nextPage } = await fetchRevisions(id, { pageSize, pageNumber });
+        if (!ownsOperation(generation, id)) return;
+        const nextRows = nextPage.data ?? [];
+        if (nextRows.length === 0) {
+          throw new Error('Revision history pagination ended before the declared total.');
+        }
+        revisionRows.push(...nextRows);
+        fetchedPages += 1;
+      }
 
       const auditByRevisionId = new Map(
         auditData
@@ -121,7 +149,7 @@ export function usePhenopacketState(phenopacketId) {
           .map((entry) => [String(entry.id), entry])
       );
 
-      historyEntries.value = (revisionData.data ?? []).map((revision) => {
+      historyEntries.value = revisionRows.map((revision) => {
         const auditEntry = auditByRevisionId.get(String(revision.id));
 
         return {
@@ -134,6 +162,7 @@ export function usePhenopacketState(phenopacketId) {
             auditEntry?.change_summary ?? revision.change_reason ?? auditEntry?.change_reason,
         };
       });
+      historyTotal.value = total;
     } catch (e) {
       if (!ownsOperation(generation, id)) return;
       historyError.value = e.response?.data?.detail || e.message || 'Failed to load history';
@@ -148,6 +177,7 @@ export function usePhenopacketState(phenopacketId) {
     loading,
     error,
     historyEntries,
+    historyTotal,
     historyLoading,
     historyError,
     transitionTo,

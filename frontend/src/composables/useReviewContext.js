@@ -1,4 +1,4 @@
-import { ref, unref } from 'vue';
+import { ref, unref, watch } from 'vue';
 
 import { getReviewContext } from '@/api/domain/reviews';
 
@@ -22,14 +22,26 @@ export function useReviewContext(id) {
   const liveMessage = ref('');
   let requestToken = 0;
 
+  function invalidate() {
+    requestToken += 1;
+    context.value = null;
+    loading.value = false;
+    error.value = null;
+    conflict.value = null;
+    liveMessage.value = '';
+  }
+
+  watch(() => unref(id), invalidate, { flush: 'sync' });
+
   async function load({ announceIssueCount = false } = {}) {
     const token = ++requestToken;
+    const recordId = unref(id);
     const previousCount = context.value?.discussion_summary?.open_blocking_issues;
     loading.value = true;
     error.value = null;
 
     try {
-      const response = await getReviewContext(unref(id));
+      const response = await getReviewContext(recordId);
       if (token !== requestToken) return null;
       const nextContext = response.data;
       if (!hasAuthoritativeIssueCount(nextContext)) {
@@ -50,7 +62,7 @@ export function useReviewContext(id) {
         context.value = null;
         error.value = requestError;
         window.logService?.error?.('Failed to fetch review context', {
-          recordId: unref(id),
+          recordId,
           error: requestError?.message,
         });
       }
@@ -82,5 +94,6 @@ export function useReviewContext(id) {
     reload,
     markConflict,
     clearConflict,
+    invalidate,
   };
 }

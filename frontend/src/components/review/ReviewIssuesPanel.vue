@@ -3,6 +3,7 @@
     <div class="review-issues__heading">
       <h2 id="review-issues-title" class="text-h6">Blocking issues</h2>
       <v-btn
+        v-if="!conflict"
         data-testid="create-issue"
         color="primary"
         size="small"
@@ -12,11 +13,31 @@
         Create issue
       </v-btn>
     </div>
-    <p v-if="!createIssueCapability.allowed && createBlockers" class="text-caption">
+    <p v-if="!conflict && !createIssueCapability.allowed && createBlockers" class="text-caption">
       Create issue unavailable: {{ createBlockers }}.
     </p>
 
-    <v-alert v-if="error" type="error" density="compact" class="my-3">
+    <v-alert
+      v-if="conflict"
+      data-testid="issue-conflict-recovery"
+      type="warning"
+      density="compact"
+      class="my-3"
+      role="alert"
+    >
+      <strong>Reload required</strong>
+      <p class="mb-2">{{ conflict.message }}</p>
+      <v-btn
+        ref="reloadButton"
+        data-testid="reload-issue-conflict"
+        size="small"
+        variant="outlined"
+        @click="reloadAfterConflict"
+      >
+        Reload review
+      </v-btn>
+    </v-alert>
+    <v-alert v-else-if="error" type="error" density="compact" class="my-3">
       {{ error.message || 'The blocking issue could not be updated.' }}
     </v-alert>
     <p v-if="orderedIssues.length === 0" class="text-body-2 mt-3">No blocking issues.</p>
@@ -53,20 +74,22 @@
           </li>
         </ul>
 
-        <div v-for="capability in issue.capabilities" :key="capability.action" class="mt-2">
-          <v-btn
-            v-if="capability.action === 'resolve' || capability.action === 'reopen'"
-            size="small"
-            variant="outlined"
-            :disabled="!capability.allowed"
-            @click="openDialog(capability.action, issue)"
-          >
-            {{ capability.action === 'resolve' ? 'Resolve issue' : 'Reopen issue' }}
-          </v-btn>
-          <span v-if="!capability.allowed && blockerText(capability)" class="text-caption ml-2">
-            {{ blockerText(capability) }}
-          </span>
-        </div>
+        <template v-if="!conflict">
+          <div v-for="capability in issue.capabilities" :key="capability.action" class="mt-2">
+            <v-btn
+              v-if="capability.action === 'resolve' || capability.action === 'reopen'"
+              size="small"
+              variant="outlined"
+              :disabled="!capability.allowed"
+              @click="openDialog(capability.action, issue)"
+            >
+              {{ capability.action === 'resolve' ? 'Resolve issue' : 'Reopen issue' }}
+            </v-btn>
+            <span v-if="!capability.allowed && blockerText(capability)" class="text-caption ml-2">
+              {{ blockerText(capability) }}
+            </span>
+          </div>
+        </template>
       </li>
     </ol>
 
@@ -82,7 +105,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 import CommentBody from '@/components/comments/CommentBody.vue';
 import ReviewIssueDialog from '@/components/review/ReviewIssueDialog.vue';
@@ -102,16 +125,18 @@ const props = defineProps({
   liveMessage: { type: String, default: '' },
 });
 
-const { submitting, error, createIssue, resolveIssue, reopenIssue } = useReviewIssues({
-  recordId: computed(() => props.recordId),
-  recordRevision: computed(() => props.recordRevision),
-  candidateRevisionId: computed(() => props.candidateRevisionId),
-  reload: props.reload,
-});
+const { submitting, error, conflict, createIssue, resolveIssue, reopenIssue, reloadConflict } =
+  useReviewIssues({
+    recordId: computed(() => props.recordId),
+    recordRevision: computed(() => props.recordRevision),
+    candidateRevisionId: computed(() => props.candidateRevisionId),
+    reload: props.reload,
+  });
 
 const dialogOpen = ref(false);
 const dialogMode = ref('create');
 const selectedIssue = ref(null);
+const reloadButton = ref(null);
 
 const orderedIssues = computed(() =>
   [...props.issues].sort((left, right) => Number(!!left.resolved_at) - Number(!!right.resolved_at))
@@ -137,11 +162,29 @@ function openDialog(mode, issue = null) {
   dialogOpen.value = true;
 }
 
+async function focusReloadButton() {
+  await nextTick();
+  (reloadButton.value?.$el || reloadButton.value)?.focus?.();
+}
+
+watch(conflict, (value) => {
+  if (value) void focusReloadButton();
+});
+
 async function submitDialog(payload) {
-  if (dialogMode.value === 'create') await createIssue(payload);
-  else if (dialogMode.value === 'resolve') await resolveIssue(selectedIssue.value, payload);
-  else await reopenIssue(selectedIssue.value, payload);
-  dialogOpen.value = false;
+  try {
+    if (dialogMode.value === 'create') await createIssue(payload);
+    else if (dialogMode.value === 'resolve') await resolveIssue(selectedIssue.value, payload);
+    else await reopenIssue(selectedIssue.value, payload);
+    dialogOpen.value = false;
+  } catch {
+    if (conflict.value) dialogOpen.value = false;
+    await focusReloadButton();
+  }
+}
+
+async function reloadAfterConflict() {
+  await reloadConflict();
 }
 </script>
 

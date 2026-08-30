@@ -74,6 +74,7 @@ const history = {
       summary: 'Ready for review',
     },
   ]),
+  historyTotal: ref(1),
   historyLoading: ref(false),
   historyError: ref(null),
   loadHistory: vi.fn(),
@@ -132,8 +133,9 @@ const stubs = {
   ReviewIssuesPanel: ReviewIssuesPanelStub,
   ReviewActionPanel: ReviewActionPanelStub,
   HistoryTab: {
-    props: ['entries', 'loading', 'error'],
-    template: '<section data-testid="history-view">History {{ entries.length }}</section>',
+    props: ['entries', 'total', 'loading', 'error'],
+    template:
+      '<section data-testid="history-view">History {{ entries.length }} of {{ total }}</section>',
   },
   'v-container': { template: '<main><slot /></main>' },
   'v-tabs': tabsStub,
@@ -169,6 +171,7 @@ describe('PhenopacketReview', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    route.params.phenopacket_id = 'PP-317';
     review.context.value = contextFixture();
     review.loading.value = false;
     review.error.value = null;
@@ -179,6 +182,7 @@ describe('PhenopacketReview', () => {
     history.historyEntries.value = [
       { id: '42', revisionNumber: 7, state: 'in_review', actor: 'submitter' },
     ];
+    history.historyTotal.value = 1;
     history.historyLoading.value = false;
     history.historyError.value = null;
     route.query.return_to = '/review?tab=approved&page=2&q=renal';

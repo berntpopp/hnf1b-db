@@ -4,7 +4,7 @@ import { transitionPhenopacket } from '@/api/domain/phenopackets';
 
 const RATIONALE_MAX_LENGTH = 500;
 const SNAPSHOT_DIGEST = /^sha256:[0-9a-f]{64}$/;
-const CONFLICT_CODES = new Set(['revision_mismatch', 'review_revision_mismatch']);
+const CONFLICT_CODES = new Set(['revision_mismatch', 'review_revision_mismatch', 'review_closed']);
 
 function requiredRationale(value) {
   const rationale = typeof value === 'string' ? value.trim() : '';
@@ -66,6 +66,19 @@ export function useReviewActions(id, contextRef, { reload, onCompleted } = {}) {
   const submitting = ref(false);
   const error = ref(null);
   const conflict = ref(null);
+  let operationGeneration = 0;
+
+  watch(
+    () => unref(id),
+    () => {
+      operationGeneration += 1;
+      pendingAction.value = null;
+      submitting.value = false;
+      error.value = null;
+      conflict.value = null;
+    },
+    { flush: 'sync' }
+  );
 
   watch(
     () => unref(contextRef),
@@ -94,6 +107,11 @@ export function useReviewActions(id, contextRef, { reload, onCompleted } = {}) {
   }
 
   async function mutate(action, toState, rationale, loaded, conditional = {}) {
+    const generation = operationGeneration;
+    const operationRecordId = loaded.phenopacket_id;
+    const operationRouteId = unref(id);
+    const ownsOperation = () =>
+      generation === operationGeneration && operationRouteId === unref(id);
     pendingAction.value = action;
     submitting.value = true;
     error.value = null;
@@ -105,23 +123,34 @@ export function useReviewActions(id, contextRef, { reload, onCompleted } = {}) {
         loaded.record_revision,
         conditional
       );
+      if (!ownsOperation()) return response.data;
       const nextContext = await reload();
-      await onCompleted?.({ action, result: response.data, context: nextContext });
+      if (!ownsOperation()) return response.data;
+      await onCompleted?.({
+        action,
+        recordId: operationRecordId,
+        result: response.data,
+        context: nextContext,
+      });
       return response.data;
     } catch (mutationError) {
-      const mappedConflict = conflictDetail(mutationError);
-      if (mappedConflict) conflict.value = mappedConflict;
-      else error.value = mutationError;
-      window.logService?.error?.('Review decision failed', {
-        routeId: unref(id),
-        loadedRecordId: loaded.phenopacket_id,
-        action,
-        error: mutationError?.message,
-      });
+      if (ownsOperation()) {
+        const mappedConflict = conflictDetail(mutationError);
+        if (mappedConflict) conflict.value = mappedConflict;
+        else error.value = mutationError;
+        window.logService?.error?.('Review decision failed', {
+          routeId: unref(id),
+          loadedRecordId: operationRecordId,
+          action,
+          error: mutationError?.message,
+        });
+      }
       throw mutationError;
     } finally {
-      pendingAction.value = null;
-      submitting.value = false;
+      if (ownsOperation()) {
+        pendingAction.value = null;
+        submitting.value = false;
+      }
     }
   }
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ref } from 'vue';
 
 const { getReviewContext } = vi.hoisted(() => ({ getReviewContext: vi.fn() }));
 
@@ -134,5 +135,40 @@ describe('useReviewContext', () => {
 
     expect(review.context.value).toEqual(newestPayload);
     expect(review.error.value).toBeNull();
+  });
+
+  it('synchronously invalidates the loaded workspace and stale request when the route id changes', async () => {
+    let resolveOld;
+    getReviewContext
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOld = resolve;
+          })
+      )
+      .mockResolvedValueOnce({
+        data: { ...contextFixture(0), phenopacket_id: 'PP-B', record_revision: 3 },
+      });
+    const id = ref('PP-A');
+    const review = useReviewContext(id);
+    review.markConflict({ code: 'revision_mismatch' });
+    review.liveMessage.value = 'Old announcement';
+    const oldLoad = review.load();
+
+    id.value = 'PP-B';
+
+    expect(review.context.value).toBeNull();
+    expect(review.loading.value).toBe(false);
+    expect(review.error.value).toBeNull();
+    expect(review.conflict.value).toBeNull();
+    expect(review.liveMessage.value).toBe('');
+    const loaded = await review.load();
+    expect(loaded.phenopacket_id).toBe('PP-B');
+
+    resolveOld({ data: { ...contextFixture(2), phenopacket_id: 'PP-A' } });
+    await oldLoad;
+    expect(review.context.value.phenopacket_id).toBe('PP-B');
+    expect(getReviewContext).toHaveBeenNthCalledWith(1, 'PP-A');
+    expect(getReviewContext).toHaveBeenNthCalledWith(2, 'PP-B');
   });
 });

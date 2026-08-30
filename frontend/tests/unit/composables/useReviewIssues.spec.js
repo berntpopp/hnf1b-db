@@ -1,3 +1,4 @@
+import { ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { createComment, resolveComment, unresolveComment } = vi.hoisted(() => ({
@@ -30,6 +31,30 @@ function setup() {
       reload,
     }),
   };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+const mutationArguments = {
+  create: [{ bodyMarkdown: 'A blocking issue.' }],
+  resolve: [issue, { disposition: 'addressed', rationale: 'Addressed.' }],
+  reopen: [issue, { rationale: 'Reopened.' }],
+};
+
+function mutation(review, operation) {
+  return {
+    create: review.createIssue,
+    resolve: review.resolveIssue,
+    reopen: review.reopenIssue,
+  }[operation](...mutationArguments[operation]);
 }
 
 describe('useReviewIssues', () => {
@@ -164,5 +189,90 @@ describe('useReviewIssues', () => {
       '10000 characters'
     );
     expect(createComment).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['create', createComment, { data: { id: 56 } }],
+    ['resolve', resolveComment, { data: { ...issue, resolved_at: '2026-08-14T10:00:00Z' } }],
+    ['reopen', unresolveComment, { data: { ...issue, resolved_at: null } }],
+  ])('keeps duplicate %s mutations single-flight', async (operation, transport, response) => {
+    const pending = deferred();
+    transport.mockReturnValueOnce(pending.promise);
+    const { review } = setup();
+
+    const first = mutation(review, operation);
+    await expect(mutation(review, operation)).rejects.toMatchObject({
+      code: 'issue_mutation_in_progress',
+    });
+    expect(transport).toHaveBeenCalledOnce();
+
+    pending.resolve(response);
+    await first;
+  });
+
+  it.each([
+    ['create', createComment, 'revision_mismatch'],
+    ['resolve', resolveComment, 'review_revision_mismatch'],
+    ['reopen', unresolveComment, 'review_closed'],
+  ])(
+    'maps %s 409 %s to explicit reload recovery without retry',
+    async (operation, transport, code) => {
+      const conflictError = Object.assign(new Error('Conflict'), {
+        response: { status: 409, data: { detail: { code, message: 'Reload the issue state.' } } },
+      });
+      transport.mockRejectedValueOnce(conflictError);
+      const { review, reload } = setup();
+
+      await expect(mutation(review, operation)).rejects.toBe(conflictError);
+      expect(review.conflict.value).toEqual({
+        code,
+        message: 'Reload the issue state.',
+        reloadRequired: true,
+      });
+      await expect(mutation(review, operation)).rejects.toMatchObject({
+        code: 'reload_required',
+      });
+      expect(transport).toHaveBeenCalledOnce();
+      expect(reload).not.toHaveBeenCalled();
+
+      await review.reloadConflict();
+      expect(reload).toHaveBeenCalledOnce();
+      expect(review.conflict.value).toBeNull();
+    }
+  );
+
+  it('ignores a late old-record failure after a newer record succeeds', async () => {
+    const recordId = ref(RECORD_ID);
+    const recordRevision = ref(11);
+    const candidateRevisionId = ref(42);
+    const reload = vi.fn().mockResolvedValue({});
+    const stale = deferred();
+    createComment.mockReturnValueOnce(stale.promise).mockResolvedValueOnce({ data: { id: 99 } });
+    const review = useReviewIssues({
+      recordId,
+      recordRevision,
+      candidateRevisionId,
+      reload,
+    });
+
+    const oldMutation = review.createIssue({ bodyMarkdown: 'Old record issue.' });
+    recordId.value = '910eca1f-12b4-4294-8747-5987dad12253';
+    recordRevision.value = 4;
+    candidateRevisionId.value = 88;
+    await review.createIssue({ bodyMarkdown: 'New record issue.' });
+    stale.reject(
+      Object.assign(new Error('Late old conflict'), {
+        response: {
+          status: 409,
+          data: { detail: { code: 'revision_mismatch', message: 'Old stale state.' } },
+        },
+      })
+    );
+    await expect(oldMutation).rejects.toThrow('Late old conflict');
+
+    expect(review.error.value).toBeNull();
+    expect(review.conflict.value).toBeNull();
+    expect(review.submitting.value).toBe(false);
+    expect(reload).toHaveBeenCalledOnce();
   });
 });

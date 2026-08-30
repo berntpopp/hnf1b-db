@@ -93,6 +93,7 @@
               <h2 id="revision-history-title" class="text-h6">Revision history</h2>
               <HistoryTab
                 :entries="history.historyEntries.value"
+                :total="history.historyTotal.value"
                 :loading="history.historyLoading.value"
                 :error="history.historyError.value"
               />
@@ -107,6 +108,7 @@
         >
           <section data-testid="issues-rail-section" class="rail-section">
             <ReviewIssuesPanel
+              :key="review.context.value.record_id"
               :issues="review.context.value.issues"
               :record-id="review.context.value.record_id"
               :record-revision="review.context.value.record_revision"
@@ -122,6 +124,7 @@
             class="rail-section decision-rail-section mobile-safe-decision"
           >
             <ReviewActionPanel
+              :key="review.context.value.phenopacket_id"
               :context="review.context.value"
               :reload="review.reload"
               :on-completed="onDecisionCompleted"
@@ -158,7 +161,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import HistoryTab from '@/components/phenopacket/HistoryTab.vue';
@@ -173,12 +176,13 @@ import { useReviewContext } from '@/composables/useReviewContext';
 const route = useRoute();
 const phenopacketId = computed(() => String(route.params.phenopacket_id || ''));
 const review = useReviewContext(phenopacketId);
-const history = usePhenopacketState(phenopacketId.value);
+const history = usePhenopacketState(phenopacketId);
 
 const activeView = ref('changes');
 const mutationMessage = ref('');
 const publicationCompleted = ref(false);
 const publicationCompletionHeading = ref(null);
+let workspaceGeneration = 0;
 
 const queueReturnPath = computed(() => {
   const value = route.query.return_to;
@@ -198,39 +202,57 @@ const candidateJson = computed(() =>
 );
 const liveAnnouncement = computed(() => mutationMessage.value || review.liveMessage.value || '');
 
-async function refreshHistory() {
+async function refreshHistory(generation = workspaceGeneration, recordId = phenopacketId.value) {
   try {
     await history.loadHistory();
   } catch (historyError) {
+    if (generation !== workspaceGeneration || recordId !== phenopacketId.value) return;
     window.logService?.error?.('Failed to refresh review history', {
-      recordId: phenopacketId.value,
+      recordId,
       error: historyError?.message,
     });
   }
 }
 
-async function loadWorkspace() {
+async function loadWorkspace(generation = workspaceGeneration) {
+  const recordId = phenopacketId.value;
   mutationMessage.value = '';
   const loaded = await review.load();
-  if (loaded) await refreshHistory();
+  if (loaded && generation === workspaceGeneration && recordId === phenopacketId.value) {
+    await refreshHistory(generation, recordId);
+  }
 }
 
-async function onDecisionCompleted({ action }) {
+async function onDecisionCompleted({ action, recordId }) {
+  if (recordId && recordId !== phenopacketId.value) return;
+  const generation = workspaceGeneration;
   if (action === 'publish') {
     publicationCompleted.value = true;
     mutationMessage.value = 'Publication complete. The approved revision is now public.';
     await nextTick();
     publicationCompletionHeading.value?.focus();
-    await refreshHistory();
+    await refreshHistory(generation, phenopacketId.value);
     return;
   }
-  await refreshHistory();
+  await refreshHistory(generation, phenopacketId.value);
   const count = review.context.value?.discussion_summary?.open_blocking_issues;
   const issueCopy = Number.isInteger(count)
     ? ` ${count} open blocking issue${count === 1 ? '' : 's'} remain.`
     : '';
   mutationMessage.value = `Review decision saved (${action.replaceAll('_', ' ')}).${issueCopy}`;
 }
+
+watch(
+  phenopacketId,
+  () => {
+    workspaceGeneration += 1;
+    activeView.value = 'changes';
+    mutationMessage.value = '';
+    publicationCompleted.value = false;
+    void loadWorkspace(workspaceGeneration);
+  },
+  { flush: 'sync' }
+);
 
 onMounted(loadWorkspace);
 </script>

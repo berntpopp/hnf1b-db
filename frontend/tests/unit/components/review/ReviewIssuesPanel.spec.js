@@ -4,8 +4,16 @@
  * Resolution rationales use the shared DOMPurify sanitizer, which requires
  * the repository's browser-compatible jsdom environment for security assertions.
  */
-import { describe, expect, it } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { createComment, resolveComment, unresolveComment } = vi.hoisted(() => ({
+  createComment: vi.fn(),
+  resolveComment: vi.fn(),
+  unresolveComment: vi.fn(),
+}));
+
+vi.mock('@/api/domain/comments', () => ({ createComment, resolveComment, unresolveComment }));
 
 import ReviewIssuesPanel from '@/components/review/ReviewIssuesPanel.vue';
 
@@ -51,6 +59,7 @@ const issues = [
 
 function mountPanel(overrides = {}) {
   return mount(ReviewIssuesPanel, {
+    attachTo: document.body,
     props: {
       issues,
       recordId: '4c096c55-8f3e-48d3-a759-c57851f3aa31',
@@ -67,7 +76,17 @@ function mountPanel(overrides = {}) {
     },
     global: {
       stubs: {
-        ReviewIssueDialog: true,
+        VAlert: { template: '<div><slot /></div>' },
+        VBtn: {
+          inheritAttrs: false,
+          template: '<button v-bind="$attrs"><slot /></button>',
+        },
+        ReviewIssueDialog: {
+          props: ['modelValue', 'mode'],
+          emits: ['update:modelValue', 'submit'],
+          template:
+            '<button v-if="modelValue" data-testid="submit-create-dialog" @click="$emit(\'submit\', { bodyMarkdown: \'New issue\' })">Submit</button>',
+        },
         CommentBody: { props: ['bodyMarkdown'], template: '<div>{{ bodyMarkdown }}</div>' },
       },
     },
@@ -75,6 +94,12 @@ function mountPanel(overrides = {}) {
 }
 
 describe('ReviewIssuesPanel', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    vi.clearAllMocks();
+    createComment.mockResolvedValue({ data: { id: 56 } });
+  });
+
   it('orders unresolved issues first and exposes a non-color status label', () => {
     const wrapper = mountPanel();
     const rows = wrapper.findAll('[data-testid="review-issue"]');
@@ -121,5 +146,39 @@ describe('ReviewIssuesPanel', () => {
       '2026-08-14T11:00:00Z',
     ]);
     expect(timestamps.every((time) => time.text().length > 0)).toBe(true);
+  });
+
+  it('replaces mutation controls with focused explicit reload recovery after a conflict', async () => {
+    const reload = vi.fn().mockResolvedValue(null);
+    createComment.mockRejectedValueOnce(
+      Object.assign(new Error('Conflict'), {
+        response: {
+          status: 409,
+          data: { detail: { code: 'review_closed', message: 'The review is closed.' } },
+        },
+      })
+    );
+    const wrapper = mountPanel({
+      reload,
+      createIssueCapability: { action: 'create_issue', allowed: true, blocked_by: [] },
+    });
+
+    await wrapper.get('[data-testid="create-issue"]').trigger('click');
+    await wrapper.get('[data-testid="submit-create-dialog"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="issue-conflict-recovery"]').text()).toContain(
+      'The review is closed.'
+    );
+    expect(wrapper.find('[data-testid="create-issue"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Resolve issue');
+    expect(document.activeElement).toBe(
+      wrapper.get('[data-testid="reload-issue-conflict"]').element
+    );
+
+    await wrapper.get('[data-testid="reload-issue-conflict"]').trigger('click');
+    await flushPromises();
+    expect(reload).toHaveBeenCalledOnce();
+    expect(wrapper.find('[data-testid="issue-conflict-recovery"]').exists()).toBe(false);
   });
 });

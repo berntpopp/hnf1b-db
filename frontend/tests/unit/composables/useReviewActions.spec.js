@@ -25,6 +25,7 @@ const contextFixture = (overrides = {}) => ({
 });
 
 function setup(overrides = {}) {
+  const routeId = ref('PP-route');
   const context = ref(contextFixture(overrides));
   const reload = vi.fn().mockImplementation(async () => {
     const next = { ...context.value, record_revision: context.value.record_revision + 1 };
@@ -32,8 +33,18 @@ function setup(overrides = {}) {
     return next;
   });
   const onCompleted = vi.fn();
-  const review = useReviewActions(ref('PP-route'), context, { reload, onCompleted });
-  return { context, reload, onCompleted, review };
+  const review = useReviewActions(routeId, context, { reload, onCompleted });
+  return { routeId, context, reload, onCompleted, review };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 describe('useReviewActions', () => {
@@ -256,5 +267,52 @@ describe('useReviewActions', () => {
     await Promise.resolve();
 
     expect(review.conflict.value).toBeNull();
+  });
+
+  it('invalidates an A decision synchronously and prevents its late failure from owning B', async () => {
+    const stale = deferred();
+    transitionPhenopacket
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce({ data: { revision: { id: 90 } } });
+    const { routeId, context, review, reload, onCompleted } = setup();
+
+    const oldDecision = review.requestChanges({ rationale: 'Record A needs changes.' });
+    routeId.value = 'PP-B';
+    context.value = contextFixture({
+      phenopacket_id: 'PP-B',
+      record_revision: 3,
+    });
+
+    expect(review.submitting.value).toBe(false);
+    expect(review.pendingAction.value).toBeNull();
+    expect(review.error.value).toBeNull();
+    expect(review.conflict.value).toBeNull();
+
+    await review.requestChanges({ rationale: 'Record B needs changes.' });
+    expect(transitionPhenopacket).toHaveBeenNthCalledWith(
+      2,
+      'PP-B',
+      'changes_requested',
+      'Record B needs changes.',
+      3,
+      {}
+    );
+    expect(reload).toHaveBeenCalledOnce();
+    expect(onCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'request_changes', recordId: 'PP-B' })
+    );
+
+    stale.reject(
+      Object.assign(new Error('Late A conflict'), {
+        response: {
+          status: 409,
+          data: { detail: { code: 'revision_mismatch', message: 'Stale A.' } },
+        },
+      })
+    );
+    await expect(oldDecision).rejects.toThrow('Late A conflict');
+    expect(review.error.value).toBeNull();
+    expect(review.conflict.value).toBeNull();
+    expect(review.submitting.value).toBe(false);
   });
 });

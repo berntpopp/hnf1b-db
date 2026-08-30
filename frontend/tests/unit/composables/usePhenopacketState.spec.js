@@ -224,6 +224,40 @@ describe('usePhenopacketState', () => {
   });
 
   describe('loadHistory', () => {
+    it('loads every server page when revision history exceeds the 50-row default', async () => {
+      const revisions = Array.from({ length: 51 }, (_, index) => ({
+        id: 100 - index,
+        revision_number: 51 - index,
+        state: 'in_review',
+        actor_username: 'curator.alice',
+        created_at: `2026-08-${String(30 - (index % 20)).padStart(2, '0')}T08:00:00Z`,
+      }));
+      fetchRevisions.mockImplementation((_id, options) => {
+        const pageNumber = options?.pageNumber ?? 1;
+        const start = (pageNumber - 1) * 50;
+        return Promise.resolve({
+          data: {
+            data: revisions.slice(start, start + 50),
+            meta: { total: 51, page: pageNumber, page_size: 50 },
+          },
+        });
+      });
+      getPhenopacketAuditHistory.mockResolvedValue({ data: [] });
+
+      const { historyEntries, historyTotal, historyLoading, loadHistory } =
+        usePhenopacketState(PHENOPACKET_ID);
+      await loadHistory();
+
+      expect(fetchRevisions).toHaveBeenNthCalledWith(1, PHENOPACKET_ID, undefined);
+      expect(fetchRevisions).toHaveBeenNthCalledWith(2, PHENOPACKET_ID, {
+        pageSize: 50,
+        pageNumber: 2,
+      });
+      expect(historyEntries.value).toHaveLength(51);
+      expect(historyTotal.value).toBe(51);
+      expect(historyLoading.value).toBe(false);
+    });
+
     it('merges revision and audit payloads into normalized history rows', async () => {
       fetchRevisions.mockResolvedValueOnce({
         data: {
