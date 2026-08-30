@@ -1,5 +1,5 @@
 import { nextTick, reactive, ref } from 'vue';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 
 const contextFixture = () => ({
@@ -139,13 +139,21 @@ const stubs = {
   'v-tabs': tabsStub,
   'v-tab': tabStub,
   'v-alert': { template: '<section role="alert"><slot /><slot name="append" /></section>' },
-  'v-btn': { template: '<button><slot name="prepend" /><slot /></button>' },
+  'v-btn': {
+    name: 'VBtn',
+    props: ['to'],
+    template: '<button :data-route-name="to && to.name"><slot name="prepend" /><slot /></button>',
+  },
   'v-icon': { template: '<i aria-hidden="true"><slot /></i>' },
   'v-skeleton-loader': { template: '<div data-testid="workspace-skeleton" />' },
 };
 
-function mountWorkspace() {
-  return mount(PhenopacketReview, { global: { stubs } });
+const mountedWrappers = new Set();
+
+function mountWorkspace({ attachTo } = {}) {
+  const wrapper = mount(PhenopacketReview, { attachTo, global: { stubs } });
+  mountedWrappers.add(wrapper);
+  return wrapper;
 }
 
 function precedes(left, right) {
@@ -153,6 +161,12 @@ function precedes(left, right) {
 }
 
 describe('PhenopacketReview', () => {
+  afterEach(() => {
+    for (const wrapper of mountedWrappers) wrapper.unmount();
+    mountedWrappers.clear();
+    document.body.innerHTML = '';
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     review.context.value = contextFixture();
@@ -244,6 +258,34 @@ describe('PhenopacketReview', () => {
     expect(wrapper.get('[role="status"]').text()).toContain('Review decision saved');
   });
 
+  it('replaces a vanished published context with a stable focused completion state', async () => {
+    const wrapper = mountWorkspace({ attachTo: document.body });
+    await flushPromises();
+    const onCompleted = wrapper.getComponent(ReviewActionPanelStub).props('onCompleted');
+    review.context.value = null;
+    review.error.value = Object.assign(new Error('Expected terminal context 404'), {
+      response: { status: 404 },
+    });
+
+    await onCompleted({ action: 'publish', context: null });
+    await nextTick();
+
+    expect(wrapper.findComponent(ReviewActionPanelStub).exists()).toBe(false);
+    expect(wrapper.text()).toContain('Publication complete');
+    expect(wrapper.text()).toContain('The approved revision is now public');
+    expect(wrapper.text()).not.toContain('Review workspace not found');
+    const heading = wrapper.get('[data-testid="publication-complete-heading"]');
+    expect(document.activeElement).toBe(heading.element);
+    expect(wrapper.get('[data-testid="publication-complete-queue"]').attributes()).toMatchObject({
+      'data-route-name': 'ReviewQueue',
+    });
+
+    review.error.value = new Error('Stale reload rejection');
+    await nextTick();
+    expect(wrapper.get('[data-testid="publication-complete-heading"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('Unable to load review workspace');
+  });
+
   it('assembles a desktop right rail with exact issues, decisions, discussion source order', () => {
     const wrapper = mountWorkspace();
     const content = wrapper.get('[data-testid="content-column"]').element;
@@ -269,7 +311,7 @@ describe('PhenopacketReview', () => {
     expect(reviewWorkspaceSource).toContain(
       'padding-bottom: calc(1rem + env(safe-area-inset-bottom));'
     );
-    expect(reviewWorkspaceSource).not.toMatch(/\border:\s*[23]\s*;/);
+    expect(reviewWorkspaceSource).not.toMatch(/\border\s*:/);
   });
 
   it('passes exact context identities and server capabilities to issues and decisions', () => {

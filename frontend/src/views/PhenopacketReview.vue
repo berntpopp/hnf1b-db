@@ -1,7 +1,34 @@
 <template>
   <v-container fluid class="review-page py-6">
     <section
-      v-if="review.error.value && !review.context.value"
+      v-if="publicationCompleted"
+      class="publication-completion"
+      aria-labelledby="publication-complete-title"
+    >
+      <h1
+        id="publication-complete-title"
+        ref="publicationCompletionHeading"
+        data-testid="publication-complete-heading"
+        class="text-h5 mb-3"
+        tabindex="-1"
+      >
+        Publication complete
+      </h1>
+      <v-alert type="success" variant="tonal" class="mb-4">
+        The approved revision is now public.
+      </v-alert>
+      <v-btn
+        data-testid="publication-complete-queue"
+        class="touch-target"
+        variant="outlined"
+        :to="{ name: 'ReviewQueue' }"
+      >
+        Back to review queue
+      </v-btn>
+    </section>
+
+    <section
+      v-else-if="review.error.value && !review.context.value"
       aria-labelledby="phenopacket-review-error-title"
     >
       <h1 id="phenopacket-review-error-title" class="text-h5 mb-3">
@@ -131,7 +158,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import HistoryTab from '@/components/phenopacket/HistoryTab.vue';
@@ -150,6 +177,8 @@ const history = usePhenopacketState(phenopacketId.value);
 
 const activeView = ref('changes');
 const mutationMessage = ref('');
+const publicationCompleted = ref(false);
+const publicationCompletionHeading = ref(null);
 
 const queueReturnPath = computed(() => {
   const value = route.query.return_to;
@@ -187,6 +216,14 @@ async function loadWorkspace() {
 }
 
 async function onDecisionCompleted({ action }) {
+  if (action === 'publish') {
+    publicationCompleted.value = true;
+    mutationMessage.value = 'Publication complete. The approved revision is now public.';
+    await nextTick();
+    publicationCompletionHeading.value?.focus();
+    await refreshHistory();
+    return;
+  }
   await refreshHistory();
   const count = review.context.value?.discussion_summary?.open_blocking_issues;
   const issueCopy = Number.isInteger(count)
