@@ -399,9 +399,9 @@ export default {
     // Expose authStore so template can access user role/id for state components.
     const authStore = useAuthStore();
 
-    // Instantiate state composable once in setup() so reactive scope persists
-    // across calls. phenopacket_id is stable for the lifetime of this route.
-    const stateActions = usePhenopacketState(route.params.phenopacket_id);
+    // Vue Router can reuse this component while changing only the record param.
+    const phenopacketId = computed(() => String(route.params.phenopacket_id || ''));
+    const stateActions = usePhenopacketState(phenopacketId);
 
     return { updateSeoPhenopacket, authStore, stateActions };
   },
@@ -525,18 +525,25 @@ export default {
       return effectiveStateOf(this.phenopacketMeta);
     },
     transitionCapabilities() {
-      const capabilities = new Map();
-      for (const capability of this.phenopacketMeta?.transition_capabilities || []) {
-        capabilities.set(capability.action, capability);
+      if (this.hasCoherentReviewContext) {
+        return this.reviewContext.capabilities || [];
       }
-      for (const capability of this.reviewContext?.capabilities || []) {
-        capabilities.set(capability.action, capability);
-      }
-      return [...capabilities.values()];
+      return this.phenopacketMeta?.transition_capabilities || [];
+    },
+    hasCoherentReviewContext() {
+      if (!this.reviewContext || !this.phenopacketMeta) return false;
+      const recordId = this.phenopacketMeta.id ?? this.phenopacketMeta.record_id;
+      return (
+        Boolean(recordId) &&
+        this.reviewContext.phenopacket_id === this.phenopacketMeta.phenopacket_id &&
+        String(this.reviewContext.record_id) === String(recordId) &&
+        this.reviewContext.record_revision === this.phenopacketMeta.revision
+      );
     },
     hasReviewWorkspace() {
-      return ['in_review', 'changes_requested', 'approved'].includes(
-        this.reviewContext?.effective_state
+      return (
+        this.hasCoherentReviewContext &&
+        ['in_review', 'changes_requested', 'approved'].includes(this.reviewContext.effective_state)
       );
     },
     /**
@@ -573,6 +580,23 @@ export default {
     },
   },
   watch: {
+    '$route.params.phenopacket_id': {
+      flush: 'sync',
+      handler(newId, oldId) {
+        if (!newId || String(newId) === String(oldId)) return;
+        const expectedId = String(newId);
+        this.resetRecordScope();
+        void this.fetchPhenopacket().then(() => {
+          if (
+            String(this.$route.params.phenopacket_id || '') === expectedId &&
+            this.activeTab === 'history'
+          ) {
+            return this.ensureHistoryLoaded(true);
+          }
+          return undefined;
+        });
+      },
+    },
     activeTab(newTab) {
       if (newTab === 'history') {
         void this.ensureHistoryLoaded();
@@ -600,6 +624,24 @@ export default {
     getSexIcon,
     getSexChipColor,
     formatSex,
+
+    resetRecordScope() {
+      this.reviewContextRequestId += 1;
+      this.phenopacket = null;
+      this.phenopacketMeta = null;
+      this.reviewContext = null;
+      this.loading = false;
+      this.error = null;
+      this.showDeleteDialog = false;
+      this.deleteLoading = false;
+      this.historyLoaded = false;
+      this.historyLoadPromise = null;
+      this.transitionModalOpen = false;
+      this.pendingTargetState = null;
+      this.transitionErrorSnackbar = false;
+      this.transitionErrorMessage = '';
+      this.updateSeoPhenopacket(null);
+    },
 
     /**
      * Format ISO8601 duration string to human-readable format.
@@ -655,31 +697,39 @@ export default {
         }
       }
 
-      this.historyLoadPromise = this.stateActions
+      const phenopacketId = String(this.$route.params.phenopacket_id || '');
+      const historyLoadPromise = this.stateActions
         .loadHistory()
         .then(() => {
-          this.historyLoaded = true;
+          if (String(this.$route.params.phenopacket_id || '') === phenopacketId) {
+            this.historyLoaded = true;
+          }
         })
         .catch((error) => {
-          window.logService.error('Failed to load phenopacket history', {
-            phenopacketId: this.$route.params.phenopacket_id,
-            error: error.message,
-          });
+          if (String(this.$route.params.phenopacket_id || '') === phenopacketId) {
+            window.logService.error('Failed to load phenopacket history', {
+              phenopacketId,
+              error: error.message,
+            });
+          }
         })
         .finally(() => {
-          this.historyLoadPromise = null;
+          if (this.historyLoadPromise === historyLoadPromise) {
+            this.historyLoadPromise = null;
+          }
         });
+      this.historyLoadPromise = historyLoadPromise;
 
-      await this.historyLoadPromise;
+      await historyLoadPromise;
     },
 
-    async fetchPhenopacket() {
+    async fetchPhenopacket(coherenceRetry = 0) {
       const reviewContextRequestId = ++this.reviewContextRequestId;
       this.loading = true;
       this.error = null;
       this.reviewContext = null;
 
-      const phenopacketId = this.$route.params.phenopacket_id;
+      const phenopacketId = String(this.$route.params.phenopacket_id || '');
       window.logService.debug('Loading phenopacket detail page', {
         phenopacketId: phenopacketId,
         route: this.$route.path,
@@ -695,8 +745,15 @@ export default {
         this.phenopacket = response.data.phenopacket;
 
         if (this.authStore.isCurator) {
-          await this.loadReviewCapabilities(phenopacketId, reviewContextRequestId);
+          const contextStatus = await this.loadReviewCapabilities(
+            phenopacketId,
+            reviewContextRequestId
+          );
           if (reviewContextRequestId !== this.reviewContextRequestId) return;
+          if (contextStatus === 'mismatch' && coherenceRetry < 1) {
+            await this.fetchPhenopacket(coherenceRetry + 1);
+            return;
+          }
         }
 
         window.logService.debug('Phenopacket data received', {
@@ -739,15 +796,22 @@ export default {
     async loadReviewCapabilities(phenopacketId, requestId) {
       try {
         const response = await getReviewContext(phenopacketId);
-        if (
-          requestId !== this.reviewContextRequestId ||
-          response.data?.phenopacket_id !== phenopacketId
-        ) {
-          return;
+        if (requestId !== this.reviewContextRequestId) return 'stale';
+        const recordId = this.phenopacketMeta?.id ?? this.phenopacketMeta?.record_id;
+        const coherent =
+          response.data?.phenopacket_id === phenopacketId &&
+          response.data?.phenopacket_id === this.phenopacketMeta?.phenopacket_id &&
+          Boolean(recordId) &&
+          String(response.data?.record_id) === String(recordId) &&
+          response.data?.record_revision === this.phenopacketMeta?.revision;
+        if (!coherent) {
+          this.reviewContext = null;
+          return 'mismatch';
         }
         this.reviewContext = response.data;
+        return 'loaded';
       } catch (error) {
-        if (requestId !== this.reviewContextRequestId) return;
+        if (requestId !== this.reviewContextRequestId) return 'stale';
         this.reviewContext = null;
         if (error.response?.status !== 404) {
           window.logService.error('Failed to load phenopacket review capabilities', {
@@ -756,6 +820,7 @@ export default {
             status: error.response?.status,
           });
         }
+        return 'unavailable';
       }
     },
 
@@ -883,13 +948,20 @@ export default {
      */
     async onTransitionConfirm({ reason }) {
       if (!this.pendingTargetState || !this.phenopacketMeta) return;
-      const phenopacketId = this.$route.params.phenopacket_id;
+      const phenopacketId = this.phenopacketMeta.phenopacket_id;
+      if (phenopacketId !== String(this.$route.params.phenopacket_id || '')) return;
       try {
         await this.stateActions.transitionTo(
           this.pendingTargetState,
           reason,
           this.phenopacketMeta.revision
         );
+        if (
+          phenopacketId !== String(this.$route.params.phenopacket_id || '') ||
+          this.phenopacketMeta?.phenopacket_id !== phenopacketId
+        ) {
+          return;
+        }
         window.logService.info('State transition succeeded', {
           phenopacketId,
           toState: this.pendingTargetState,

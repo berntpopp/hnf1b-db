@@ -1,6 +1,6 @@
 // frontend/src/composables/usePhenopacketState.js
 // Wave 7 / D.1 §9.3 — composable for state machine actions on a single phenopacket.
-import { ref } from 'vue';
+import { ref, toValue, watch } from 'vue';
 import {
   transitionPhenopacket,
   fetchRevisions,
@@ -24,7 +24,7 @@ export function effectiveStateOf(pp) {
 /**
  * Composable encapsulating state-machine operations for one phenopacket.
  *
- * @param {string} phenopacketId - The phenopacket's public identifier.
+ * @param {string|import('vue').Ref<string>|(() => string)} phenopacketId - Current public identifier.
  * @returns {{ revisions, loading, error, transitionTo, loadRevisions }}
  */
 export function usePhenopacketState(phenopacketId) {
@@ -34,6 +34,25 @@ export function usePhenopacketState(phenopacketId) {
   const historyEntries = ref([]);
   const historyLoading = ref(false);
   const historyError = ref(null);
+  let recordGeneration = 0;
+
+  const currentPhenopacketId = () => String(toValue(phenopacketId) || '');
+  const ownsOperation = (generation, id) =>
+    generation === recordGeneration && id === currentPhenopacketId();
+
+  watch(
+    currentPhenopacketId,
+    () => {
+      recordGeneration += 1;
+      revisions.value = [];
+      loading.value = false;
+      error.value = null;
+      historyEntries.value = [];
+      historyLoading.value = false;
+      historyError.value = null;
+    },
+    { flush: 'sync' }
+  );
 
   /**
    * POST a state transition.
@@ -49,16 +68,20 @@ export function usePhenopacketState(phenopacketId) {
       throw new Error(message);
     }
 
+    const id = currentPhenopacketId();
+    const generation = recordGeneration;
     loading.value = true;
     error.value = null;
     try {
-      const { data } = await transitionPhenopacket(phenopacketId, toState, reason, revision);
+      const { data } = await transitionPhenopacket(id, toState, reason, revision);
+      if (!ownsOperation(generation, id)) return undefined;
       return data;
     } catch (e) {
+      if (!ownsOperation(generation, id)) return undefined;
       error.value = e.response?.data?.detail || e.message;
       throw e;
     } finally {
-      loading.value = false;
+      if (ownsOperation(generation, id)) loading.value = false;
     }
   };
 
@@ -67,24 +90,30 @@ export function usePhenopacketState(phenopacketId) {
    * @param {Object} [opts] - Pagination options forwarded to fetchRevisions.
    */
   const loadRevisions = async (opts) => {
+    const id = currentPhenopacketId();
+    const generation = recordGeneration;
     loading.value = true;
     try {
-      const { data } = await fetchRevisions(phenopacketId, opts);
+      const { data } = await fetchRevisions(id, opts);
+      if (!ownsOperation(generation, id)) return;
       revisions.value = data.data;
     } finally {
-      loading.value = false;
+      if (ownsOperation(generation, id)) loading.value = false;
     }
   };
 
   const loadHistory = async (opts) => {
+    const id = currentPhenopacketId();
+    const generation = recordGeneration;
     historyLoading.value = true;
     historyError.value = null;
 
     try {
       const [{ data: revisionData }, { data: auditData }] = await Promise.all([
-        fetchRevisions(phenopacketId, opts),
-        getPhenopacketAuditHistory(phenopacketId),
+        fetchRevisions(id, opts),
+        getPhenopacketAuditHistory(id),
       ]);
+      if (!ownsOperation(generation, id)) return;
 
       const auditByRevisionId = new Map(
         auditData
@@ -106,10 +135,11 @@ export function usePhenopacketState(phenopacketId) {
         };
       });
     } catch (e) {
+      if (!ownsOperation(generation, id)) return;
       historyError.value = e.response?.data?.detail || e.message || 'Failed to load history';
       throw e;
     } finally {
-      historyLoading.value = false;
+      if (ownsOperation(generation, id)) historyLoading.value = false;
     }
   };
 

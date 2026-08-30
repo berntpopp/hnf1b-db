@@ -48,7 +48,26 @@ describe('TransitionMenu', () => {
     expect(wrapper.text()).toContain('Archive');
     expect(wrapper.text()).toContain('Only an administrator can perform this action.');
     expect(wrapper.text()).not.toContain('Create issue');
-    expect(wrapper.find('[data-action="archive"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.findAll('[data-testid="transition-item"]')).toHaveLength(2);
+    expect(wrapper.find('[data-action="archive"]').attributes('aria-disabled')).toBe('true');
+  });
+
+  it('keeps blocked reasons focusable and denies pointer and keyboard activation', async () => {
+    const wrapper = mountMenu([
+      { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+    ]);
+    const blocked = wrapper.get('[data-action="archive"]');
+
+    expect(blocked.attributes('aria-disabled')).toBe('true');
+    expect(blocked.attributes('tabindex')).toBe('0');
+    expect(blocked.text()).toContain('Only an administrator can perform this action.');
+
+    await blocked.trigger('click');
+    await blocked.trigger('keydown', { key: 'Enter' });
+    await blocked.trigger('keydown', { key: ' ' });
+
+    expect(wrapper.emitted('transition')).toBeUndefined();
+    expect(wrapper.emitted('open-review')).toBeUndefined();
   });
 
   it('emits only payload-compatible transitions from allowed capabilities', async () => {
@@ -73,7 +92,7 @@ describe('TransitionMenu', () => {
     ]);
 
     expect(wrapper.text()).toContain('You contributed to this review cycle.');
-    expect(wrapper.get('[data-action="request_changes"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('[data-action="request_changes"]').attributes('aria-disabled')).toBe('true');
     await wrapper.get('[data-action="approve"]').trigger('click');
     await wrapper.get('[data-action="publish"]').trigger('click');
 
