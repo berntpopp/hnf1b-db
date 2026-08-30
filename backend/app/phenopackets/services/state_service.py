@@ -421,9 +421,7 @@ class PhenopacketStateService:
             raise self.InvalidRationale(
                 "Transition rationale must contain 1 to 500 non-whitespace characters."
             )
-        if to_state == "approved" and not isinstance(
-            attestation, ApprovalAttestation
-        ):
+        if to_state == "approved" and not isinstance(attestation, ApprovalAttestation):
             raise self.AttestationRequired(
                 "Approval requires affirmative independent-review and "
                 "no-conflict attestations."

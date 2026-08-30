@@ -211,8 +211,7 @@ def _map_service_error(exc: Exception) -> HTTPException:
     response_model=CommentResponse,
     status_code=201,
     responses={
-        status: {"model": ApiErrorEnvelope}
-        for status in (401, 403, 404, 409, 422, 500)
+        status: {"model": ApiErrorEnvelope} for status in (401, 403, 404, 409, 422, 500)
     },
 )
 async def create_comment(
