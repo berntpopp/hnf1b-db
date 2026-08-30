@@ -74,4 +74,3 @@ The revised spec leaves historical actor-role/full-digest/version fields unset. 
 ## Gate result
 
 **Pass after primary-agent corrections.** The written spec is ready for user confirmation and implementation planning. This review intentionally concludes the requested single spec-review pass.
-
