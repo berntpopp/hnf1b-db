@@ -14,8 +14,6 @@
         :aria-disabled="item.allowed ? 'false' : 'true'"
         tabindex="0"
         @click="select(item)"
-        @keydown.enter.prevent="select(item)"
-        @keydown.space.prevent="select(item)"
       >
         <v-list-item-title>{{ item.label }}</v-list-item-title>
         <v-list-item-subtitle v-if="item.denials.length">

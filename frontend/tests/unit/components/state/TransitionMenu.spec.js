@@ -1,5 +1,8 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+import { createVuetify } from 'vuetify';
+import * as vuetifyComponents from 'vuetify/components';
+import * as vuetifyDirectives from 'vuetify/directives';
 
 import TransitionMenu from '@/components/state/TransitionMenu.vue';
 
@@ -20,6 +23,10 @@ const VBtnStub = {
   inheritAttrs: false,
   template: '<button v-bind="$attrs" type="button"><slot /></button>',
 };
+const fullVuetify = createVuetify({
+  components: vuetifyComponents,
+  directives: vuetifyDirectives,
+});
 
 const mountMenu = (capabilities) =>
   mount(TransitionMenu, {
@@ -33,6 +40,15 @@ const mountMenu = (capabilities) =>
         VListItemSubtitle: TextStub,
         VBtn: VBtnStub,
       },
+    },
+  });
+
+const mountRealListItemMenu = (capabilities) =>
+  mount(TransitionMenu, {
+    props: { capabilities },
+    global: {
+      plugins: [fullVuetify],
+      stubs: { VMenu: VMenuStub },
     },
   });
 
@@ -68,6 +84,39 @@ describe('TransitionMenu', () => {
 
     expect(wrapper.emitted('transition')).toBeUndefined();
     expect(wrapper.emitted('open-review')).toBeUndefined();
+  });
+
+  it.each([
+    ['mouse click', 'submit', 'click', undefined, 'transition', 'in_review'],
+    ['Enter', 'submit', 'keydown', 'Enter', 'transition', 'in_review'],
+    ['Space', 'approve', 'keydown', ' ', 'open-review', 'approve'],
+  ])(
+    'real Vuetify emits an allowed action exactly once for %s',
+    async (_label, action, eventName, key, emittedEvent, payload) => {
+      const wrapper = mountRealListItemMenu([{ action, allowed: true, blocked_by: [] }]);
+      const item = wrapper.get(`[data-action="${action}"]`);
+
+      await item.trigger(eventName, key ? { key } : undefined);
+
+      expect(wrapper.emitted(emittedEvent)).toEqual([[payload]]);
+      wrapper.unmount();
+    }
+  );
+
+  it.each(['Enter', ' '])('real Vuetify denies blocked keyboard activation for %s', async (key) => {
+    const wrapper = mountRealListItemMenu([
+      { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+    ]);
+    const blocked = wrapper.get('[data-action="archive"]');
+
+    await blocked.trigger('keydown', { key });
+
+    expect(blocked.attributes('aria-disabled')).toBe('true');
+    expect(blocked.attributes('tabindex')).toBe('0');
+    expect(blocked.text()).toContain('Only an administrator can perform this action.');
+    expect(wrapper.emitted('transition')).toBeUndefined();
+    expect(wrapper.emitted('open-review')).toBeUndefined();
+    wrapper.unmount();
   });
 
   it('emits only payload-compatible transitions from allowed capabilities', async () => {
