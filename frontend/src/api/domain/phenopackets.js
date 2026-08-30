@@ -243,11 +243,40 @@ export const getPhenopacketsByVariant = (variantId) =>
  * @param {number} revision - Current revision for optimistic locking
  * @returns {Promise} Axios promise with { phenopacket, revision }
  */
-export const transitionPhenopacket = (id, toState, reason, revision) =>
-  apiClient.post(`/phenopackets/${id}/transitions`, {
+const approvalAttestationBody = (attestation) => {
+  if (!attestation) return undefined;
+  return {
+    independent_review: attestation.independentReview,
+    no_unmanaged_conflict: attestation.noUnmanagedConflict,
+  };
+};
+
+const definedBody = (body) =>
+  Object.fromEntries(Object.entries(body).filter(([, value]) => value !== undefined));
+
+const transitionConditionalBody = (toState, conditional = {}) => {
+  if (toState === 'approved') {
+    return definedBody({
+      candidate_revision_id: conditional.candidateRevisionId,
+      candidate_content_sha256: conditional.candidateContentSha256,
+      attestation: approvalAttestationBody(conditional.attestation),
+    });
+  }
+  if (toState === 'published') {
+    return definedBody({
+      approved_revision_id: conditional.approvedRevisionId,
+      approved_content_sha256: conditional.approvedContentSha256,
+    });
+  }
+  return {};
+};
+
+export const transitionPhenopacket = (id, toState, reason, revision, conditional = {}) =>
+  apiClient.post(`/phenopackets/${encodeURIComponent(id)}/transitions`, {
     to_state: toState,
     reason,
     revision,
+    ...transitionConditionalBody(toState, conditional),
   });
 
 /**

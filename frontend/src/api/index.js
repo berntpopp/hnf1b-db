@@ -22,6 +22,8 @@ export * from './domain/reference';
 export * from './domain/variant_annotation';
 export * from './domain/search';
 export * from './domain/curation';
+export * from './domain/comments';
+export * from './domain/reviews';
 
 // Legacy default export — used by `import API from '@/api'`
 import { apiClient } from './transport';
@@ -37,6 +39,8 @@ import * as reference from './domain/reference';
 import * as variantAnnotation from './domain/variant_annotation';
 import * as search from './domain/search';
 import * as curation from './domain/curation';
+import * as comments from './domain/comments';
+import * as reviews from './domain/reviews';
 
 export default {
   ...phenopackets,
@@ -51,5 +55,7 @@ export default {
   ...variantAnnotation,
   ...search,
   ...curation,
+  ...comments,
+  ...reviews,
   client: apiClient,
 };

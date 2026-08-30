@@ -35,13 +35,28 @@ export const getComment = (id, { includeDeleted = false } = {}) =>
     params: includeDeleted ? { include: 'deleted' } : {},
   });
 
-export const createComment = ({ recordType, recordId, bodyMarkdown, mentionUserIds = [] }) =>
-  apiClient.post('/comments', {
+export const createComment = ({
+  recordType,
+  recordId,
+  bodyMarkdown,
+  mentionUserIds = [],
+  recordRevision,
+  reviewRevisionId,
+}) => {
+  const body = {
     record_type: recordType,
     record_id: recordId,
     body_markdown: bodyMarkdown,
     mention_user_ids: mentionUserIds,
-  });
+  };
+  if (recordRevision !== undefined && recordRevision !== null) {
+    body.record_revision = recordRevision;
+  }
+  if (reviewRevisionId !== undefined && reviewRevisionId !== null) {
+    body.review_revision_id = reviewRevisionId;
+  }
+  return apiClient.post('/comments', body);
+};
 
 export const updateComment = (id, { bodyMarkdown, mentionUserIds = [] }) =>
   apiClient.patch(`/comments/${id}`, {
@@ -49,8 +64,30 @@ export const updateComment = (id, { bodyMarkdown, mentionUserIds = [] }) =>
     mention_user_ids: mentionUserIds,
   });
 
-export const resolveComment = (id) => apiClient.post(`/comments/${id}/resolve`);
-export const unresolveComment = (id) => apiClient.post(`/comments/${id}/unresolve`);
+const issueActionBody = (request) => {
+  if (!request) return undefined;
+  const body = {
+    record_revision: request.recordRevision,
+    rationale: request.rationale,
+  };
+  if (request.disposition !== undefined && request.disposition !== null) {
+    body.disposition = request.disposition;
+  }
+  return body;
+};
+
+export const resolveComment = (id, request) => {
+  const body = issueActionBody(request);
+  return body === undefined
+    ? apiClient.post(`/comments/${id}/resolve`)
+    : apiClient.post(`/comments/${id}/resolve`, body);
+};
+export const unresolveComment = (id, request) => {
+  const body = issueActionBody(request);
+  return body === undefined
+    ? apiClient.post(`/comments/${id}/unresolve`)
+    : apiClient.post(`/comments/${id}/unresolve`, body);
+};
 export const deleteComment = (id) => apiClient.delete(`/comments/${id}`);
 export const listCommentEdits = (id) => apiClient.get(`/comments/${id}/edits`);
 
