@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, nextTick, reactive, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
@@ -20,8 +20,10 @@ const queue = {
   clearFilters: vi.fn(),
   setTab: vi.fn(),
 };
+const mockRoute = reactive({ fullPath: '/review?tab=approved&page=2' });
 
 vi.mock('@/composables/useReviewQueue', () => ({ useReviewQueue: () => queue }));
+vi.mock('vue-router', () => ({ useRoute: () => mockRoute }));
 
 import ReviewQueue from '@/views/ReviewQueue.vue';
 
@@ -53,6 +55,7 @@ const stubs = {
   'v-alert': { template: '<section role="alert"><slot /><slot name="append" /></section>' },
   'v-chip': { template: '<span><slot /></span>' },
   'v-btn': {
+    name: 'VBtn',
     props: ['to'],
     template:
       '<a v-if="to" class="review-link" :href="`/review/${to.params.phenopacket_id}`"><slot /></a><button v-else><slot /></button>',
@@ -64,7 +67,6 @@ function mountQueue() {
   return mount(ReviewQueue, {
     global: {
       stubs,
-      mocks: { $route: { fullPath: '/review?tab=approved&page=2' } },
     },
   });
 }
@@ -76,6 +78,7 @@ describe('ReviewQueue', () => {
     queue.loading.value = false;
     queue.error.value = null;
     queue.hasFilters = computed(() => false);
+    mockRoute.fullPath = '/review?tab=approved&page=2';
     queue.retry.mockClear();
     queue.clearFilters.mockClear();
     queue.setTab.mockClear();
@@ -101,11 +104,27 @@ describe('ReviewQueue', () => {
     expect(wrapper.text()).toContain('2 open issues');
   });
 
-  it('keeps the queue query on each explicit Review link and does not expose bulk approval', () => {
+  it('keeps the current reactive queue URL on each explicit Review link', async () => {
     queue.items.value = [
       { phenopacket_id: 'PP-317', effective_state: 'approved', open_issue_count: 0 },
     ];
 
+    const wrapper = mountQueue();
+    const reviewLink = wrapper.getComponent({ name: 'VBtn' });
+
+    expect(wrapper.find('a.review-link').exists()).toBe(true);
+    expect(reviewLink.props('to').query.return_to).toBe('/review?tab=approved&page=2');
+
+    mockRoute.fullPath = '/review?tab=approved&page=3&q=HNF1B';
+    await nextTick();
+
+    expect(reviewLink.props('to').query.return_to).toBe('/review?tab=approved&page=3&q=HNF1B');
+  });
+
+  it('does not expose bulk approval or row-click-only navigation', () => {
+    queue.items.value = [
+      { phenopacket_id: 'PP-317', effective_state: 'approved', open_issue_count: 0 },
+    ];
     const wrapper = mountQueue();
 
     expect(wrapper.find('a.review-link').exists()).toBe(true);
@@ -118,6 +137,8 @@ describe('ReviewQueue', () => {
     const wrapper = mountQueue();
 
     expect(wrapper.get('[role="alert"]').text()).toContain('Network unavailable');
+    expect(wrapper.text()).not.toContain('No records are currently awaiting review.');
+    expect(wrapper.text()).not.toContain('No records match the active filters.');
     await wrapper.get('[data-testid="retry-review-queue"]').trigger('click');
     expect(queue.retry).toHaveBeenCalledOnce();
   });

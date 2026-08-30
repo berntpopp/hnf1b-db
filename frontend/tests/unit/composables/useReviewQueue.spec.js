@@ -122,6 +122,34 @@ describe('useReviewQueue', () => {
     scope.stop();
   });
 
+  it('clears search and auxiliary filters without leaving the active approved tab', async () => {
+    mockRoute.query = {
+      page: '3',
+      tab: 'approved',
+      q: 'HNF1B',
+      eligibility: 'reviewable_by_me',
+      issues: 'open',
+    };
+    const { scope, state } = createQueue();
+    await flush();
+    getReviewQueue.mockClear();
+
+    state.clearFilters();
+    await flush();
+
+    expect(state.tab.value).toBe('approved');
+    expect(state.search.value).toBe('');
+    expect(state.eligibility.value).toBe('all');
+    expect(state.issues.value).toBe('all');
+    expect(state.page.value).toBe(1);
+    expect(getReviewQueue).toHaveBeenLastCalledWith({
+      pageNumber: 1,
+      pageSize: 25,
+      state: 'approved',
+    });
+    scope.stop();
+  });
+
   it('keeps backend rows and backend pagination totals without local transformation', async () => {
     getReviewQueue.mockResolvedValueOnce(
       response([row('PP-1'), row('PP-2')], { total: 41, total_pages: 3 })

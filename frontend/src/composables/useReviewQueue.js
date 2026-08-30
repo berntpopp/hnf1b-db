@@ -110,7 +110,10 @@ export function useReviewQueue() {
   }
 
   function clearFilters() {
-    urlState.clearAllFilters();
+    urlState.search.value = '';
+    eligibility.value = 'all';
+    issues.value = 'all';
+    urlState.resetPage();
   }
 
   function setTab(nextTab) {

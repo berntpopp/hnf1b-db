@@ -131,7 +131,10 @@
         </template>
 
         <template #no-data>
-          <div class="py-6 text-center text-body-2 text-medium-emphasis">
+          <div
+            v-if="!queue.loading.value && !queue.error.value"
+            class="py-6 text-center text-body-2 text-medium-emphasis"
+          >
             <template v-if="queue.hasFilters.value">
               No records match the active filters.
               <v-btn variant="text" size="small" @click="queue.clearFilters">Clear filters</v-btn>
@@ -146,6 +149,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
@@ -155,6 +159,7 @@ import { useReviewQueue } from '@/composables/useReviewQueue';
 import { buildSortParameter } from '@/utils/pagination';
 
 const queue = useReviewQueue();
+const route = useRoute();
 
 const headers = [
   { title: 'Case', value: 'phenopacket_id', sortable: true },
@@ -247,7 +252,7 @@ function reviewLocation(item) {
   return {
     name: 'PhenopacketReview',
     params: { phenopacket_id: item.phenopacket_id },
-    query: { return_to: `${window.location.pathname}${window.location.search}` },
+    query: { return_to: route.fullPath },
   };
 }
 </script>
