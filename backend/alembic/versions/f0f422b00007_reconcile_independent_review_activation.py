@@ -71,8 +71,10 @@ def _install_projection_functions() -> None:
             IF issue.id IS NULL OR latest_event.id IS NULL OR NOT (
                 (
                     latest_event.action = 'resolved'
-                    AND issue.resolved_at = latest_event.created_at
-                    AND issue.resolved_by_id = latest_event.actor_id
+                    AND issue.resolved_at IS NOT DISTINCT FROM
+                        latest_event.created_at
+                    AND issue.resolved_by_id IS NOT DISTINCT FROM
+                        latest_event.actor_id
                 ) OR (
                     latest_event.action = 'reopened'
                     AND issue.resolved_at IS NULL
@@ -191,8 +193,10 @@ def _reconcile_latest_resolution_events() -> None:
              WHERE NOT (
                 (
                     latest.action = 'resolved'
-                    AND issue.resolved_at = latest.created_at
-                    AND issue.resolved_by_id = latest.actor_id
+                    AND issue.resolved_at IS NOT DISTINCT FROM
+                        latest.created_at
+                    AND issue.resolved_by_id IS NOT DISTINCT FROM
+                        latest.actor_id
                 ) OR (
                     latest.action = 'reopened'
                     AND issue.resolved_at IS NULL

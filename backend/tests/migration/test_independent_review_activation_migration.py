@@ -721,6 +721,49 @@ def test_forward_reconciliation_repairs_same_actor_resolved_timestamp_drift() ->
         connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
 
 
+def test_forward_projection_validator_rejects_null_resolved_projection() -> None:
+    """A resolved event with no projected timestamp must fail closed."""
+    with _isolated_schema() as (connection, _schema, migration):
+        forward = _migration_module(
+            "f0f422b00007_reconcile_independent_review_activation"
+        )
+        record_id = uuid.uuid4()
+        _seed_active_review(connection, record_id, 1)
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+
+        _bind(connection, forward)
+        forward.upgrade()
+        connection.execute(
+            text(
+                "DROP TRIGGER comment_resolution_events_project_comment "
+                "ON comment_resolution_events"
+            )
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'issue',2)"""
+            ),
+            {"id": record_id},
+        )
+
+        with pytest.raises(
+            DBAPIError, match="review_issue_resolution_projection_mismatch"
+        ):
+            with connection.begin_nested():
+                connection.execute(
+                    text(
+                        """INSERT INTO comment_resolution_events
+                        (comment_id,action,disposition,rationale,actor_id,actor_role)
+                        VALUES (1,'resolved','addressed','missing projection',2,'curator')"""
+                    )
+                )
+                connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+
+
 def test_forward_reconciliation_is_idempotent_for_fresh_activation_schema() -> None:
     """Fresh e0 installs keep the same final projection and mutation guards."""
     with _isolated_schema() as (connection, _schema, migration):
