@@ -31,7 +31,7 @@
             v-model="text"
             class="native-field"
             rows="5"
-            maxlength="10000"
+            :maxlength="textLimit"
             required
           />
         </v-card-text>
@@ -90,8 +90,12 @@ const textLabel = computed(() => (props.mode === 'create' ? 'Issue' : 'Rationale
 const submitLabel = computed(
   () => ({ create: 'Create issue', resolve: 'Resolve issue', reopen: 'Reopen issue' })[props.mode]
 );
+const textLimit = computed(() => (props.mode === 'create' ? 10_000 : 500));
 const canSubmit = computed(
-  () => text.value.trim().length > 0 && (props.mode !== 'resolve' || disposition.value !== '')
+  () =>
+    text.value.trim().length > 0 &&
+    text.value.trim().length <= textLimit.value &&
+    (props.mode !== 'resolve' || disposition.value !== '')
 );
 
 function reset() {

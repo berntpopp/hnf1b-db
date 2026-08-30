@@ -1,3 +1,9 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * Resolution rationales use the shared DOMPurify sanitizer, which requires
+ * the repository's browser-compatible jsdom environment for security assertions.
+ */
 import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 
@@ -12,7 +18,24 @@ const issues = [
     resolved_at: '2026-08-14T10:00:00Z',
     review_revision_id: 42,
     capabilities: [{ action: 'reopen', allowed: true, blocked_by: [] }],
-    resolution_events: [],
+    resolution_events: [
+      {
+        id: 10,
+        action: 'resolved',
+        disposition: 'accepted_with_rationale',
+        rationale: 'Evidence accepted <script>alert(1)</script>',
+        actor_username: 'reviewer',
+        created_at: '2026-08-14T10:00:00Z',
+      },
+      {
+        id: 11,
+        action: 'reopened',
+        disposition: null,
+        rationale: 'Candidate changed again',
+        actor_username: 'second-reviewer',
+        created_at: '2026-08-14T11:00:00Z',
+      },
+    ],
   },
   {
     id: 1,
@@ -78,5 +101,25 @@ describe('ReviewIssuesPanel', () => {
 
     expect(wrapper.get('[role="status"]').attributes('aria-live')).toBe('polite');
     expect(wrapper.get('[role="status"]').text()).toBe('1 open blocking issue remains.');
+  });
+
+  it('renders the ordered resolution audit with disposition and semantic timestamps', () => {
+    const wrapper = mountPanel();
+    const events = wrapper.findAll('[data-testid="resolution-event"]');
+
+    expect(events).toHaveLength(2);
+    expect(events[0].text()).toContain('Resolved by reviewer');
+    expect(events[0].text()).toContain('Accepted with rationale');
+    expect(events[0].text()).toContain('Evidence accepted');
+    expect(events[0].html()).not.toContain('<script>');
+    expect(events[1].text()).toContain('Reopened by second-reviewer');
+    expect(events[1].text()).not.toContain('Disposition');
+
+    const timestamps = wrapper.findAll('time');
+    expect(timestamps.map((time) => time.attributes('datetime'))).toEqual([
+      '2026-08-14T10:00:00Z',
+      '2026-08-14T11:00:00Z',
+    ]);
+    expect(timestamps.every((time) => time.text().length > 0)).toBe(true);
   });
 });

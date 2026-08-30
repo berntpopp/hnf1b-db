@@ -34,9 +34,22 @@
         <CommentBody :body-markdown="issue.body_markdown" />
 
         <ul v-if="issue.resolution_events.length" class="resolution-events">
-          <li v-for="event in issue.resolution_events" :key="event.id">
-            {{ event.action === 'resolved' ? 'Resolved' : 'Reopened' }} by
-            {{ event.actor_username }}: {{ sanitized(event.rationale) }}
+          <li
+            v-for="event in issue.resolution_events"
+            :key="event.id"
+            data-testid="resolution-event"
+          >
+            <div>
+              <strong>
+                {{ event.action === 'resolved' ? 'Resolved' : 'Reopened' }} by
+                {{ event.actor_username }}
+              </strong>
+              <span v-if="event.action === 'resolved' && event.disposition">
+                — {{ formatDisposition(event.disposition) }}
+              </span>
+            </div>
+            <div>{{ sanitized(event.rationale) }}</div>
+            <time :datetime="event.created_at">{{ formatTimestamp(event.created_at) }}</time>
           </li>
         </ul>
 
@@ -108,6 +121,15 @@ const blockerText = (capability) =>
   (capability.blocked_by || []).map((blocker) => blocker.replaceAll('_', ' ')).join(', ');
 const createBlockers = computed(() => blockerText(props.createIssueCapability));
 const sanitized = (value) => sanitize(value || '');
+const formatDisposition = (value) => {
+  const text = value.replaceAll('_', ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+function formatTimestamp(value) {
+  const timestamp = new Date(value);
+  return Number.isNaN(timestamp.getTime()) ? sanitized(value) : timestamp.toLocaleString();
+}
 
 function openDialog(mode, issue = null) {
   dialogMode.value = mode;

@@ -8,10 +8,15 @@ const RESOLUTION_DISPOSITIONS = new Set([
   'retracted',
   'superseded',
 ]);
+const ISSUE_BODY_MAX_LENGTH = 10_000;
+const RATIONALE_MAX_LENGTH = 500;
 
-function requiredText(value, label) {
+function requiredText(value, label, maxLength) {
   const text = typeof value === 'string' ? value.trim() : '';
   if (!text) throw new Error(`${label} is required.`);
+  if (text.length > maxLength) {
+    throw new Error(`${label} must not exceed ${maxLength} characters.`);
+  }
   return text;
 }
 
@@ -20,9 +25,15 @@ export function useReviewIssues({ recordId, recordRevision, candidateRevisionId,
   const submitting = ref(false);
   const error = ref(null);
 
-  function assertCandidateIssue(issue) {
-    if (!issue || issue.review_revision_id !== unref(candidateRevisionId)) {
-      throw new Error('The issue does not belong to the current candidate revision.');
+  function assertActionableIssue(issue) {
+    if (!issue || issue.record_type !== 'phenopacket' || issue.record_id !== unref(recordId)) {
+      throw new Error('The issue record identity does not match the review context.');
+    }
+    if (issue.is_blocking_issue !== true) {
+      throw new Error('The comment is not a blocking issue.');
+    }
+    if (!Number.isInteger(issue.review_revision_id) || issue.review_revision_id <= 0) {
+      throw new Error('The issue review revision is invalid.');
     }
   }
 
@@ -46,7 +57,7 @@ export function useReviewIssues({ recordId, recordRevision, candidateRevisionId,
   }
 
   async function createIssue({ bodyMarkdown, mentionUserIds = [] }) {
-    const body = requiredText(bodyMarkdown, 'Issue body');
+    const body = requiredText(bodyMarkdown, 'Issue body', ISSUE_BODY_MAX_LENGTH);
     return await mutate(() =>
       createComment({
         recordType: 'phenopacket',
@@ -60,11 +71,11 @@ export function useReviewIssues({ recordId, recordRevision, candidateRevisionId,
   }
 
   async function resolveIssue(issue, { disposition, rationale }) {
-    assertCandidateIssue(issue);
+    assertActionableIssue(issue);
     if (!RESOLUTION_DISPOSITIONS.has(disposition)) {
       throw new Error('A supported issue disposition is required.');
     }
-    const evidence = requiredText(rationale, 'Resolution rationale');
+    const evidence = requiredText(rationale, 'Resolution rationale', RATIONALE_MAX_LENGTH);
     return await mutate(() =>
       resolveComment(issue.id, {
         recordRevision: unref(recordRevision),
@@ -75,8 +86,8 @@ export function useReviewIssues({ recordId, recordRevision, candidateRevisionId,
   }
 
   async function reopenIssue(issue, { rationale }) {
-    assertCandidateIssue(issue);
-    const evidence = requiredText(rationale, 'Reopen rationale');
+    assertActionableIssue(issue);
+    const evidence = requiredText(rationale, 'Reopen rationale', RATIONALE_MAX_LENGTH);
     return await mutate(() =>
       unresolveComment(issue.id, {
         recordRevision: unref(recordRevision),

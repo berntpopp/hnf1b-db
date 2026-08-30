@@ -72,6 +72,7 @@ describe('ReviewIssueDialog', () => {
   it('creates an issue from a non-empty body', async () => {
     mountDialog('create');
     const textarea = document.querySelector('textarea');
+    expect(textarea.maxLength).toBe(10_000);
     textarea.value = 'Please correct the inheritance evidence.';
     textarea.dispatchEvent(new Event('input'));
     await wrapper.vm.$nextTick();
@@ -80,5 +81,46 @@ describe('ReviewIssueDialog', () => {
     expect(wrapper.emitted('submit')[0]).toEqual([
       { bodyMarkdown: 'Please correct the inheritance evidence.' },
     ]);
+  });
+
+  it.each(['resolve', 'reopen'])(
+    '%s accepts 500 rationale characters and rejects 501',
+    async (mode) => {
+      mountDialog(mode);
+      if (mode === 'resolve') {
+        const select = document.querySelector('select');
+        select.value = 'addressed';
+        select.dispatchEvent(new Event('change'));
+      }
+      const textarea = document.querySelector('textarea');
+      const submit = document.querySelector('[data-testid="issue-submit"]');
+      expect(textarea.maxLength).toBe(500);
+
+      textarea.value = 'a'.repeat(500);
+      textarea.dispatchEvent(new Event('input'));
+      await wrapper.vm.$nextTick();
+      expect(submit.disabled).toBe(false);
+
+      textarea.value = 'a'.repeat(501);
+      textarea.dispatchEvent(new Event('input'));
+      await wrapper.vm.$nextTick();
+      expect(submit.disabled).toBe(true);
+    }
+  );
+
+  it('keeps create enabled through 10,000 characters and disables 10,001', async () => {
+    mountDialog('create');
+    const textarea = document.querySelector('textarea');
+    const submit = document.querySelector('[data-testid="issue-submit"]');
+
+    textarea.value = 'a'.repeat(10_000);
+    textarea.dispatchEvent(new Event('input'));
+    await wrapper.vm.$nextTick();
+    expect(submit.disabled).toBe(false);
+
+    textarea.value = 'a'.repeat(10_001);
+    textarea.dispatchEvent(new Event('input'));
+    await wrapper.vm.$nextTick();
+    expect(submit.disabled).toBe(true);
   });
 });
