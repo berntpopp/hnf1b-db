@@ -2,16 +2,62 @@
 
 **Review date:** 2026-08-30
 
-**Reviewed tree:** `353a453`
+**Base tree:** `5a5e45628c72331d59fe29b18869af65ce7517a6`
+
+**Reviewed tree:** `353a453579c61f62d0351e93a49fc9d9e7e547b9`
 
 **Review mode:** One independent, report-only pass. The primary agent accepted and
 addressed every finding. No second independent review was requested.
+
+**Reviewer:** independent `gpt-5.6-sol` reviewer at `xhigh` reasoning.
+
+## Scope and method
+
+The reviewer inspected all 46 commits and 131 changed files in the frozen tree, the
+complete 30,379-line diff package, design, prior spec review, implementation plan,
+durable operator documentation, and local verification report. The diff package had
+SHA-256 `9719d42e63ce2eef635dee55e3b06ccdca5b00486dc2edcb1454c8c538b3e417`.
+The pass traced policy, immutable revisions, publication, public readers, review queue,
+issue mutations and database triggers, migrations, API/OpenAPI, frontend routing and
+state ownership, accessibility, E2E, seeding, CI, rollout, and rollback. Broad suite
+counts were not accepted by themselves; representative tests were matched to their
+production paths and focused checks were rerun.
+
+At review time, the live draft PR still pointed to `36f3889e`; its green Actions did
+not attest the frozen reviewed tree. The review therefore requested changes and
+explicitly required the primary agent to resolve the findings and verify the actual
+published head.
+
+## Strengths recorded by the reviewer
+
+- Server policy and direct service use consistently exclude owners, active-cycle
+  submitters, and content contributors from decisions, including admins, without
+  requiring reviewer assignment.
+- Approval binds the immutable candidate revision and recomputed full-content digest
+  under the record lock; the v2 ledger records actor, role snapshot, rationale,
+  attestations, and server time.
+- Publication rechecks the approved revision/digest and copies content without
+  canonicalization or publish-time mutation.
+- Phenopacket-first locking plus database triggers close application and direct-SQL
+  blocking-issue races, with both writer orderings covered.
+- The `d0`/`e0`/`f0` rollout preserves legacy history, activates invariants, reconciles
+  already-stamped projection drift, and refuses evidence-destroying downgrade.
+- Review context is coherent and the queue remains server filtered, sorted, paginated,
+  and capability driven.
+- The frontend already had exact server identity use, decision single-flight,
+  stale-response ownership, focus management, and credible mobile behavior.
+- The distinct-actor two-cycle E2E was non-tautological and included privacy,
+  blocking issues, exact approval/publication, discovery, keyboard/mobile, and cleanup.
+- Development seeding, production configuration, rollout, and guarded rollback fail
+  closed.
 
 ## Outcome
 
 The reviewer reported one Critical, six Important, and one Minor finding. All eight
 were accepted. The resulting implementation commits are `e1407db`, `6050c2b`,
 `86ed434`, `1ff6f87`, and `306c181`; `8f3689f` adds the final runtime privacy proof.
+The frozen-tree verdict was **Request changes — do not merge**. The primary-agent
+dispositions below close that verdict without performing a second independent pass.
 
 ## Finding ledger
 
@@ -81,6 +127,20 @@ was omitted from the backend process's default CORS list; all four browser sessi
 therefore redirected to login. The fixtures were archived, the owned backend was
 restarted with the explicit 5174 origin, and the exact test set passed. This was a
 runtime harness configuration issue, not a product assertion failure.
+
+## Verification performed by the independent reviewer
+
+- Confirmed the base/head identities, ancestor relationship, 46 commits, 131 changed
+  files, clean worktree, and `git diff --check` success without editing any file.
+- Reran 47 focused backend tests covering exact snapshots, review policy, and OpenAPI;
+  all passed with one existing event-loop deprecation warning.
+- Reran 40 focused frontend tests covering the workspace, review context, issue and
+  decision actions, and ordinary-detail route reuse; all passed.
+- Direct probes reproduced acceptance of a whitespace-only rationale and the missing
+  comment-create OpenAPI error contract.
+- Inspected the supplied full-suite, migration/raw-SQL, rollout/downgrade, OpenAPI,
+  Playwright, and hybrid evidence against their source and tests.
+- Performed only read-only GitHub inspection and did not mutate the branch or PR.
 
 ## Residual warnings and boundaries
 

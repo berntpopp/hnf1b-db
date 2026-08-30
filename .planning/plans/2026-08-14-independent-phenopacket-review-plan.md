@@ -465,7 +465,7 @@ git commit -m "feat(backend): gate approval on blocking review issues"
 - Comment responses expose `review_revision_id`, `is_blocking_issue`, and append-only resolution events without changing the ordinary-comment contract.
 - Public CRUD filtering remains physical-head based; curator CRUD rows now include correct `effective_state`.
 
-- [ ] **Step 1: Write failing queue projection and authorization tests**
+- [x] **Step 1: Write failing queue projection and authorization tests**
 
 ```python
 async def test_queue_filters_published_record_by_in_review_effective_state(...):
@@ -484,27 +484,27 @@ async def test_viewer_review_queue_is_not_discoverable(...):
 
 Cover anonymous/viewer non-disclosure, pagination/count parity, allowlisted sorting, oldest-submission default, state/owner/eligibility/issues filters, search, state counts, own-row visibility with disabled capabilities, old public-head retention, and application SELECT-count independence between one-row and full-page responses.
 
-- [ ] **Step 2: Write failing coherent-context and semantic-change tests**
+- [x] **Step 2: Write failing coherent-context and semantic-change tests**
 
 Test new records (no baseline/all added), revised records (public head baseline), nested add/remove/replace, arrays, unknown extension fields, unresolved-first issues, contributor/submission audit, and actor-specific capability blockers.
 
-- [ ] **Step 3: Run queue/context tests and confirm endpoints are absent**
+- [x] **Step 3: Run queue/context tests and confirm endpoints are absent**
 
 Run: `cd backend && uv run pytest tests/test_review_queue.py tests/test_review_context.py tests/test_crud_state_branching.py -q`
 
 Expected: FAIL with 404/import errors.
 
-- [ ] **Step 4: Implement repository/service/router boundaries**
+- [x] **Step 4: Implement repository/service/router boundaries**
 
 Register the review router before the CRUD catch-all. Keep SQL expressions shared between row and count queries. Avoid per-row queries by joining/aggregating owner, submitted revision, blocking issue count, and contributors. Return typed Pydantic response models rather than ad hoc dicts.
 
-- [ ] **Step 5: Verify API, visibility, query-count, and OpenAPI tests**
+- [x] **Step 5: Verify API, visibility, query-count, and OpenAPI tests**
 
 Run: `cd backend && uv run pytest tests/test_review_queue.py tests/test_review_context.py tests/test_crud_state_branching.py tests/test_visibility_endpoints.py tests/test_openapi_contract.py -q`
 
 Refresh the deterministic snapshot only after the live review schemas are correct, inspect the generated diff, then rerun. Expected: PASS; Task 12 performs the final refresh after its remaining contract changes.
 
-- [ ] **Step 6: Commit the review API**
+- [x] **Step 6: Commit the review API**
 
 ```bash
 git add backend/app/phenopackets/review backend/app/phenopackets/routers/review.py \
@@ -549,11 +549,11 @@ unresolveComment(commentId, request?)
 
 Routes `ReviewQueue` and `PhenopacketReview` use `requiresAuth: true, requiresCurator: true`. Export a testable `resolveRouteAccess(to, from, authStore)` and return `NotFound` for authenticated viewers. API modules serialize snake_case HTTP contracts and never infer policy.
 
-- [ ] **Step 1: Write failing transport serialization tests**
+- [x] **Step 1: Write failing transport serialization tests**
 
 Assert every queue parameter alias, encoded context ID, candidate ID/digest/attestation approval payload, approved ID/digest publication payload, omission of irrelevant fields, revision-bound issue creation, typed resolve/reopen bodies, and ordinary bodyless resolution.
 
-- [ ] **Step 2: Write failing guard/navigation tests**
+- [x] **Step 2: Write failing guard/navigation tests**
 
 ```javascript
 it('returns NotFound for a viewer without disclosing the review record', async () => {
@@ -563,23 +563,23 @@ it('returns NotFound for a viewer without disclosing the review record', async (
 
 Cover anonymous return URL, curator/admin access, desktop/mobile menu visibility, and drawer close.
 
-- [ ] **Step 3: Run focused frontend tests and confirm missing modules/routes**
+- [x] **Step 3: Run focused frontend tests and confirm missing modules/routes**
 
 Run: `cd frontend && npm test -- tests/unit/api/reviews.spec.js tests/unit/api/comments.spec.js tests/unit/api/phenopackets.spec.js tests/unit/router/reviewRoutes.spec.js tests/unit/components/ReviewNavigation.spec.js`
 
 Expected: FAIL.
 
-- [ ] **Step 4: Implement transport, guards, and lazy routes**
+- [x] **Step 4: Implement transport, guards, and lazy routes**
 
 Use lazy route imports and create accessible loading shells for both route components so this commit remains buildable. Tasks 8 and 10 replace the shells with the queue and workspace. Preserve existing login initialization and admin guards.
 
-- [ ] **Step 5: Verify focused tests and lint**
+- [x] **Step 5: Verify focused tests and lint**
 
 Run: `cd frontend && npm test -- tests/unit/api/reviews.spec.js tests/unit/api/comments.spec.js tests/unit/api/phenopackets.spec.js tests/unit/router/reviewRoutes.spec.js tests/unit/components/ReviewNavigation.spec.js && npm run lint:check`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit transport/navigation**
+- [x] **Step 6: Commit transport/navigation**
 
 ```bash
 git add frontend/src/api frontend/src/router/index.js frontend/src/components/AppBar.vue \
@@ -610,35 +610,35 @@ useReviewQueue() => {
 
 Tab mapping is exact: `needs-review -> in_review`, `changes-requested -> changes_requested`, `approved -> approved`, and `my-drafts -> draft + owner=mine`. Queue DTO rows use `physical_state` and `effective_state`; the view always displays effective state.
 
-- [ ] **Step 1: Write failing composable tests**
+- [x] **Step 1: Write failing composable tests**
 
 Cover URL hydration, exact tab filters, page reset on filter/search/tab changes, backend totals, stale-response suppression, and preserved error for retry.
 
-- [ ] **Step 2: Run composable tests and observe missing implementation**
+- [x] **Step 2: Run composable tests and observe missing implementation**
 
 Run: `cd frontend && npm test -- tests/unit/composables/useReviewQueue.spec.js`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement queue state against `getReviewQueue`**
+- [x] **Step 3: Implement queue state against `getReviewQueue`**
 
 Reuse `useTableUrlState` semantics. Track a monotonically increasing request token or AbortController so an older response cannot overwrite a newer one. Do no client sorting/pagination.
 
-- [ ] **Step 4: Write failing queue-view tests**
+- [x] **Step 4: Write failing queue-view tests**
 
 Assert server totals, effective state, explicit focusable Review link, retry, true-empty versus filtered-empty messages, mobile state/issue count, and absence of bulk approval or row-click-only navigation.
 
-- [ ] **Step 5: Implement `ReviewQueue.vue`**
+- [x] **Step 5: Implement `ReviewQueue.vue`**
 
 Use `AppDataTable`, standard toolbar/pagination components, `StateBadge`, skeletons, alert/retry, and mobile slots. Keep query state shareable.
 
-- [ ] **Step 6: Verify queue tests and accessibility lint**
+- [x] **Step 6: Verify queue tests and accessibility lint**
 
 Run: `cd frontend && npm test -- tests/unit/composables/useReviewQueue.spec.js tests/unit/views/ReviewQueue.spec.js && npm run lint:check`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the queue**
+- [x] **Step 7: Commit the queue**
 
 ```bash
 git add frontend/src/composables/useReviewQueue.js frontend/src/views/ReviewQueue.vue \
@@ -678,29 +678,29 @@ useReviewIssues({ recordId, recordRevision, candidateRevisionId, reload }) => {
 
 The backend semantic diff is authoritative. `CandidateSnapshot` reuses existing subject, phenotype, disease, interpretation, measurement, and metadata cards. Each blocking issue consumes its own backend-returned capabilities; it never inherits ordinary comment author/admin deletion rules.
 
-- [ ] **Step 1: Write failing context/diff tests**
+- [x] **Step 1: Write failing context/diff tests**
 
 Cover one coherent load, unavailable issue status failing closed, add/remove/change text plus icons, before/after rendering without color dependence, null baseline “New phenopacket”, complete candidate cards, and raw extension content.
 
-- [ ] **Step 2: Implement the context composable and display components**
+- [x] **Step 2: Implement the context composable and display components**
 
 Do not compute a client diff. Sanitize rendered values through existing utilities and provide accessible labels for JSON pointers/operations.
 
-- [ ] **Step 3: Write failing blocking-issue tests**
+- [x] **Step 3: Write failing blocking-issue tests**
 
 Cover exact candidate binding, disposition allowlist, rationale, unresolved-first ordering, server capabilities, no Delete action, reload after mutation, and issue-count live announcement.
 
-- [ ] **Step 4: Implement issue composable/panel/dialog**
+- [x] **Step 4: Implement issue composable/panel/dialog**
 
 Use Task 7 transport. Preserve ordinary `DiscussionTab` unchanged except for shared response-field compatibility.
 
-- [ ] **Step 5: Verify focused tests, format, and lint**
+- [x] **Step 5: Verify focused tests, format, and lint**
 
 Run: `cd frontend && npm test -- tests/unit/composables/useReviewContext.spec.js tests/unit/composables/useReviewIssues.spec.js tests/unit/components/review && npm run format:check && npm run lint:check`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit comparison/issues**
+- [x] **Step 6: Commit comparison/issues**
 
 ```bash
 git add frontend/src/composables/useReviewContext.js frontend/src/composables/useReviewIssues.js \
@@ -735,29 +735,29 @@ useReviewActions(id, contextRef, { reload, onCompleted }) => {
 
 Approval payloads originate only from loaded candidate ID/digest; publication originates only from loaded approval ID/digest. Backend capabilities drive every action and denial reason.
 
-- [ ] **Step 1: Write failing action tests**
+- [x] **Step 1: Write failing action tests**
 
 Cover unknown/open issue disabling, both attestations and rationale, server self-review/contributor explanations, publish capability, structured conflict mapping, no retry after conflict, unresolved count copy, and focus restoration.
 
-- [ ] **Step 2: Implement action composable and dialogs**
+- [x] **Step 2: Implement action composable and dialogs**
 
 Map `revision_mismatch` and `review_revision_mismatch` to a reload-required state. Never synthesize an approval/publication identity from route or current record state.
 
-- [ ] **Step 3: Write failing workspace/header tests**
+- [x] **Step 3: Write failing workspace/header tests**
 
 Cover audit metadata, preserved back-to-queue query, skeleton/retry/private-404 states, refresh after mutation, conflict replacement, candidate/raw JSON/history views, right rail desktop layout, and single-column mobile order/sticky safe-area controls.
 
-- [ ] **Step 4: Assemble `PhenopacketReview.vue`**
+- [x] **Step 4: Assemble `PhenopacketReview.vue`**
 
 Desktop main column contains changes/candidate/JSON/history; the right rail contains review issues, discussion summary, and decisions. Mobile order is header, content tabs, issues, decisions. Use `aria-live="polite"`, one `h1`, 44px targets, focus trap/return, and text plus icons.
 
-- [ ] **Step 5: Verify workspace tests and build**
+- [x] **Step 5: Verify workspace tests and build**
 
 Run: `cd frontend && npm test -- tests/unit/composables/useReviewActions.spec.js tests/unit/components/review tests/unit/views/PhenopacketReview.spec.js && npm run lint:check && npm run build`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the workspace**
+- [x] **Step 6: Commit the workspace**
 
 ```bash
 git add frontend/src/composables/useReviewActions.js frontend/src/components/review \
@@ -784,25 +784,25 @@ git commit -m "feat(frontend): add exact-revision review workspace"
 - `PagePhenopacket` exposes “Open review workspace” in active review states.
 - Direct publication in `ReportObservationWorkspace` is removed and replaced with an open-review affordance.
 
-- [ ] **Step 1: Replace local-matrix tests with capability tests**
+- [x] **Step 1: Replace local-matrix tests with capability tests**
 
 Assert only server capabilities render, denial reasons display, conditional actions route to review workspace, and no `RULES`, `role`, or `isOwner` props remain.
 
-- [ ] **Step 2: Write failing detail/report-workspace bypass tests**
+- [x] **Step 2: Write failing detail/report-workspace bypass tests**
 
 Assert active review records link to the workspace and report curation can no longer call publication without approved ID/digest.
 
-- [ ] **Step 3: Implement server-authoritative consumers**
+- [x] **Step 3: Implement server-authoritative consumers**
 
 Preserve legacy state labels/history. Do not recreate policy in computed properties.
 
-- [ ] **Step 4: Run focused and full affected unit tests**
+- [x] **Step 4: Run focused and full affected unit tests**
 
 Run: `cd frontend && npm test -- tests/unit/components/state tests/unit/views/PagePhenopacket.spec.js tests/unit/components/curation/ReportObservationWorkspace.spec.js`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit bypass removal**
+- [x] **Step 5: Commit bypass removal**
 
 ```bash
 git add frontend/src/components/state frontend/src/composables/usePhenopacketState.js \
@@ -834,27 +834,27 @@ git commit -m "refactor(frontend): consume server review capabilities"
 - Add `loginAsCuratorA` and `loginAsCuratorB`, using `E2E_CURATOR_A_*`/`E2E_CURATOR_B_*` with deterministic development-only fallbacks.
 - OpenAPI documents queue/context DTOs, conditional transition fields, ordinary/bodyless and blocking/typed comment mutations, structured errors, and actor capabilities.
 
-- [ ] **Step 1: Write/update seeder and OpenAPI contract tests**
+- [x] **Step 1: Write/update seeder and OpenAPI contract tests**
 
 Assert both curators are distinct/active/verified and snapshot exposes the new request/response/error contracts. Run focused backend tests and confirm intentional snapshot drift.
 
-- [ ] **Step 2: Refresh the deterministic OpenAPI snapshot under CI Python 3.12**
+- [x] **Step 2: Refresh the deterministic OpenAPI snapshot under CI Python 3.12**
 
 Run: `cd backend && uv run python scripts/dump_openapi.py > ../mcp/contract/openapi.snapshot.json` only after the live schema tests are correct. Inspect the diff and verify only intentional review-contract changes.
 
-- [ ] **Step 3: Replace same-admin lifecycle assumptions**
+- [x] **Step 3: Replace same-admin lifecycle assumptions**
 
 Update existing backend/E2E fixtures so owner, reviewer, and publisher are distinct where policy requires. Do not weaken assertions to accept both old and new workflows.
 
-- [ ] **Step 4: Write the principal Playwright lifecycle**
+- [x] **Step 4: Write the principal Playwright lifecycle**
 
 Prove: curator A creates/submits; anonymous/viewer cannot discover; A cannot decide; curator B finds through server filters, raises an issue, requests changes, resolves with disposition/rationale, approves exact revision/digest; content stays private until admin publication; a second cycle retains the old public head until replacement publication.
 
-- [ ] **Step 5: Add conflicts, reopening, keyboard, and mobile E2E coverage**
+- [x] **Step 5: Add conflicts, reopening, keyboard, and mobile E2E coverage**
 
 Cover approved-to-changes-requested, stale revision/digest reload-required state, keyboard-only queue/issue/decision path, 375×812 layout/no overflow, named controls, focus behavior, and non-color diff cues.
 
-- [ ] **Step 6: Run focused backend and E2E contracts**
+- [x] **Step 6: Run focused backend and E2E contracts**
 
 Run:
 
@@ -865,7 +865,7 @@ cd frontend && npm run e2e -- tests/e2e/independent-review.spec.js tests/e2e/rev
 
 Expected: PASS with genuinely distinct authenticated actors.
 
-- [ ] **Step 7: Commit contracts and E2E proof**
+- [x] **Step 7: Commit contracts and E2E proof**
 
 ```bash
 git add backend/scripts/seed_dev_users.py backend/tests/test_seed_dev_users.py \
@@ -925,7 +925,7 @@ For every design acceptance criterion, record authoritative evidence and mark pr
 
 Write `docs/curation-review-workflow.md` with the operator-visible state lifecycle, independent-review exclusions, blocking-issue dispositions, exact-revision sign-off contract, publication boundary, rollout order, and guarded rollback behavior.
 
-- [ ] **Step 5: Dispatch the one-pass adversarial PR reviewer**
+- [x] **Step 5: Dispatch the one-pass adversarial PR reviewer**
 
 Give the reviewer the design, spec-review artifact, implementation plan, complete diff, test evidence, and current code. Save its report and primary-agent dispositions in `.planning/reviews/2026-08-14-independent-phenopacket-review-pr-review.md`.
 
