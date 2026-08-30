@@ -22,6 +22,7 @@ ReviewBlockCode = Literal[
 ReviewAction = Literal[
     "create_issue",
     "request_changes",
+    "withdraw",
     "approve",
     "publish",
     "resolve",
@@ -157,6 +158,8 @@ class ReviewRevisionSummary(BaseModel):
     content_sha256: str | None
     created_at: datetime
     actor: ActorSummary
+    actor_role: str | None
+    actor_role_at_decision_recorded: bool
 
 
 class ReviewRevision(ReviewRevisionSummary):

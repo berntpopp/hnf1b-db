@@ -8,6 +8,7 @@
             "enum": [
               "create_issue",
               "request_changes",
+              "withdraw",
               "approve",
               "publish",
               "resolve",
@@ -4553,6 +4554,21 @@
           "actor": {
             "$ref": "#/components/schemas/ActorSummary"
           },
+          "actor_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Role"
+          },
+          "actor_role_at_decision_recorded": {
+            "title": "Actor Role At Decision Recorded",
+            "type": "boolean"
+          },
           "content": {
             "additionalProperties": true,
             "title": "Content",
@@ -4594,6 +4610,8 @@
           "content_sha256",
           "created_at",
           "actor",
+          "actor_role",
+          "actor_role_at_decision_recorded",
           "content"
         ],
         "title": "ReviewRevision",
@@ -4604,6 +4622,21 @@
         "properties": {
           "actor": {
             "$ref": "#/components/schemas/ActorSummary"
+          },
+          "actor_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Role"
+          },
+          "actor_role_at_decision_recorded": {
+            "title": "Actor Role At Decision Recorded",
+            "type": "boolean"
           },
           "content_sha256": {
             "anyOf": [
@@ -4640,7 +4673,9 @@
           "state",
           "content_sha256",
           "created_at",
-          "actor"
+          "actor",
+          "actor_role",
+          "actor_role_at_decision_recorded"
         ],
         "title": "ReviewRevisionSummary",
         "type": "object"

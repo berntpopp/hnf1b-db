@@ -88,6 +88,7 @@ vi.mock('@/composables/usePhenopacketState', () => ({ usePhenopacketState: () =>
 vi.mock('vue-router', () => ({ useRoute: () => route }));
 
 import PhenopacketReview from '@/views/PhenopacketReview.vue';
+import reviewWorkspaceSource from '@/views/PhenopacketReview.vue?raw';
 
 const ReviewHeaderStub = {
   props: ['context', 'returnTo'],
@@ -243,12 +244,15 @@ describe('PhenopacketReview', () => {
     expect(wrapper.get('[role="status"]').text()).toContain('Review decision saved');
   });
 
-  it('assembles a desktop right rail and preserves the mobile content, issues, decisions order', () => {
+  it('assembles a desktop right rail with exact issues, decisions, discussion source order', () => {
     const wrapper = mountWorkspace();
     const content = wrapper.get('[data-testid="content-column"]').element;
     const rail = wrapper.get('[data-testid="review-right-rail"]');
     const issues = wrapper.get('[data-testid="issues-panel"]').element;
     const decisions = wrapper.get('[data-testid="action-panel"]').element;
+    const issueSection = wrapper.get('[data-testid="issues-rail-section"]').element;
+    const decisionSection = wrapper.get('[data-testid="decision-rail-section"]').element;
+    const discussionSection = wrapper.get('[data-testid="discussion-rail-section"]').element;
 
     expect(rail.classes()).toContain('review-right-rail');
     expect(wrapper.get('[data-testid="decision-rail-section"]').classes()).toContain(
@@ -256,6 +260,16 @@ describe('PhenopacketReview', () => {
     );
     expect(precedes(content, issues)).toBe(true);
     expect(precedes(issues, decisions)).toBe(true);
+    expect(issueSection.nextElementSibling).toBe(decisionSection);
+    expect(decisionSection.nextElementSibling).toBe(discussionSection);
+  });
+
+  it('keeps the mobile decision rail sticky above the safe area without CSS reordering', () => {
+    expect(reviewWorkspaceSource).toMatch(/@media \(max-width: 959px\)/);
+    expect(reviewWorkspaceSource).toContain(
+      'padding-bottom: calc(1rem + env(safe-area-inset-bottom));'
+    );
+    expect(reviewWorkspaceSource).not.toMatch(/\border:\s*[23]\s*;/);
   });
 
   it('passes exact context identities and server capabilities to issues and decisions', () => {

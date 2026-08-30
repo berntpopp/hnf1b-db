@@ -31,12 +31,15 @@ const baseContext = () => ({
 });
 
 const DecisionDialogStub = {
-  props: ['modelValue', 'action', 'unresolvedCount', 'snapshot'],
+  props: ['modelValue', 'action', 'unresolvedCount', 'snapshot', 'submitting'],
   emits: ['update:modelValue', 'submit', 'closed'],
   template: `
     <div v-if="modelValue" data-testid="decision-dialog" :data-action="action">
       <button data-testid="close-dialog" @click="$emit('update:modelValue', false); $emit('closed')">
         Close
+      </button>
+      <button data-testid="submit-dialog" @click="$emit('submit', { rationale: 'Reason' })">
+        Submit
       </button>
     </div>
   `,
@@ -139,6 +142,26 @@ describe('ReviewActionPanel', () => {
     expect(withPublish.get('[data-testid="action-publish"]').text()).toContain('Publish');
   });
 
+  it('offers owner withdrawal only when supplied by a possible server DTO', () => {
+    const context = baseContext();
+    context.capabilities = [
+      {
+        action: 'request_changes',
+        allowed: false,
+        blocked_by: ['self_review_forbidden', 'reviewer_submitted'],
+      },
+      {
+        action: 'approve',
+        allowed: false,
+        blocked_by: ['self_review_forbidden', 'reviewer_submitted'],
+      },
+      { action: 'withdraw', allowed: true, blocked_by: [] },
+    ];
+    const panel = mountPanel(context);
+
+    expect(panel.get('[data-testid="action-withdraw"]').text()).toContain('Withdraw');
+  });
+
   it('restores focus to the action that opened the modal', async () => {
     const panel = mountPanel();
     const trigger = panel.get('[data-testid="action-approve"]');
@@ -165,5 +188,65 @@ describe('ReviewActionPanel', () => {
     expect(panel.find('[data-testid="action-approve"]').exists()).toBe(false);
     await panel.get('[data-testid="reload-review"]').trigger('click');
     expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('focuses reload when a conflict replaces the opening action', async () => {
+    actionState.approve.mockImplementation(async () => {
+      actionState.conflict.value = {
+        code: 'review_revision_mismatch',
+        message: 'The candidate changed.',
+        reloadRequired: true,
+      };
+      throw new Error('Conflict');
+    });
+    const panel = mountPanel();
+
+    await panel.get('[data-testid="action-approve"]').trigger('click');
+    await panel.get('[data-testid="submit-dialog"]').trigger('click');
+    await nextTick();
+    panel.getComponent(DecisionDialogStub).vm.$emit('closed');
+    await nextTick();
+
+    expect(document.activeElement).toBe(panel.get('[data-testid="reload-review"]').element);
+  });
+
+  it('focuses the first surviving action when reload replaces the successful trigger', async () => {
+    const panel = mountPanel();
+    actionState.approve.mockImplementation(async () => {
+      await panel.setProps({
+        context: {
+          ...baseContext(),
+          effective_state: 'approved',
+          capabilities: [{ action: 'request_changes', allowed: true, blocked_by: [] }],
+        },
+      });
+    });
+
+    await panel.get('[data-testid="action-approve"]').trigger('click');
+    await panel.get('[data-testid="submit-dialog"]').trigger('click');
+    await nextTick();
+    panel.getComponent(DecisionDialogStub).vm.$emit('closed');
+    await nextTick();
+
+    expect(document.activeElement).toBe(
+      panel.get('[data-testid="action-request_changes"]').element
+    );
+  });
+
+  it('disables every decision trigger while one decision is submitting', async () => {
+    const context = baseContext();
+    context.capabilities = [
+      { action: 'request_changes', allowed: false, blocked_by: ['self_review_forbidden'] },
+      { action: 'approve', allowed: false, blocked_by: ['self_review_forbidden'] },
+      { action: 'withdraw', allowed: true, blocked_by: [] },
+    ];
+    const panel = mountPanel(context);
+
+    actionState.submitting.value = true;
+    await nextTick();
+
+    for (const button of panel.findAll('.decision-list button')) {
+      expect(button.attributes('disabled')).toBeDefined();
+    }
   });
 });

@@ -104,4 +104,19 @@ describe('ReviewDecisionDialog', () => {
     await wrapper.vm.$nextTick();
     expect(submit.disabled).toBe(true);
   });
+
+  it('is persistent and ignores dismissal or submission while transport is pending', async () => {
+    mountDialog('request_changes', { submitting: true });
+    const dialog = wrapper.getComponent({ name: 'VDialog' });
+
+    expect(dialog.props('persistent')).toBe(true);
+    dialog.vm.$emit('update:modelValue', false);
+    input('#decision-rationale', 'Do not submit twice.');
+    await wrapper.vm.$nextTick();
+    document.querySelector('form').dispatchEvent(new Event('submit'));
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    expect(wrapper.emitted('submit')).toBeUndefined();
+    expect(document.querySelector('[data-testid="decision-cancel"]').disabled).toBe(true);
+  });
 });

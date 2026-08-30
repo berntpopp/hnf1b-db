@@ -650,6 +650,8 @@ class ReviewRepository:
                 actor=cast(
                     ActorSummary, _actor_summary(actors_by_revision[revision.id])
                 ),
+                actor_role=revision.actor_role,
+                actor_role_at_decision_recorded=revision.actor_role is not None,
             )
 
         def snapshot(revision: PhenopacketRevision | None) -> ReviewRevision | None:

@@ -3,6 +3,7 @@
     :model-value="modelValue"
     max-width="680"
     :retain-focus="true"
+    :persistent="submitting"
     aria-labelledby="review-decision-dialog-title"
     @update:model-value="close"
     @after-leave="emit('closed')"
@@ -53,7 +54,13 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn class="dialog-action" variant="text" :disabled="submitting" @click="close(false)">
+          <v-btn
+            data-testid="decision-cancel"
+            class="dialog-action"
+            variant="text"
+            :disabled="submitting"
+            @click="close(false)"
+          >
             Cancel
           </v-btn>
           <v-btn
@@ -167,11 +174,12 @@ function reset() {
 }
 
 function close(value = false) {
+  if (props.submitting && value === false) return;
   emit('update:modelValue', value);
 }
 
 function submit() {
-  if (!canSubmit.value) return;
+  if (props.submitting || !canSubmit.value) return;
   const payload = { rationale: rationale.value.trim() };
   if (props.action === 'approve') {
     Object.assign(payload, { independentReview: true, noUnmanagedConflict: true });

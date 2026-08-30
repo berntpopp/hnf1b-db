@@ -86,6 +86,10 @@ class ReviewPolicy:
             if facts.unresolved_count > 0:
                 approval_blockers.append("unresolved_review_issues")
             actions.append(cls._capability("approve", approval_blockers))
+            if actor.role == "admin" or (
+                facts.owner_id is not None and actor.id == facts.owner_id
+            ):
+                actions.append(cls._capability("withdraw", []))
         elif facts.effective_state == "approved":
             actions.append(cls._capability("request_changes", blockers))
             if actor.role == "admin":
@@ -208,6 +212,11 @@ class ReviewPolicy:
             if unresolved_count > 0:
                 approval_blockers.append("unresolved_review_issues")
             actions.append(cls._capability("approve", approval_blockers))
+            if actor.role == "admin" or (
+                phenopacket.draft_owner_id is not None
+                and actor.id == phenopacket.draft_owner_id
+            ):
+                actions.append(cls._capability("withdraw", []))
         elif effective_state == "approved":
             actions.append(cls._capability("request_changes", common_blockers))
             if actor.role == "admin":

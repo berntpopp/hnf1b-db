@@ -119,7 +119,10 @@ function auditSummary(revision, includeRoleFallback = false) {
   const revisionLabel = Number.isInteger(revision.revision_number)
     ? `revision ${revision.revision_number}`
     : `revision ID ${revision.id}`;
-  const role = revision.actor_role || revision.actor?.role;
+  const role =
+    revision.actor_role_at_decision_recorded === true && revision.actor_role
+      ? revision.actor_role
+      : null;
   const roleCopy = role
     ? `role at decision: ${role}`
     : includeRoleFallback

@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.phenopackets.models import Phenopacket, PhenopacketRevision
-from app.phenopackets.review.policy import ReviewPolicy, ReviewPolicyError
+from app.phenopackets.review.policy import (
+    ReviewPolicy,
+    ReviewPolicyError,
+    ReviewPolicyFacts,
+)
 from app.phenopackets.review.schemas import ActionCapability
 
 
@@ -93,6 +97,59 @@ async def _review_candidate(
 def _capability(capabilities: Any, action: str) -> Any:
     """Select an action capability without deriving its expected result."""
     return next(item for item in capabilities.actions if item.action == action)
+
+
+def test_withdraw_facts_are_owned_or_administered_not_independence_based():
+    """Withdrawal belongs to the owner/admin even when review is independent."""
+    owner = SimpleNamespace(id=7, role="curator", is_active=True)
+    other_curator = SimpleNamespace(id=8, role="curator", is_active=True)
+    admin = SimpleNamespace(id=9, role="admin", is_active=True)
+    facts = ReviewPolicyFacts(
+        effective_state="in_review",
+        owner_id=owner.id,
+        submitter_id=owner.id,
+        actor_contributed=True,
+        unresolved_count=0,
+        candidate_is_active=True,
+        authors_known=True,
+    )
+
+    owner_capabilities = ReviewPolicy.evaluate_facts(owner, facts)
+    other_capabilities = ReviewPolicy.evaluate_facts(other_curator, facts)
+    admin_capabilities = ReviewPolicy.evaluate_facts(admin, facts)
+
+    assert _capability(owner_capabilities, "withdraw").allowed is True
+    assert all(item.action != "withdraw" for item in other_capabilities.actions)
+    assert _capability(admin_capabilities, "withdraw").allowed is True
+
+
+@pytest.mark.asyncio
+async def test_database_policy_offers_withdraw_only_to_owner_or_admin(
+    db_session,
+    curator_user,
+    another_curator,
+    admin_user,
+):
+    """The DB-backed evaluator applies withdrawal ownership literally."""
+    record, candidate = await _review_candidate(
+        db_session,
+        owner_id=curator_user.id,
+        submitter_id=curator_user.id,
+    )
+
+    owner = await ReviewPolicy.evaluate(
+        db_session, record, candidate, curator_user, unresolved_count=0
+    )
+    other = await ReviewPolicy.evaluate(
+        db_session, record, candidate, another_curator, unresolved_count=0
+    )
+    admin = await ReviewPolicy.evaluate(
+        db_session, record, candidate, admin_user, unresolved_count=0
+    )
+
+    assert _capability(owner, "withdraw").allowed is True
+    assert all(item.action != "withdraw" for item in other.actions)
+    assert _capability(admin, "withdraw").allowed is True
 
 
 @pytest.mark.asyncio

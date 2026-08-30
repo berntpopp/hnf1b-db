@@ -78,6 +78,11 @@ export function useReviewActions(id, contextRef, { reload, onCompleted } = {}) {
   );
 
   function assertReady(action) {
+    if (submitting.value) {
+      throw Object.assign(new Error('A review decision is already in progress.'), {
+        code: 'decision_in_progress',
+      });
+    }
     if (conflict.value) {
       throw Object.assign(new Error('Reload the review context before trying another decision.'), {
         code: 'reload_required',

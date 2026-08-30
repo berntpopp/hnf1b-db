@@ -20,8 +20,6 @@ const contextFixture = (overrides = {}) => ({
   capabilities: [
     { action: 'request_changes', allowed: true, blocked_by: [] },
     { action: 'approve', allowed: true, blocked_by: [] },
-    { action: 'publish', allowed: true, blocked_by: [] },
-    { action: 'withdraw', allowed: true, blocked_by: [] },
   ],
   ...overrides,
 });
@@ -75,6 +73,11 @@ describe('useReviewActions', () => {
 
   it('publishes only the loaded approval identity when the server capability allows it', async () => {
     const { review } = setup({
+      effective_state: 'approved',
+      capabilities: [
+        { action: 'request_changes', allowed: true, blocked_by: [] },
+        { action: 'publish', allowed: true, blocked_by: [] },
+      ],
       approved_revision_id: 999,
       approved_content_sha256: `sha256:${'f'.repeat(64)}`,
     });
@@ -91,11 +94,32 @@ describe('useReviewActions', () => {
   });
 
   it.each([
-    ['requestChanges', 'request_changes', 'changes_requested'],
-    ['reopenApproved', 'request_changes', 'changes_requested'],
-    ['withdraw', 'withdraw', 'draft'],
-  ])('uses the loaded record revision for %s', async (method, _capability, toState) => {
-    const { review } = setup();
+    ['requestChanges', 'changes_requested', {}],
+    [
+      'reopenApproved',
+      'changes_requested',
+      {
+        effective_state: 'approved',
+        capabilities: [{ action: 'request_changes', allowed: true, blocked_by: [] }],
+      },
+    ],
+    [
+      'withdraw',
+      'draft',
+      {
+        capabilities: [
+          {
+            action: 'request_changes',
+            allowed: false,
+            blocked_by: ['self_review_forbidden'],
+          },
+          { action: 'approve', allowed: false, blocked_by: ['self_review_forbidden'] },
+          { action: 'withdraw', allowed: true, blocked_by: [] },
+        ],
+      },
+    ],
+  ])('uses the loaded record revision for %s', async (method, toState, overrides) => {
+    const { review } = setup(overrides);
 
     await review[method]({ rationale: 'A recorded decision rationale.' });
 
@@ -106,6 +130,31 @@ describe('useReviewActions', () => {
       11,
       {}
     );
+  });
+
+  it('fails closed before a second transport while a decision is submitting', async () => {
+    let resolveTransition;
+    transitionPhenopacket.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveTransition = resolve;
+        })
+    );
+    const { review } = setup();
+    const first = review.approve({
+      rationale: 'Independent review complete.',
+      independentReview: true,
+      noUnmanagedConflict: true,
+    });
+
+    expect(review.submitting.value).toBe(true);
+    await expect(
+      review.requestChanges({ rationale: 'A second concurrent decision.' })
+    ).rejects.toMatchObject({ code: 'decision_in_progress' });
+    expect(transitionPhenopacket).toHaveBeenCalledOnce();
+
+    resolveTransition({ data: { revision: { id: 44 } } });
+    await first;
   });
 
   it('fails closed when issue status is unknown or open even if approval is misreported allowed', async () => {

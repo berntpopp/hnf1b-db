@@ -10,7 +10,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.comments.models import Comment, CommentResolutionEvent
 from app.database import async_session_maker
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
 from app.phenopackets.review.repository import ReviewRepository
 from app.phenopackets.review.service import ReviewService
 from tests.test_review_queue import _headers_for, _seed_queue_record
@@ -218,6 +218,8 @@ async def test_context_uses_only_immutable_public_head_and_exposes_exact_candida
             "username": curator_user.username,
             "display_name": curator_user.full_name,
         },
+        "actor_role": curator_user.role,
+        "actor_role_at_decision_recorded": True,
         "content": candidate.content_jsonb,
     }
     assert body["baseline"]["id"] == record.head_published_revision_id
@@ -279,6 +281,101 @@ async def test_context_new_record_has_no_baseline_and_owner_blockers(
             "reviewer_contributed",
         ],
     }
+    assert body["capabilities"][-1] == {
+        "action": "withdraw",
+        "allowed": True,
+        "blocked_by": [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_context_withdraw_capability_is_owner_or_admin_only(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+    admin_headers,
+):
+    """Context capabilities preserve the same owner/admin withdrawal authority."""
+    record, _candidate = await _seed_queue_record(
+        db_session,
+        slug="withdraw-context",
+        owner=curator_user,
+        submitter=curator_user,
+    )
+    await db_session.commit()
+    url = f"/api/v2/phenopackets/{record.phenopacket_id}/review-context"
+
+    owner = await async_client.get(
+        url, headers=(await _headers_for(async_client, curator_user.username))
+    )
+    reviewer = await async_client.get(
+        url, headers=(await _headers_for(async_client, another_curator.username))
+    )
+    admin = await async_client.get(url, headers=admin_headers)
+
+    assert owner.status_code == 200, owner.text
+    assert reviewer.status_code == 200, reviewer.text
+    assert admin.status_code == 200, admin.text
+    owner_actions = owner.json()["capabilities"]
+    reviewer_actions = reviewer.json()["capabilities"]
+    admin_actions = admin.json()["capabilities"]
+    assert owner_actions[-1] == {
+        "action": "withdraw",
+        "allowed": True,
+        "blocked_by": [],
+    }
+    assert all(item["action"] != "withdraw" for item in reviewer_actions)
+    assert admin_actions[-1] == {
+        "action": "withdraw",
+        "allowed": True,
+        "blocked_by": [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_context_projects_recorded_and_historical_actor_roles_without_inference(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+):
+    """Stored decision roles survive while historical nulls stay explicitly unknown."""
+    record, candidate = await _seed_queue_record(
+        db_session,
+        slug="actor-role-audit",
+        owner=curator_user,
+        submitter=curator_user,
+        effective_state="approved",
+        published=True,
+        historical_publication_role_missing=True,
+    )
+    baseline = await db_session.get(
+        PhenopacketRevision, record.head_published_revision_id
+    )
+    assert baseline is not None
+    await db_session.commit()
+
+    response = await async_client.get(
+        f"/api/v2/phenopackets/{record.phenopacket_id}/review-context",
+        headers=(await _headers_for(async_client, another_curator.username)),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["candidate"]["id"] == candidate.id
+    assert body["candidate"]["actor_role"] == curator_user.role
+    assert body["candidate"]["actor_role_at_decision_recorded"] is True
+    assert body["approved"]["actor_role"] == curator_user.role
+    assert body["approved"]["actor_role_at_decision_recorded"] is True
+    assert body["audit"]["submission"]["actor_role"] == curator_user.role
+    assert body["audit"]["submission"]["actor_role_at_decision_recorded"] is True
+    assert body["audit"]["approval"]["actor_role"] == curator_user.role
+    assert body["audit"]["approval"]["actor_role_at_decision_recorded"] is True
+    assert body["baseline"]["actor_role"] is None
+    assert body["baseline"]["actor_role_at_decision_recorded"] is False
+    assert body["audit"]["publication"]["actor_role"] is None
+    assert body["audit"]["publication"]["actor_role_at_decision_recorded"] is False
 
 
 @pytest.mark.asyncio

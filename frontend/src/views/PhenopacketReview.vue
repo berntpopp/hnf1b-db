@@ -78,7 +78,7 @@
           class="review-right-rail"
           aria-label="Review discussion and decisions"
         >
-          <section class="rail-section">
+          <section data-testid="issues-rail-section" class="rail-section">
             <ReviewIssuesPanel
               :issues="review.context.value.issues"
               :record-id="review.context.value.record_id"
@@ -91,6 +91,18 @@
           </section>
 
           <section
+            data-testid="decision-rail-section"
+            class="rail-section decision-rail-section mobile-safe-decision"
+          >
+            <ReviewActionPanel
+              :context="review.context.value"
+              :reload="review.reload"
+              :on-completed="onDecisionCompleted"
+            />
+          </section>
+
+          <section
+            data-testid="discussion-rail-section"
             class="rail-section discussion-rail-section"
             aria-labelledby="discussion-summary-title"
           >
@@ -109,17 +121,6 @@
                 <dd>{{ review.context.value.discussion_summary.open_blocking_issues }}</dd>
               </div>
             </dl>
-          </section>
-
-          <section
-            data-testid="decision-rail-section"
-            class="rail-section decision-rail-section mobile-safe-decision"
-          >
-            <ReviewActionPanel
-              :context="review.context.value"
-              :reload="review.reload"
-              :on-completed="onDecisionCompleted"
-            />
           </section>
         </aside>
       </div>
@@ -296,14 +297,9 @@ onMounted(loadWorkspace);
 
   .mobile-safe-decision {
     bottom: 0;
-    order: 2;
     padding-bottom: calc(1rem + env(safe-area-inset-bottom));
     position: sticky;
     z-index: 2;
-  }
-
-  .discussion-rail-section {
-    order: 3;
   }
 }
 </style>

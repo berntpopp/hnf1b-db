@@ -160,6 +160,14 @@ def test_review_routes_and_comment_issue_fields_are_typed() -> None:
     assert "review_revision_id" in comment_properties
     assert "is_blocking_issue" in comment_properties
     assert "resolution_events" in comment_properties
+    assert "withdraw" in schemas["ActionCapability"]["properties"]["action"]["enum"]
+    revision_summary = schemas["ReviewRevisionSummary"]
+    assert "actor_role" in revision_summary["properties"]
+    assert "actor_role_at_decision_recorded" in revision_summary["properties"]
+    assert {
+        "actor_role",
+        "actor_role_at_decision_recorded",
+    }.issubset(revision_summary["required"])
 
 
 def test_semantic_change_before_and_after_are_required_typed_json_values() -> None:

@@ -21,6 +21,7 @@ const context = {
       created_at: '2026-08-14T08:30:00Z',
       actor: { username: 'curator.submitter', display_name: 'Submitter Curator' },
       actor_role: 'curator',
+      actor_role_at_decision_recorded: true,
     },
     contributors: [{ username: 'curator.contributor', display_name: 'Contributor Curator' }],
     approval: {
@@ -28,6 +29,8 @@ const context = {
       revision_number: 8,
       created_at: '2026-08-14T10:30:00Z',
       actor: { username: 'curator.reviewer', display_name: 'Reviewer Curator' },
+      actor_role: 'curator',
+      actor_role_at_decision_recorded: true,
     },
     publication: null,
   },
@@ -67,9 +70,21 @@ describe('ReviewHeader', () => {
     expect(wrapper.text()).toContain('Contributor Curator');
     expect(wrapper.text()).toContain('Candidate revision 7');
     expect(wrapper.text()).toContain('Reviewer Curator');
-    expect(wrapper.text()).toContain('Role at decision not recorded');
+    expect(wrapper.text()).toContain('role at decision: curator');
+    expect(wrapper.text()).not.toContain('Role at decision not recorded');
     expect(wrapper.text()).toContain('Existing public version retained');
     expect(wrapper.text()).toContain('Eligible to review');
+  });
+
+  it('labels only a genuinely unrecorded historical role as missing', () => {
+    const historical = structuredClone(context);
+    historical.audit.approval.actor.role = 'admin';
+    historical.audit.approval.actor_role = null;
+    historical.audit.approval.actor_role_at_decision_recorded = false;
+    const wrapper = mountHeader({ context: historical });
+
+    expect(wrapper.text()).toContain('Role at decision not recorded');
+    expect(wrapper.text()).not.toContain('role at decision: admin');
   });
 
   it('preserves the exact safe internal queue return path', () => {

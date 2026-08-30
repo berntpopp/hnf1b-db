@@ -36,6 +36,7 @@ async def _seed_queue_record(
     submitted_at: datetime | None = None,
     subject_id: str | None = None,
     subject_label: str | None = None,
+    historical_publication_role_missing: bool = False,
 ) -> tuple[Phenopacket, PhenopacketRevision]:
     """Persist one active cycle with literal old-head and candidate content."""
     baseline = {
@@ -75,7 +76,7 @@ async def _seed_queue_record(
             change_patch=[],
             change_reason="published baseline",
             actor_id=owner.id,
-            actor_role=owner.role,
+            actor_role=None if historical_publication_role_missing else owner.role,
             from_state=None,
             to_state="published",
             event_type="published",
@@ -392,12 +393,67 @@ async def test_queue_default_order_filters_search_facets_and_disabled_own_row(
         headers=headers,
     )
     assert [row["phenopacket_id"] for row in mine.json()["data"]] == ["renal-beta"]
-    blockers = mine.json()["data"][0]["capabilities"][0]["blocked_by"]
+    mine_capabilities = mine.json()["data"][0]["capabilities"]
+    blockers = mine_capabilities[0]["blocked_by"]
     assert blockers == [
         "self_review_forbidden",
         "reviewer_submitted",
         "reviewer_contributed",
     ]
+    assert mine_capabilities[-1] == {
+        "action": "withdraw",
+        "allowed": True,
+        "blocked_by": [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_queue_withdraw_capability_is_owner_or_admin_only(
+    async_client,
+    db_session,
+    curator_user,
+    another_curator,
+    admin_headers,
+):
+    """Real queue DTOs expose owner/admin withdrawal without granting reviewers."""
+    await _seed_queue_record(
+        db_session,
+        slug="withdraw-queue",
+        owner=curator_user,
+        submitter=curator_user,
+    )
+    await db_session.commit()
+
+    owner_response = await async_client.get(
+        f"{QUEUE_URL}?q=withdraw-queue",
+        headers=(await _headers_for(async_client, curator_user.username)),
+    )
+    reviewer_response = await async_client.get(
+        f"{QUEUE_URL}?q=withdraw-queue",
+        headers=(await _headers_for(async_client, another_curator.username)),
+    )
+    admin_response = await async_client.get(
+        f"{QUEUE_URL}?q=withdraw-queue",
+        headers=admin_headers,
+    )
+
+    assert owner_response.status_code == 200, owner_response.text
+    assert reviewer_response.status_code == 200, reviewer_response.text
+    assert admin_response.status_code == 200, admin_response.text
+    owner_actions = owner_response.json()["data"][0]["capabilities"]
+    reviewer_actions = reviewer_response.json()["data"][0]["capabilities"]
+    admin_actions = admin_response.json()["data"][0]["capabilities"]
+    assert owner_actions[-1] == {
+        "action": "withdraw",
+        "allowed": True,
+        "blocked_by": [],
+    }
+    assert all(item["action"] != "withdraw" for item in reviewer_actions)
+    assert admin_actions[-1] == {
+        "action": "withdraw",
+        "allowed": True,
+        "blocked_by": [],
+    }
 
 
 @pytest.mark.asyncio

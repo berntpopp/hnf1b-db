@@ -1,6 +1,8 @@
 <template>
   <section class="review-actions" aria-labelledby="review-actions-title">
-    <h2 id="review-actions-title" class="text-h6 mb-3">Review decisions</h2>
+    <h2 id="review-actions-title" ref="decisionHeading" class="text-h6 mb-3" tabindex="-1">
+      Review decisions
+    </h2>
 
     <v-alert
       v-if="actions.conflict.value"
@@ -15,6 +17,7 @@
           <strong>Reload required</strong>
           <p class="mb-2">{{ actions.conflict.value.message }}</p>
           <v-btn
+            ref="reloadButton"
             data-testid="reload-review"
             class="decision-action"
             variant="outlined"
@@ -44,13 +47,14 @@
       <div v-else class="decision-list">
         <div v-for="capability in decisionCapabilities" :key="capability.action">
           <v-btn
+            :ref="(element) => setActionTrigger(capability.action, element)"
             :data-testid="`action-${capability.action}`"
             class="decision-action"
             block
             :color="actionPresentation(capability.action).color"
             :variant="actionPresentation(capability.action).variant"
             :disabled="isDisabled(capability)"
-            @click="openDecision(capability.action, $event)"
+            @click="openDecision(capability.action)"
           >
             <template #prepend>
               <v-icon aria-hidden="true">{{ actionPresentation(capability.action).icon }}</v-icon>
@@ -100,6 +104,9 @@ const actions = useReviewActions(recordId, contextRef, {
 const dialogOpen = ref(false);
 const dialogAction = ref('approve');
 const lastActionTrigger = ref(null);
+const actionTriggers = new Map();
+const decisionHeading = ref(null);
+const reloadButton = ref(null);
 const conflictReloading = ref(false);
 
 const decisionCapabilities = computed(() =>
@@ -188,13 +195,38 @@ function blockerDescriptions(capability) {
 }
 
 function isDisabled(capability) {
+  if (actions.submitting.value) return true;
   if (!capability.allowed) return true;
   if (capability.action !== 'approve') return false;
   return !Number.isInteger(openIssueCount.value) || openIssueCount.value > 0;
 }
 
-function openDecision(action, event) {
-  lastActionTrigger.value = event.currentTarget;
+function setActionTrigger(action, element) {
+  if (element) actionTriggers.set(action, element);
+  else actionTriggers.delete(action);
+}
+
+function focusElement(target) {
+  const element = target?.$el || target;
+  if (
+    !element?.isConnected ||
+    typeof element.focus !== 'function' ||
+    element.disabled ||
+    element.getAttribute?.('aria-disabled') === 'true'
+  ) {
+    return false;
+  }
+  element.focus();
+  return true;
+}
+
+function focusFirstAvailableAction() {
+  const capability = decisionCapabilities.value.find((item) => !isDisabled(item));
+  return capability ? focusElement(actionTriggers.get(capability.action)) : false;
+}
+
+function openDecision(action) {
+  lastActionTrigger.value = action;
   dialogAction.value =
     action === 'request_changes' && props.context.effective_state === 'approved'
       ? 'reopen_approved'
@@ -220,7 +252,10 @@ async function submitDecision(payload) {
 
 async function restoreActionFocus() {
   await nextTick();
-  lastActionTrigger.value?.focus();
+  if (actions.conflict.value && focusElement(reloadButton.value)) return;
+  if (lastActionTrigger.value && focusElement(actionTriggers.get(lastActionTrigger.value))) return;
+  if (focusFirstAvailableAction()) return;
+  focusElement(decisionHeading.value);
 }
 
 async function reloadConflict() {
