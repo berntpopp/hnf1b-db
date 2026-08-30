@@ -159,14 +159,17 @@ async def list_publications(
     WITH pub_counts AS (
         SELECT
             REPLACE(ext_ref->>'id', 'PMID:', '') as pmid,
-            COUNT(DISTINCT phenopacket_id) as phenopacket_count,
-            MIN(created_at) as first_added
-        FROM phenopackets,
-             jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
+            COUNT(DISTINCT p.phenopacket_id) as phenopacket_count,
+            MIN(p.created_at) as first_added
+        FROM phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
+        CROSS JOIN LATERAL jsonb_array_elements(
+            r.content_jsonb->'metaData'->'externalReferences'
+        ) as ext_ref
         WHERE ext_ref->>'id' LIKE 'PMID:%'
-          AND deleted_at IS NULL
-          AND state = 'published'
-          AND head_published_revision_id IS NOT NULL
+          AND p.deleted_at IS NULL
+          AND p.state = 'published'
+          AND p.head_published_revision_id IS NOT NULL
         GROUP BY ext_ref->>'id'
     )
     SELECT
@@ -226,13 +229,16 @@ async def list_publications(
     WITH pub_counts AS (
         SELECT
             REPLACE(ext_ref->>'id', 'PMID:', '') as pmid,
-            COUNT(DISTINCT phenopacket_id) as phenopacket_count
-        FROM phenopackets,
-             jsonb_array_elements(phenopacket->'metaData'->'externalReferences') as ext_ref
+            COUNT(DISTINCT p.phenopacket_id) as phenopacket_count
+        FROM phenopackets p
+        JOIN phenopacket_revisions r ON r.id = p.head_published_revision_id
+        CROSS JOIN LATERAL jsonb_array_elements(
+            r.content_jsonb->'metaData'->'externalReferences'
+        ) as ext_ref
         WHERE ext_ref->>'id' LIKE 'PMID:%'
-          AND deleted_at IS NULL
-          AND state = 'published'
-          AND head_published_revision_id IS NOT NULL
+          AND p.deleted_at IS NULL
+          AND p.state = 'published'
+          AND p.head_published_revision_id IS NOT NULL
         GROUP BY ext_ref->>'id'
     )
     SELECT COUNT(*) as total
