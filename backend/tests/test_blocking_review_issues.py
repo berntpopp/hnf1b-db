@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import importlib.util
+import uuid
+from pathlib import Path
+
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from pydantic import ValidationError
-from sqlalchemy import event, select, text
+from sqlalchemy import create_engine, event, select, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.comments.models import CommentResolutionEvent
 from app.comments.schemas import (
@@ -13,6 +21,8 @@ from app.comments.schemas import (
     ReviewIssueResolveRequest,
 )
 from app.comments.service import CommentsService
+from app.core.config import settings
+from app.database import Base
 from app.models.user import User
 from app.phenopackets.models import (
     ApprovalAttestation,
@@ -93,19 +103,271 @@ async def _post_issue(client, headers, record, candidate):
     )
 
 
-async def _drop_resolution_projection_triggers(db_session) -> None:
-    """Emulate the d0 expansion-only schema where the app owns projection."""
-    for statement in (
-        "DROP TRIGGER IF EXISTS comment_resolution_events_project_comment "
-        "ON comment_resolution_events",
-        "DROP FUNCTION IF EXISTS project_comment_resolution_event()",
-        "DROP TRIGGER IF EXISTS comment_resolution_events_projection_final_state "
-        "ON comment_resolution_events",
-        "DROP FUNCTION IF EXISTS validate_resolution_event_projection()",
-        "DROP TRIGGER IF EXISTS comments_review_issue_mutation_guard ON comments",
-        "DROP FUNCTION IF EXISTS guard_review_issue_mutation()",
-    ):
-        await db_session.execute(text(statement))
+def _d0_migration_module():
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic/versions/d0f422b00005_expand_independent_review_audit.py"
+    )
+    assert path.exists(), "independent-review d0 expansion migration is missing"
+    spec = importlib.util.spec_from_file_location("d0_expand_review_audit", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
+
+
+def _sync_database_url() -> str:
+    return settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+
+
+def _create_d0_service_schema(schema: str) -> None:
+    migration = _d0_migration_module()
+    engine = create_engine(_sync_database_url())
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+            connection.execute(text(f'SET LOCAL search_path TO "{schema}"'))
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE users (
+                        id INTEGER PRIMARY KEY,
+                        email VARCHAR(255) NOT NULL,
+                        username VARCHAR(50) NOT NULL,
+                        hashed_password VARCHAR(255) NOT NULL,
+                        full_name VARCHAR(255),
+                        role VARCHAR(20) NOT NULL,
+                        is_active BOOLEAN NOT NULL,
+                        is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+                        is_fixture_user BOOLEAN NOT NULL DEFAULT FALSE,
+                        last_login TIMESTAMPTZ,
+                        failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                        locked_until TIMESTAMPTZ,
+                        refresh_token TEXT,
+                        session_version INTEGER NOT NULL DEFAULT 1,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        updated_at TIMESTAMPTZ
+                    );
+                    CREATE TABLE phenopackets (
+                        id UUID PRIMARY KEY,
+                        phenopacket_id VARCHAR(100) NOT NULL UNIQUE,
+                        version VARCHAR(10) DEFAULT '2.0',
+                        phenopacket JSONB NOT NULL,
+                        revision INTEGER NOT NULL,
+                        subject_id VARCHAR(100),
+                        subject_sex VARCHAR(20),
+                        provenance_status VARCHAR(24) NOT NULL DEFAULT 'legacy_unbound',
+                        search_vector TSVECTOR,
+                        features_count INTEGER GENERATED ALWAYS AS (
+                            jsonb_array_length(
+                                COALESCE(
+                                    phenopacket->'phenotypicFeatures',
+                                    '[]'::jsonb
+                                )
+                            )
+                        ) STORED,
+                        has_variant BOOLEAN GENERATED ALWAYS AS (
+                            jsonb_array_length(
+                                COALESCE(phenopacket->'interpretations', '[]'::jsonb)
+                            ) > 0
+                        ) STORED,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        created_by_id BIGINT,
+                        updated_by_id BIGINT,
+                        schema_version VARCHAR(20) DEFAULT '2.0.0',
+                        deleted_at TIMESTAMPTZ,
+                        deleted_by_id BIGINT,
+                        state TEXT NOT NULL DEFAULT 'draft',
+                        editing_revision_id BIGINT,
+                        head_published_revision_id BIGINT,
+                        draft_owner_id BIGINT
+                    );
+                    CREATE TABLE phenopacket_revisions (
+                        id BIGSERIAL PRIMARY KEY,
+                        record_id UUID NOT NULL,
+                        parent_revision_id BIGINT,
+                        revision_number INTEGER NOT NULL,
+                        state TEXT NOT NULL,
+                        content_jsonb JSONB NOT NULL,
+                        change_patch JSONB,
+                        change_reason TEXT NOT NULL,
+                        actor_id BIGINT NOT NULL,
+                        import_run_id UUID,
+                        from_state TEXT,
+                        to_state TEXT NOT NULL,
+                        event_type TEXT NOT NULL DEFAULT 'snapshot',
+                        profile_schema_version VARCHAR(40),
+                        projection_version VARCHAR(40),
+                        ledger_hash VARCHAR(128),
+                        projection_hash VARCHAR(128),
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+                    CREATE TABLE comments (
+                        id BIGSERIAL PRIMARY KEY,
+                        record_type TEXT NOT NULL,
+                        record_id UUID NOT NULL,
+                        author_id BIGINT NOT NULL,
+                        body_markdown TEXT NOT NULL,
+                        resolved_at TIMESTAMPTZ,
+                        resolved_by_id BIGINT,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        deleted_at TIMESTAMPTZ,
+                        deleted_by_id BIGINT
+                    );
+                    CREATE TABLE comment_edits (
+                        id BIGSERIAL PRIMARY KEY,
+                        comment_id BIGINT NOT NULL,
+                        editor_id BIGINT NOT NULL,
+                        prev_body TEXT NOT NULL,
+                        edited_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+                    CREATE TABLE comment_mentions (
+                        comment_id BIGINT NOT NULL,
+                        user_id BIGINT NOT NULL,
+                        PRIMARY KEY (comment_id, user_id)
+                    );
+                    """
+                )
+            )
+            migration.op = Operations(
+                MigrationContext.configure(
+                    connection, opts={"target_metadata": Base.metadata}
+                )
+            )
+            migration.upgrade()
+            connection.execute(
+                text(
+                    "CREATE TABLE alembic_version "
+                    "(version_num VARCHAR(32) NOT NULL PRIMARY KEY)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO alembic_version (version_num) "
+                    "VALUES ('d0f422b00005')"
+                )
+            )
+    except Exception:
+        _drop_schema(schema)
+        raise
+    finally:
+        engine.dispose()
+
+
+def _drop_schema(schema: str) -> None:
+    engine = create_engine(_sync_database_url())
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+    finally:
+        engine.dispose()
+
+
+async def _seed_d0_review_cycle(session) -> tuple[uuid.UUID, int, int, int, int]:
+    owner = User(
+        id=101,
+        email="d0-owner@example.test",
+        username="d0-owner",
+        hashed_password="not-used",
+        role="curator",
+        is_active=True,
+    )
+    reviewer = User(
+        id=102,
+        email="d0-reviewer@example.test",
+        username="d0-reviewer",
+        hashed_password="not-used",
+        role="curator",
+        is_active=True,
+    )
+    session.add_all([owner, reviewer])
+    record = Phenopacket(
+        phenopacket_id=f"d0-service-{uuid.uuid4().hex}",
+        phenopacket={
+            "id": "d0-service",
+            "phenotypicFeatures": [],
+            "interpretations": [],
+        },
+        state="draft",
+        revision=0,
+        draft_owner_id=owner.id,
+        created_by_id=owner.id,
+    )
+    session.add(record)
+    await session.flush()
+    root = PhenopacketRevision(
+        record_id=record.id,
+        revision_number=1,
+        state="draft",
+        content_jsonb=record.phenopacket,
+        change_reason="create",
+        actor_id=owner.id,
+        from_state=None,
+        to_state="draft",
+        event_type="created",
+    )
+    session.add(root)
+    await session.flush()
+    candidate = PhenopacketRevision(
+        record_id=record.id,
+        parent_revision_id=root.id,
+        revision_number=2,
+        state="in_review",
+        content_jsonb=record.phenopacket,
+        change_reason="submit",
+        actor_id=owner.id,
+        from_state="draft",
+        to_state="in_review",
+        event_type="state_transition",
+    )
+    session.add(candidate)
+    await session.flush()
+    record.state = "in_review"
+    record.revision = 2
+    record.editing_revision_id = candidate.id
+    await session.flush()
+    return record.id, candidate.id, record.revision, owner.id, reviewer.id
+
+
+async def _create_d0_issue(session_maker) -> tuple[int, int, int, int]:
+    async with session_maker() as session:
+        record_id, candidate_id, record_revision, _owner_id, reviewer_id = (
+            await _seed_d0_review_cycle(session)
+        )
+        await session.commit()
+
+    async with session_maker() as session:
+        reviewer = await session.get(User, reviewer_id)
+        assert reviewer is not None
+        service = CommentsService(session)
+        issue = await service.create(
+            record_type="phenopacket",
+            record_id=record_id,
+            body_markdown="Blocking review concern",
+            mention_user_ids=[],
+            actor=reviewer,
+            record_revision=record_revision,
+            review_revision_id=candidate_id,
+        )
+        issue_id = issue.id
+        await session.commit()
+    return issue_id, record_revision, reviewer_id, candidate_id
+
+
+async def _with_d0_session_maker(schema: str):
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        poolclass=NullPool,
+        connect_args={"server_settings": {"search_path": schema, "jit": "off"}},
+    )
+    return engine, async_sessionmaker(
+        engine,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
 
 
 def test_review_issue_request_schemas_are_strict_trimmed_and_literal() -> None:
@@ -224,87 +486,139 @@ async def test_blocking_issue_lifecycle_appends_events_and_keeps_identity(
 
 
 @pytest.mark.asyncio
-async def test_blocking_issue_resolution_projects_on_expansion_only_schema(
-    db_session, curator_user, another_curator
-):
-    """Service fallback atomically projects events before e0 triggers exist."""
-    record, candidate = await _seed_review_cycle(
-        db_session, owner=curator_user, submitter=curator_user
-    )
-    service = CommentsService(db_session)
-    issue = await service.create(
-        record_type="phenopacket",
-        record_id=record.id,
-        body_markdown="Address this concern.",
-        mention_user_ids=[],
-        actor=another_curator,
-        record_revision=record.revision,
-        review_revision_id=candidate.id,
-    )
-    issue_id = issue.id
-    record_revision = record.revision
-    await db_session.commit()
-
-    await _drop_resolution_projection_triggers(db_session)
-    resolved = await service.resolve(
-        comment_id=issue_id,
-        actor=another_curator,
-        issue_input={
-            "record_revision": record_revision,
-            "disposition": "addressed",
-            "rationale": "fixed",
-        },
-    )
-    assert resolved.resolved_at is not None
-    assert resolved.resolved_by_id == another_curator.id
-    assert (
-        await db_session.execute(
-            select(CommentResolutionEvent).where(
-                CommentResolutionEvent.comment_id == issue_id
-            )
+async def test_blocking_review_issue_mutations_survive_real_d0_expansion_schema():
+    """Committed service resolve/reopen project on a real d0-only schema."""
+    schema = f"d0_review_service_{uuid.uuid4().hex}"
+    _create_d0_service_schema(schema)
+    engine = None
+    try:
+        engine, session_maker = await _with_d0_session_maker(schema)
+        issue_id, record_revision, reviewer_id, candidate_id = await _create_d0_issue(
+            session_maker
         )
-    ).scalar_one().action == "resolved"
 
-    await db_session.rollback()
-    assert (
-        await db_session.execute(
-            select(CommentResolutionEvent).where(
-                CommentResolutionEvent.comment_id == issue_id
+        async with session_maker() as session:
+            reviewer = await session.get(User, reviewer_id)
+            assert reviewer is not None
+            service = CommentsService(session)
+            resolved = await service.resolve(
+                comment_id=issue_id,
+                actor=reviewer,
+                issue_input={
+                    "record_revision": record_revision,
+                    "disposition": "addressed",
+                    "rationale": "fixed",
+                },
             )
-        )
-    ).scalar_one_or_none() is None
-    rolled_back = await service.get_by_id(issue_id)
-    assert rolled_back is not None
-    assert rolled_back.resolved_at is None
-    assert rolled_back.resolved_by_id is None
+            await session.commit()
+            assert resolved.resolved_at is not None
+            assert resolved.resolved_by_id == reviewer_id
 
-    await _drop_resolution_projection_triggers(db_session)
-    await service.resolve(
-        comment_id=issue_id,
-        actor=another_curator,
-        issue_input={
-            "record_revision": record_revision,
-            "disposition": "addressed",
-            "rationale": "fixed again",
-        },
-    )
-    reopened = await service.unresolve(
-        comment_id=issue_id,
-        actor=another_curator,
-        issue_input={
-            "record_revision": record_revision,
-            "rationale": "needs another look",
-        },
-    )
-    assert reopened.resolved_at is None
-    assert reopened.resolved_by_id is None
-    assert (
-        await db_session.execute(
-            select(CommentResolutionEvent).where(
-                CommentResolutionEvent.comment_id == issue_id
+        async with session_maker() as session:
+            service = CommentsService(session)
+            reloaded = await service.get_by_id(issue_id)
+            assert reloaded is not None
+            assert reloaded.resolved_at is not None
+            assert reloaded.resolved_by_id == reviewer_id
+            assert reloaded.review_revision_id == candidate_id
+            events = list(
+                (
+                    await session.execute(
+                        select(CommentResolutionEvent)
+                        .where(CommentResolutionEvent.comment_id == issue_id)
+                        .order_by(CommentResolutionEvent.id)
+                    )
+                ).scalars()
             )
+            assert [(event.action, event.disposition) for event in events] == [
+                ("resolved", "addressed")
+            ]
+
+        async with session_maker() as session:
+            reviewer = await session.get(User, reviewer_id)
+            assert reviewer is not None
+            service = CommentsService(session)
+            reopened = await service.unresolve(
+                comment_id=issue_id,
+                actor=reviewer,
+                issue_input={
+                    "record_revision": record_revision,
+                    "rationale": "needs another look",
+                },
+            )
+            await session.commit()
+            assert reopened.resolved_at is None
+            assert reopened.resolved_by_id is None
+
+        async with session_maker() as session:
+            service = CommentsService(session)
+            reloaded = await service.get_by_id(issue_id)
+            assert reloaded is not None
+            assert reloaded.resolved_at is None
+            assert reloaded.resolved_by_id is None
+            events = list(
+                (
+                    await session.execute(
+                        select(CommentResolutionEvent)
+                        .where(CommentResolutionEvent.comment_id == issue_id)
+                        .order_by(CommentResolutionEvent.id)
+                    )
+                ).scalars()
+            )
+            assert [(event.action, event.disposition) for event in events] == [
+                ("resolved", "addressed"),
+                ("reopened", None),
+            ]
+    finally:
+        if engine is not None:
+            await engine.dispose()
+        _drop_schema(schema)
+
+
+@pytest.mark.asyncio
+async def test_blocking_review_issue_resolution_rolls_back_on_real_d0_schema():
+    """Expansion-only fallback projection rolls back with its audit event."""
+    schema = f"d0_review_rollback_{uuid.uuid4().hex}"
+    _create_d0_service_schema(schema)
+    engine = None
+    try:
+        engine, session_maker = await _with_d0_session_maker(schema)
+        issue_id, record_revision, reviewer_id, _candidate_id = await _create_d0_issue(
+            session_maker
         )
-    ).scalars().all()[1].action == "reopened"
+
+        async with session_maker() as session:
+            reviewer = await session.get(User, reviewer_id)
+            assert reviewer is not None
+            service = CommentsService(session)
+            await service.resolve(
+                comment_id=issue_id,
+                actor=reviewer,
+                issue_input={
+                    "record_revision": record_revision,
+                    "disposition": "addressed",
+                    "rationale": "fixed",
+                },
+            )
+            await session.rollback()
+
+        async with session_maker() as session:
+            service = CommentsService(session)
+            reloaded = await service.get_by_id(issue_id)
+            assert reloaded is not None
+            assert reloaded.resolved_at is None
+            assert reloaded.resolved_by_id is None
+            assert (
+                await session.execute(
+                    select(CommentResolutionEvent).where(
+                        CommentResolutionEvent.comment_id == issue_id
+                    )
+                )
+            ).scalar_one_or_none() is None
+    finally:
+        if engine is not None:
+            await engine.dispose()
+        _drop_schema(schema)
 
 
 @pytest.mark.asyncio

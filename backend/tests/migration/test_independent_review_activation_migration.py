@@ -657,6 +657,70 @@ def test_forward_reconciliation_repairs_old_e0_missing_projection_trigger() -> N
         ).scalar_one() == 1
 
 
+def test_forward_reconciliation_repairs_same_actor_resolved_timestamp_drift() -> None:
+    """Resolved projections converge exactly to the latest event timestamp."""
+    with _isolated_schema() as (connection, _schema, migration):
+        forward = _migration_module(
+            "f0f422b00007_reconcile_independent_review_activation"
+        )
+        record_id = uuid.uuid4()
+        _seed_active_review(connection, record_id, 1)
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'issue',2)"""
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'resolved','addressed','project after repair',2,'curator')"""
+            )
+        )
+        connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+        event_timestamp = connection.execute(
+            text("SELECT created_at FROM comment_resolution_events WHERE id=1")
+        ).scalar_one()
+        connection.execute(
+            text("DROP TRIGGER comments_review_issue_mutation_guard ON comments")
+        )
+        connection.execute(
+            text(
+                "DROP TRIGGER comment_resolution_events_projection_final_state "
+                "ON comment_resolution_events"
+            )
+        )
+        connection.execute(
+            text(
+                """
+                UPDATE comments
+                   SET resolved_at = CAST(:event_timestamp AS timestamptz)
+                       - interval '1 day',
+                       resolved_by_id = 2
+                 WHERE id = 1
+                """
+            ),
+            {"event_timestamp": event_timestamp},
+        )
+
+        _bind(connection, forward)
+        forward.upgrade()
+
+        assert (
+            connection.execute(
+                text("SELECT resolved_at FROM comments WHERE id=1")
+            ).scalar_one()
+            == event_timestamp
+        )
+        connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+
+
 def test_forward_reconciliation_is_idempotent_for_fresh_activation_schema() -> None:
     """Fresh e0 installs keep the same final projection and mutation guards."""
     with _isolated_schema() as (connection, _schema, migration):

@@ -71,7 +71,7 @@ def _install_projection_functions() -> None:
             IF issue.id IS NULL OR latest_event.id IS NULL OR NOT (
                 (
                     latest_event.action = 'resolved'
-                    AND issue.resolved_at IS NOT NULL
+                    AND issue.resolved_at = latest_event.created_at
                     AND issue.resolved_by_id = latest_event.actor_id
                 ) OR (
                     latest_event.action = 'reopened'
@@ -142,6 +142,7 @@ def _reconcile_latest_resolution_events() -> None:
            AND latest.action = 'resolved'
            AND (
                issue.resolved_at IS NULL
+               OR issue.resolved_at IS DISTINCT FROM latest.created_at
                OR issue.resolved_by_id IS DISTINCT FROM latest.actor_id
            );
         """
@@ -178,7 +179,8 @@ def _reconcile_latest_resolution_events() -> None:
                 SELECT DISTINCT ON (event.comment_id)
                     event.comment_id,
                     event.action,
-                    event.actor_id
+                    event.actor_id,
+                    event.created_at
                 FROM comment_resolution_events event
                 ORDER BY event.comment_id, event.id DESC
             )
@@ -189,7 +191,7 @@ def _reconcile_latest_resolution_events() -> None:
              WHERE NOT (
                 (
                     latest.action = 'resolved'
-                    AND issue.resolved_at IS NOT NULL
+                    AND issue.resolved_at = latest.created_at
                     AND issue.resolved_by_id = latest.actor_id
                 ) OR (
                     latest.action = 'reopened'
