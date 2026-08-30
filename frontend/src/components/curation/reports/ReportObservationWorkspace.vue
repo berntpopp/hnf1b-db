@@ -141,23 +141,17 @@
           @resolve="resolveConflict"
         />
         <section class="publish-panel" aria-labelledby="publish-heading">
-          <h2 id="publish-heading" class="text-h6">Publish canonical projection</h2>
-          <p v-if="recordState !== 'approved'">Projection must be approved before publication.</p>
-          <p v-else-if="userRole !== 'admin'">
-            Only an administrator can publish an approved projection.
-          </p>
-          <label>
-            Publication reason
-            <textarea v-model="publishReason" rows="2" :disabled="!canPublish" />
-          </label>
-          <button
-            type="button"
-            data-action="publish-projection"
-            :disabled="!canPublish || !publishReason.trim()"
-            @click="publishProjection"
+          <h2 id="publish-heading" class="text-h6">Review and publication</h2>
+          <p>Publication requires the exact approved revision, digest, and review attestations.</p>
+          <RouterLink
+            data-action="open-review-workspace"
+            :to="{
+              name: 'PhenopacketReview',
+              params: { phenopacket_id: phenopacketId },
+            }"
           >
-            Publish canonical projection
-          </button>
+            Open review workspace
+          </RouterLink>
         </section>
       </aside>
     </div>
@@ -190,7 +184,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
-import { transitionPhenopacket } from '@/api/domain/phenopackets';
 import { usePhenopacketCuration } from '@/composables/usePhenopacketCuration';
 import { formatApiError } from '@/utils/apiError';
 import { assessmentCompleteness, isCurationUnavailable } from '@/utils/curationAdapters';
@@ -202,13 +195,11 @@ import ReportObservationList from './ReportObservationList.vue';
 const props = defineProps({
   phenopacketId: { type: String, required: true },
   recordState: { type: String, default: 'draft' },
-  userRole: { type: String, default: 'curator' },
 });
-const emit = defineEmits(['available', 'unavailable', 'dirty-change', 'published']);
+const emit = defineEmits(['available', 'unavailable', 'dirty-change']);
 const curation = usePhenopacketCuration(props.phenopacketId);
 const available = ref(false);
 const changeReason = ref('');
-const publishReason = ref('');
 const saveError = ref('');
 const pendingObservationId = ref(null);
 const liveMessage = ref('');
@@ -224,16 +215,6 @@ const canEdit = computed(() =>
   ['draft', 'published', 'changes_requested'].includes(props.recordState)
 );
 
-const canPublish = computed(
-  () =>
-    props.recordState === 'approved' &&
-    props.userRole === 'admin' &&
-    available.value &&
-    !!curation.revision.value &&
-    !!curation.projection.value &&
-    !curation.dirty.value &&
-    curation.conflicts.value.length === 0
-);
 const overallCompleteness = computed(() =>
   assessmentCompleteness(
     curation.observations.value.flatMap((observation) => observation.phenotypes || [])
@@ -395,22 +376,6 @@ async function appendCorrection(correction) {
     liveMessage.value = 'Source correction appended without deleting the prior value.';
   } catch (error) {
     saveError.value = formatApiError(error, 'Failed to append source correction');
-  }
-}
-
-async function publishProjection() {
-  if (!canPublish.value || !publishReason.value.trim()) return;
-  try {
-    const result = await transitionPhenopacket(
-      props.phenopacketId,
-      'published',
-      publishReason.value.trim(),
-      curation.revision.value
-    );
-    emit('published', result.data);
-    liveMessage.value = 'Canonical projection published.';
-  } catch (error) {
-    saveError.value = formatApiError(error, 'Failed to publish canonical projection');
   }
 }
 </script>

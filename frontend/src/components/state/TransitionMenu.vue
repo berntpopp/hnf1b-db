@@ -1,5 +1,5 @@
 <template>
-  <v-menu>
+  <v-menu v-if="items.length">
     <template #activator="{ props: activatorProps }">
       <v-btn v-bind="activatorProps" data-testid="menu-activator" variant="outlined">
         State actions
@@ -8,11 +8,15 @@
     <v-list>
       <v-list-item
         v-for="item in items"
-        :key="item.to"
-        data-testid="transition-item"
-        @click="emit('transition', item.to)"
+        :key="item.action"
+        :data-action="item.action"
+        :disabled="!item.allowed"
+        @click="select(item)"
       >
-        {{ item.label }}
+        <v-list-item-title>{{ item.label }}</v-list-item-title>
+        <v-list-item-subtitle v-if="item.denials.length">
+          {{ item.denials.join(' ') }}
+        </v-list-item-subtitle>
       </v-list-item>
     </v-list>
   </v-menu>
@@ -20,47 +24,52 @@
 
 <script setup>
 import { computed } from 'vue';
-import { TRANSITION_LABELS } from '@/utils/stateConfig';
 
 const props = defineProps({
-  currentState: { type: String, required: true },
-  role: { type: String, required: true },
-  isOwner: { type: Boolean, default: false },
+  capabilities: { type: Array, required: true },
 });
-const emit = defineEmits(['transition']);
+const emit = defineEmits(['transition', 'open-review']);
 
-// Mirror of backend transitions.py::allowed_transitions.
-const RULES = {
-  draft: (role, owner) => {
-    const out = [];
-    if (role === 'admin' || owner) out.push('in_review');
-    if (role === 'admin') out.push('archived');
-    return out;
-  },
-  in_review: (role, owner) => {
-    const out = [];
-    if (role === 'admin' || owner) out.push('draft');
-    if (role === 'admin') out.push('changes_requested', 'approved', 'archived');
-    return out;
-  },
-  changes_requested: (role, owner) => {
-    const out = [];
-    if (role === 'admin' || owner) out.push('in_review');
-    if (role === 'admin') out.push('archived');
-    return out;
-  },
-  approved: (role) => (role === 'admin' ? ['published', 'archived'] : []),
-  published: (role) => (role === 'admin' ? ['archived'] : []),
-  archived: () => [],
+const PRESENTATION = {
+  submit: { label: 'Submit for review', target: 'in_review' },
+  resubmit: { label: 'Resubmit for review', target: 'in_review' },
+  withdraw: { label: 'Withdraw from review', target: 'draft' },
+  archive: { label: 'Archive', target: 'archived' },
+  request_changes: { label: 'Request changes', exact: true },
+  approve: { label: 'Approve candidate', exact: true },
+  publish: { label: 'Publish approved revision', exact: true },
 };
 
-const items = computed(() => {
-  if (props.role === 'viewer') return [];
-  const fn = RULES[props.currentState] ?? (() => []);
-  return fn(props.role, props.isOwner).map((to) => ({ to, label: TRANSITION_LABELS[to] }));
-});
+const BLOCKER_COPY = {
+  forbidden_role: 'Only an administrator can perform this action.',
+  forbidden_not_owner: 'Only the draft owner can perform this action.',
+  self_review_forbidden: 'You own this draft and cannot independently review it.',
+  reviewer_submitted: 'You submitted this candidate and cannot independently review it.',
+  reviewer_contributed: 'You contributed to this review cycle.',
+  review_author_unknown: 'Reviewer independence cannot be verified.',
+  unresolved_review_issues: 'Resolve all blocking issues before approval.',
+  review_closed: 'This review action is no longer available.',
+};
 
-// Expose items so unit tests can verify role-gating without opening the overlay
-// (v-menu overlay requires visualViewport which is unavailable in happy-dom).
-defineExpose({ items });
+const items = computed(() =>
+  props.capabilities.flatMap((capability) => {
+    const presentation = PRESENTATION[capability?.action];
+    if (!presentation) return [];
+    return [
+      {
+        ...capability,
+        ...presentation,
+        denials: (capability.blocked_by || []).map(
+          (code) => BLOCKER_COPY[code] || code.replaceAll('_', ' ')
+        ),
+      },
+    ];
+  })
+);
+
+function select(item) {
+  if (!item.allowed) return;
+  if (item.exact) emit('open-review', item.action);
+  else emit('transition', item.target);
+}
 </script>

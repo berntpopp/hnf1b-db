@@ -7,6 +7,8 @@ import {
   getPhenopacketAuditHistory,
 } from '@/api/domain/phenopackets';
 
+const SIMPLE_TRANSITION_TARGETS = new Set(['in_review', 'draft', 'archived']);
+
 /**
  * Derive the effective state for UI binding.
  * Falls back to pp.state when the response predates D.2 (no effective_state field).
@@ -41,6 +43,12 @@ export function usePhenopacketState(phenopacketId) {
    * @returns {Promise<Object>} The API response data ({ phenopacket, revision }).
    */
   const transitionTo = async (toState, reason, revision) => {
+    if (!SIMPLE_TRANSITION_TARGETS.has(toState)) {
+      const message = `State transition '${toState}' requires the review workspace`;
+      error.value = message;
+      throw new Error(message);
+    }
+
     loading.value = true;
     error.value = null;
     try {

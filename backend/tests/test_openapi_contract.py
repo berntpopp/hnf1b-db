@@ -161,6 +161,12 @@ def test_review_routes_and_comment_issue_fields_are_typed() -> None:
     assert "is_blocking_issue" in comment_properties
     assert "resolution_events" in comment_properties
     assert "withdraw" in schemas["ActionCapability"]["properties"]["action"]["enum"]
+    assert {
+        "submit",
+        "resubmit",
+        "archive",
+    }.issubset(schemas["ActionCapability"]["properties"]["action"]["enum"])
+    assert "transition_capabilities" in schemas["PhenopacketResponse"]["properties"]
     revision_summary = schemas["ReviewRevisionSummary"]
     assert "actor_role" in revision_summary["properties"]
     assert "actor_role_at_decision_recorded" in revision_summary["properties"]

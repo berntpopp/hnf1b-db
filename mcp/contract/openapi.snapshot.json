@@ -6,6 +6,9 @@
         "properties": {
           "action": {
             "enum": [
+              "submit",
+              "resubmit",
+              "archive",
               "create_issue",
               "request_changes",
               "withdraw",
@@ -25,6 +28,8 @@
             "default": [],
             "items": {
               "enum": [
+                "forbidden_role",
+                "forbidden_not_owner",
                 "self_review_forbidden",
                 "reviewer_submitted",
                 "reviewer_contributed",
@@ -2776,6 +2781,13 @@
             ],
             "default": "draft",
             "title": "State"
+          },
+          "transition_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/ActionCapability"
+            },
+            "title": "Transition Capabilities",
+            "type": "array"
           },
           "updated_at": {
             "format": "date-time",

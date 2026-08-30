@@ -234,6 +234,11 @@ async def test_context_uses_only_immutable_public_head_and_exposes_exact_candida
         {"action": "create_issue", "allowed": True, "blocked_by": []},
         {"action": "request_changes", "allowed": True, "blocked_by": []},
         {"action": "approve", "allowed": True, "blocked_by": []},
+        {
+            "action": "archive",
+            "allowed": False,
+            "blocked_by": ["forbidden_role"],
+        },
     ]
     assert any(
         item
@@ -281,10 +286,17 @@ async def test_context_new_record_has_no_baseline_and_owner_blockers(
             "reviewer_contributed",
         ],
     }
-    assert body["capabilities"][-1] == {
+    assert next(
+        item for item in body["capabilities"] if item["action"] == "withdraw"
+    ) == {
         "action": "withdraw",
         "allowed": True,
         "blocked_by": [],
+    }
+    assert body["capabilities"][-1] == {
+        "action": "archive",
+        "allowed": False,
+        "blocked_by": ["forbidden_role"],
     }
 
 
@@ -320,14 +332,19 @@ async def test_context_withdraw_capability_is_owner_or_admin_only(
     owner_actions = owner.json()["capabilities"]
     reviewer_actions = reviewer.json()["capabilities"]
     admin_actions = admin.json()["capabilities"]
-    assert owner_actions[-1] == {
+    assert next(item for item in owner_actions if item["action"] == "withdraw") == {
         "action": "withdraw",
         "allowed": True,
         "blocked_by": [],
     }
     assert all(item["action"] != "withdraw" for item in reviewer_actions)
-    assert admin_actions[-1] == {
+    assert next(item for item in admin_actions if item["action"] == "withdraw") == {
         "action": "withdraw",
+        "allowed": True,
+        "blocked_by": [],
+    }
+    assert admin_actions[-1] == {
+        "action": "archive",
         "allowed": True,
         "blocked_by": [],
     }

@@ -7,15 +7,17 @@ state-service layers rather than duplicated here.
 import pytest
 
 from app.phenopackets.services.transitions import (
+    Role,
     StateTransition,
     TransitionError,
     allowed_transitions,
     check_transition,
+    structural_transition_capabilities,
 )
 
-CURATOR = "curator"
-ADMIN = "admin"
-VIEWER = "viewer"
+CURATOR: Role = "curator"
+ADMIN: Role = "admin"
+VIEWER: Role = "viewer"
 
 
 @pytest.mark.parametrize(
@@ -164,3 +166,38 @@ def test_check_transition_returns_state_transition_dataclass():
     assert rule.to_state == "in_review"
     assert rule.requires_admin is False
     assert rule.requires_ownership_or_admin is True
+
+
+def test_structural_capabilities_are_derived_from_the_guard_matrix() -> None:
+    """Draft owners get submit while archive remains a server-explained denial."""
+    capabilities = structural_transition_capabilities(
+        "draft", role=CURATOR, is_owner=True
+    )
+
+    assert [(item.action, item.allowed, item.blocked_by) for item in capabilities] == [
+        ("submit", True, ()),
+        ("archive", False, ("forbidden_role",)),
+    ]
+
+
+def test_structural_capabilities_distinguish_resubmit_and_ownership_denial() -> None:
+    """Changes-requested projects resubmit without recreating ownership policy."""
+    capabilities = structural_transition_capabilities(
+        "changes_requested", role=CURATOR, is_owner=False
+    )
+
+    assert [(item.action, item.allowed, item.blocked_by) for item in capabilities] == [
+        ("resubmit", False, ("forbidden_not_owner",)),
+        ("archive", False, ("forbidden_role",)),
+    ]
+
+
+def test_structural_capabilities_preserve_published_admin_archive() -> None:
+    """Published records still expose their one payload-compatible action."""
+    capabilities = structural_transition_capabilities(
+        "published", role=ADMIN, is_owner=False
+    )
+
+    assert [(item.action, item.allowed, item.blocked_by) for item in capabilities] == [
+        ("archive", True, ())
+    ]

@@ -12,6 +12,8 @@ from typing_extensions import TypeAliasType
 from app.comments.schemas import CommentResponse
 
 ReviewBlockCode = Literal[
+    "forbidden_role",
+    "forbidden_not_owner",
     "self_review_forbidden",
     "reviewer_submitted",
     "reviewer_contributed",
@@ -20,6 +22,9 @@ ReviewBlockCode = Literal[
     "review_closed",
 ]
 ReviewAction = Literal[
+    "submit",
+    "resubmit",
+    "archive",
     "create_issue",
     "request_changes",
     "withdraw",

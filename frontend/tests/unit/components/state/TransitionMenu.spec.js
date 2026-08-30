@@ -1,92 +1,90 @@
-import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
+import { describe, expect, it } from 'vitest';
+
 import TransitionMenu from '@/components/state/TransitionMenu.vue';
 
-// Note: v-menu in Vuetify triggers the overlay positioning logic on click which
-// requires `visualViewport` — unavailable in happy-dom. We therefore test the
-// role-gating logic via the component's exposed `items` computed (populated via
-// defineExpose) without opening the actual overlay. The activator button and
-// transition-item slots are separately confirmed to exist in the DOM.
-
-const mountMenu = (props) => {
-  const vuetify = createVuetify({ components, directives });
-  return mount(TransitionMenu, { props, global: { plugins: [vuetify] } });
+const VMenuStub = {
+  template:
+    '<div><slot name="activator" :props="{}" /><div data-testid="menu-content"><slot /></div></div>',
+};
+const VListStub = { template: '<div><slot /></div>' };
+const VListItemStub = {
+  inheritAttrs: false,
+  props: { disabled: Boolean },
+  emits: ['click'],
+  template:
+    '<button v-bind="$attrs" type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+};
+const TextStub = { template: '<span><slot /></span>' };
+const VBtnStub = {
+  inheritAttrs: false,
+  template: '<button v-bind="$attrs" type="button"><slot /></button>',
 };
 
+const mountMenu = (capabilities) =>
+  mount(TransitionMenu, {
+    props: { capabilities },
+    global: {
+      stubs: {
+        VMenu: VMenuStub,
+        VList: VListStub,
+        VListItem: VListItemStub,
+        VListItemTitle: TextStub,
+        VListItemSubtitle: TextStub,
+        VBtn: VBtnStub,
+      },
+    },
+  });
+
 describe('TransitionMenu', () => {
-  it('curator owner on draft sees submit only', () => {
-    const wrapper = mountMenu({
-      currentState: 'draft',
-      role: 'curator',
-      isOwner: true,
-    });
-    const labels = wrapper.vm.items.map((i) => i.label);
-    expect(labels).toContain('Submit for review');
-    expect(labels).not.toContain('Approve');
-    expect(labels).not.toContain('Request changes');
+  it('renders only server-returned state actions and their denial reasons', () => {
+    const wrapper = mountMenu([
+      { action: 'submit', allowed: true, blocked_by: [] },
+      { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+      { action: 'create_issue', allowed: true, blocked_by: [] },
+    ]);
+
+    expect(wrapper.text()).toContain('Submit for review');
+    expect(wrapper.text()).toContain('Archive');
+    expect(wrapper.text()).toContain('Only an administrator can perform this action.');
+    expect(wrapper.text()).not.toContain('Create issue');
+    expect(wrapper.find('[data-action="archive"]').attributes('disabled')).toBeDefined();
   });
 
-  it('viewer sees nothing', () => {
-    const wrapper = mountMenu({
-      currentState: 'draft',
-      role: 'viewer',
-      isOwner: true,
-    });
-    expect(wrapper.vm.items).toHaveLength(0);
+  it('emits only payload-compatible transitions from allowed capabilities', async () => {
+    const wrapper = mountMenu([
+      { action: 'resubmit', allowed: true, blocked_by: [] },
+      { action: 'withdraw', allowed: true, blocked_by: [] },
+      { action: 'archive', allowed: true, blocked_by: [] },
+    ]);
+
+    await wrapper.get('[data-action="resubmit"]').trigger('click');
+    await wrapper.get('[data-action="withdraw"]').trigger('click');
+    await wrapper.get('[data-action="archive"]').trigger('click');
+
+    expect(wrapper.emitted('transition')).toEqual([['in_review'], ['draft'], ['archived']]);
   });
 
-  it('admin on in_review sees approve and request_changes', () => {
-    const wrapper = mountMenu({
-      currentState: 'in_review',
-      role: 'admin',
-      isOwner: false,
-    });
-    const labels = wrapper.vm.items.map((i) => i.label);
-    expect(labels).toContain('Approve');
-    expect(labels).toContain('Request changes');
+  it('routes exact decision actions to the focused workspace', async () => {
+    const wrapper = mountMenu([
+      { action: 'request_changes', allowed: false, blocked_by: ['reviewer_contributed'] },
+      { action: 'approve', allowed: true, blocked_by: [] },
+      { action: 'publish', allowed: true, blocked_by: [] },
+    ]);
+
+    expect(wrapper.text()).toContain('You contributed to this review cycle.');
+    expect(wrapper.get('[data-action="request_changes"]').attributes('disabled')).toBeDefined();
+    await wrapper.get('[data-action="approve"]').trigger('click');
+    await wrapper.get('[data-action="publish"]').trigger('click');
+
+    expect(wrapper.emitted('open-review')).toEqual([['approve'], ['publish']]);
+    expect(wrapper.emitted('transition')).toBeUndefined();
   });
 
-  it('admin on draft sees in_review and archived', () => {
-    const wrapper = mountMenu({
-      currentState: 'draft',
-      role: 'admin',
-      isOwner: false,
-    });
-    const tos = wrapper.vm.items.map((i) => i.to);
-    expect(tos).toContain('in_review');
-    expect(tos).toContain('archived');
-  });
+  it('has no local state, role, or ownership policy props', () => {
+    const wrapper = mountMenu([]);
 
-  it('admin on changes_requested sees in_review and archived', () => {
-    const wrapper = mountMenu({
-      currentState: 'changes_requested',
-      role: 'admin',
-      isOwner: false,
-    });
-    const tos = wrapper.vm.items.map((i) => i.to);
-    expect(tos).toContain('in_review');
-    expect(tos).toContain('archived');
-  });
-
-  it('curator owner on draft sees submit only (no archive)', () => {
-    const wrapper = mountMenu({
-      currentState: 'draft',
-      role: 'curator',
-      isOwner: true,
-    });
-    const tos = wrapper.vm.items.map((i) => i.to);
-    expect(tos).toEqual(['in_review']);
-  });
-
-  it('menu activator button is rendered', () => {
-    const wrapper = mountMenu({
-      currentState: 'draft',
-      role: 'curator',
-      isOwner: true,
-    });
-    expect(wrapper.find('[data-testid="menu-activator"]').exists()).toBe(true);
+    expect(Object.keys(wrapper.vm.$options.props)).toEqual(['capabilities']);
+    expect(wrapper.find('[data-testid="menu-activator"]').exists()).toBe(false);
   });
 });

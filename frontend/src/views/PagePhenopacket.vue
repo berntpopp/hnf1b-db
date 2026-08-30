@@ -102,12 +102,20 @@
             <div class="d-flex align-center gap-2 mb-3">
               <StateBadge :state="effectiveState" />
               <TransitionMenu
-                v-if="effectiveState"
-                :current-state="effectiveState"
-                :role="authStore.user.role"
-                :is-owner="authStore.user.id === phenopacketMeta.draft_owner_id"
+                v-if="transitionCapabilities.length"
+                :capabilities="transitionCapabilities"
                 @transition="onTransitionRequest"
+                @open-review="openReviewWorkspace"
               />
+              <v-btn
+                v-if="hasReviewWorkspace"
+                data-testid="open-review-workspace"
+                variant="tonal"
+                prepend-icon="mdi-clipboard-check-outline"
+                @click="openReviewWorkspace"
+              >
+                Open review workspace
+              </v-btn>
             </div>
             <EditingBanner
               :editing-revision-id="phenopacketMeta.editing_revision_id"
@@ -326,6 +334,7 @@
 import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { getPhenopacket, deletePhenopacket, exportPhenopacket } from '@/api';
+import { getReviewContext } from '@/api/domain/reviews';
 import { useAuthStore } from '@/stores/authStore';
 import { getSexIcon, getSexChipColor, formatSex } from '@/utils/sex';
 import { readEncounterAge, readEncounterGestationalAge, formatGestationalAge } from '@/utils/age';
@@ -401,6 +410,8 @@ export default {
       phenopacket: null,
       // Full API response wrapper — holds state + pointer fields (Wave 7/D.1).
       phenopacketMeta: null,
+      reviewContext: null,
+      reviewContextRequestId: 0,
       loading: false,
       error: null,
       showDeleteDialog: false,
@@ -512,6 +523,21 @@ export default {
      */
     effectiveState() {
       return effectiveStateOf(this.phenopacketMeta);
+    },
+    transitionCapabilities() {
+      const capabilities = new Map();
+      for (const capability of this.phenopacketMeta?.transition_capabilities || []) {
+        capabilities.set(capability.action, capability);
+      }
+      for (const capability of this.reviewContext?.capabilities || []) {
+        capabilities.set(capability.action, capability);
+      }
+      return [...capabilities.values()];
+    },
+    hasReviewWorkspace() {
+      return ['in_review', 'changes_requested', 'approved'].includes(
+        this.reviewContext?.effective_state
+      );
     },
     /**
      * Whether the Discussion tab should be visible.
@@ -648,8 +674,10 @@ export default {
     },
 
     async fetchPhenopacket() {
+      const reviewContextRequestId = ++this.reviewContextRequestId;
       this.loading = true;
       this.error = null;
+      this.reviewContext = null;
 
       const phenopacketId = this.$route.params.phenopacket_id;
       window.logService.debug('Loading phenopacket detail page', {
@@ -659,10 +687,17 @@ export default {
 
       try {
         const response = await getPhenopacket(phenopacketId);
+        if (reviewContextRequestId !== this.reviewContextRequestId) return;
+
         // Backend returns the GA4GH phenopacket object nested under 'phenopacket' key.
         // Also store the full response wrapper for Wave 7/D.1 state fields.
         this.phenopacketMeta = response.data;
         this.phenopacket = response.data.phenopacket;
+
+        if (this.authStore.isCurator) {
+          await this.loadReviewCapabilities(phenopacketId, reviewContextRequestId);
+          if (reviewContextRequestId !== this.reviewContextRequestId) return;
+        }
 
         window.logService.debug('Phenopacket data received', {
           phenopacketId: phenopacketId,
@@ -683,6 +718,8 @@ export default {
           hasMeasurements: this.hasMeasurements,
         });
       } catch (error) {
+        if (reviewContextRequestId !== this.reviewContextRequestId) return;
+
         window.logService.error('Failed to fetch phenopacket', {
           error: error.message,
           phenopacketId: this.$route.params.phenopacket_id,
@@ -693,7 +730,32 @@ export default {
             ? `Phenopacket '${this.$route.params.phenopacket_id}' not found.`
             : 'Failed to load phenopacket. Please try again later.';
       } finally {
-        this.loading = false;
+        if (reviewContextRequestId === this.reviewContextRequestId) {
+          this.loading = false;
+        }
+      }
+    },
+
+    async loadReviewCapabilities(phenopacketId, requestId) {
+      try {
+        const response = await getReviewContext(phenopacketId);
+        if (
+          requestId !== this.reviewContextRequestId ||
+          response.data?.phenopacket_id !== phenopacketId
+        ) {
+          return;
+        }
+        this.reviewContext = response.data;
+      } catch (error) {
+        if (requestId !== this.reviewContextRequestId) return;
+        this.reviewContext = null;
+        if (error.response?.status !== 404) {
+          window.logService.error('Failed to load phenopacket review capabilities', {
+            phenopacketId,
+            error: error.message,
+            status: error.response?.status,
+          });
+        }
       }
     },
 
@@ -803,6 +865,16 @@ export default {
     onTransitionRequest(toState) {
       this.pendingTargetState = toState;
       this.transitionModalOpen = true;
+    },
+
+    openReviewWorkspace() {
+      const phenopacketId =
+        this.phenopacketMeta?.phenopacket_id ?? this.$route.params.phenopacket_id;
+      if (!phenopacketId) return;
+      this.$router.push({
+        name: 'PhenopacketReview',
+        params: { phenopacket_id: phenopacketId },
+      });
     },
 
     /**

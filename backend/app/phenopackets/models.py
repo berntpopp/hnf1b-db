@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.schema import conv
 
 from app.database import Base
+from app.phenopackets.review.schemas import ActionCapability
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -658,6 +659,7 @@ class PhenopacketResponse(BaseModel):
     # Wave 7 D.2: derived from editing_revision.state when in-flight, else pp.state.
     # None when include_state=False (non-curator callers).
     effective_state: Optional[str] = None
+    transition_capabilities: List[ActionCapability] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

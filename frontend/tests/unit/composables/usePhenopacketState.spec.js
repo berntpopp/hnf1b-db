@@ -66,7 +66,7 @@ describe('usePhenopacketState', () => {
 
       const { loading, error, transitionTo } = usePhenopacketState(PHENOPACKET_ID);
 
-      await expect(transitionTo('approved', 'LGTM', 3)).rejects.toThrow('Conflict');
+      await expect(transitionTo('archived', 'No longer active', 3)).rejects.toThrow('Conflict');
       await flushPromises();
 
       expect(loading.value).toBe(false);
@@ -80,10 +80,27 @@ describe('usePhenopacketState', () => {
 
       const { error, transitionTo } = usePhenopacketState(PHENOPACKET_ID);
 
-      await expect(transitionTo('published', 'Ship it', 5)).rejects.toThrow('Network Error');
+      await expect(transitionTo('draft', 'Withdraw for editing', 5)).rejects.toThrow(
+        'Network Error'
+      );
 
       expect(error.value).toBe('Network Error');
     });
+
+    it.each(['changes_requested', 'approved', 'published'])(
+      'rejects exact review target %s without sending generic transition transport',
+      async (targetState) => {
+        const { loading, error, transitionTo } = usePhenopacketState(PHENOPACKET_ID);
+
+        await expect(transitionTo(targetState, 'Unsafe generic decision', 5)).rejects.toThrow(
+          'requires the review workspace'
+        );
+
+        expect(transitionPhenopacket).not.toHaveBeenCalled();
+        expect(loading.value).toBe(false);
+        expect(error.value).toContain('requires the review workspace');
+      }
+    );
   });
 
   describe('loadRevisions', () => {

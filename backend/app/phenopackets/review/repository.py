@@ -38,6 +38,7 @@ from app.phenopackets.review.schemas import (
     StateCounts,
 )
 from app.phenopackets.review.service import ReviewService
+from app.phenopackets.review.structural import structural_capabilities
 
 _CONTENT_EVENTS = ("created", "draft_created", "draft_saved")
 _QUEUE_STATES = ("draft", "in_review", "changes_requested", "approved")
@@ -555,6 +556,11 @@ class ReviewRepository:
                 actor, facts, action="create_issue"
             ),
             *ReviewPolicy.evaluate_facts(actor, facts).actions,
+            *structural_capabilities(
+                actor,
+                effective_state,
+                record.draft_owner_id,
+            ),
         ]
         issue_dtos: list[ReviewIssue] = []
         user_by_id = {user.id: user for _revision, user in revision_rows}

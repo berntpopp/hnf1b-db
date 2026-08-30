@@ -18,6 +18,15 @@ from app.phenopackets.review.policy import (
 from app.phenopackets.review.schemas import ActionCapability
 
 
+def test_review_package_preserves_lazy_public_policy_exports() -> None:
+    """Schema-first imports retain the package's public policy API."""
+    from app.phenopackets.review import ReviewPolicy as ExportedReviewPolicy
+    from app.phenopackets.review import ReviewPolicyError as ExportedReviewPolicyError
+
+    assert ExportedReviewPolicy is ReviewPolicy
+    assert ExportedReviewPolicyError is ReviewPolicyError
+
+
 async def _review_candidate(
     db_session: Any,
     *,

@@ -47,7 +47,7 @@ vi.mock('@/components/VariantAnnotationForm.vue', () => ({
 vi.mock('@/components/curation/reports/ReportObservationWorkspace.vue', () => ({
   default: {
     name: 'ReportObservationWorkspace',
-    props: ['phenopacketId', 'recordState', 'userRole'],
+    props: ['phenopacketId', 'recordState'],
     template: '<div class="mock-report-observation-workspace" />',
   },
 }));
