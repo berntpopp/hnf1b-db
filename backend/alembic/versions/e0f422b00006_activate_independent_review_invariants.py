@@ -633,6 +633,7 @@ def _install_comment_and_event_triggers() -> None:
                OR NEW.review_revision_id <> OLD.review_revision_id
                OR NEW.record_id <> OLD.record_id
                OR NEW.record_type <> OLD.record_type
+               OR NEW.author_id IS DISTINCT FROM OLD.author_id
                OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at
                OR NEW.deleted_by_id IS DISTINCT FROM OLD.deleted_by_id THEN
                 RAISE EXCEPTION 'review_issue_mutation_forbidden';

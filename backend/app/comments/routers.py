@@ -26,6 +26,8 @@ from app.comments.schemas import (
     CommentMentionOut,
     CommentResponse,
     CommentUpdate,
+    ReviewIssueReopenRequest,
+    ReviewIssueResolveRequest,
 )
 from app.comments.service import CommentsService
 from app.database import get_db
@@ -318,7 +320,7 @@ async def update_comment(
 @router.post("/{comment_id}/resolve", response_model=CommentResponse)
 async def resolve_comment(
     comment_id: int,
-    body: Any = Body(default=None),
+    body: ReviewIssueResolveRequest | dict[str, Any] | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ) -> CommentResponse:
@@ -341,7 +343,7 @@ async def resolve_comment(
 @router.post("/{comment_id}/unresolve", response_model=CommentResponse)
 async def unresolve_comment(
     comment_id: int,
-    body: Any = Body(default=None),
+    body: ReviewIssueReopenRequest | dict[str, Any] | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ) -> CommentResponse:

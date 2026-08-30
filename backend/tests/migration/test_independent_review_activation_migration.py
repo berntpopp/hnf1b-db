@@ -64,6 +64,14 @@ def test_activation_revision_extends_exact_expansion_head() -> None:
     assert migration.down_revision == "d0f422b00005"
 
 
+def test_forward_reconciliation_revision_extends_activation_head() -> None:
+    migration = _migration_module(
+        "f0f422b00007_reconcile_independent_review_activation"
+    )
+    assert migration.revision == "f0f422b00007"
+    assert migration.down_revision == "e0f422b00006"
+
+
 @pytest.mark.parametrize(
     "migration_name",
     [
@@ -393,6 +401,7 @@ def test_database_event_atomically_projects_resolution_and_rejects_issue_erasure
         connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         for statement in (
             "UPDATE comments SET review_revision_id=NULL WHERE id=1",
+            "UPDATE comments SET author_id=1 WHERE id=1",
             "UPDATE comments SET deleted_at=now() WHERE id=1",
             "DELETE FROM comments WHERE id=1",
         ):
@@ -561,6 +570,132 @@ def test_database_enforces_resolution_event_actor_independence_and_role() -> Non
             ).scalar_one()
             == 2
         )
+
+
+def _drop_projection_trigger_for_old_e0(connection) -> None:
+    connection.execute(
+        text(
+            """
+            DROP TRIGGER comment_resolution_events_project_comment
+                ON comment_resolution_events;
+            DROP FUNCTION project_comment_resolution_event();
+            """
+        )
+    )
+
+
+def test_forward_reconciliation_repairs_old_e0_missing_projection_trigger() -> None:
+    """Already-stamped e0 schemas converge without losing audit rows."""
+    with _isolated_schema() as (connection, schema, migration):
+        forward = _migration_module(
+            "f0f422b00007_reconcile_independent_review_activation"
+        )
+        record_id = uuid.uuid4()
+        _seed_active_review(connection, record_id, 1)
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+        _drop_projection_trigger_for_old_e0(connection)
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'issue',2)"""
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'resolved','addressed','project after repair',2,'curator')"""
+            )
+        )
+
+        _bind(connection, forward)
+        forward.upgrade()
+
+        assert connection.execute(
+            text(
+                "SELECT resolved_at IS NOT NULL, resolved_by_id FROM comments WHERE id=1"
+            )
+        ).one() == (True, 2)
+        connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'reopened',NULL,'reopen after repair',2,'curator')"""
+            )
+        )
+        assert connection.execute(
+            text("SELECT resolved_at, resolved_by_id FROM comments WHERE id=1")
+        ).one() == (None, None)
+        with pytest.raises(DBAPIError, match="review_issue_mutation_forbidden"):
+            with connection.begin_nested():
+                connection.execute(text("UPDATE comments SET author_id=1 WHERE id=1"))
+
+        forward.downgrade()
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM comment_resolution_events")
+            ).scalar_one()
+            == 2
+        )
+        assert connection.execute(
+            text(
+                """
+                SELECT count(*) FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema
+                  AND c.relname = 'comment_resolution_events'
+                  AND t.tgname = 'comment_resolution_events_project_comment'
+                """
+            ),
+            {"schema": schema},
+        ).scalar_one() == 1
+
+
+def test_forward_reconciliation_is_idempotent_for_fresh_activation_schema() -> None:
+    """Fresh e0 installs keep the same final projection and mutation guards."""
+    with _isolated_schema() as (connection, _schema, migration):
+        forward = _migration_module(
+            "f0f422b00007_reconcile_independent_review_activation"
+        )
+        record_id = uuid.uuid4()
+        _seed_active_review(connection, record_id, 1)
+        _install_existing_triggers(connection)
+        _bind(connection, migration)
+        migration.upgrade()
+
+        _bind(connection, forward)
+        forward.upgrade()
+        forward.upgrade()
+
+        connection.execute(
+            text(
+                """INSERT INTO comments
+                (id,record_type,record_id,author_id,body_markdown,review_revision_id)
+                VALUES (1,'phenopacket',:id,2,'issue',2)"""
+            ),
+            {"id": record_id},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO comment_resolution_events
+                (comment_id,action,disposition,rationale,actor_id,actor_role)
+                VALUES (1,'resolved','addressed','fresh projection',2,'curator')"""
+            )
+        )
+        assert connection.execute(
+            text(
+                "SELECT resolved_at IS NOT NULL, resolved_by_id FROM comments WHERE id=1"
+            )
+        ).one() == (True, 2)
+        with pytest.raises(DBAPIError, match="review_issue_mutation_forbidden"):
+            with connection.begin_nested():
+                connection.execute(text("UPDATE comments SET author_id=1 WHERE id=1"))
 
 
 def test_unresolved_current_cycle_issue_blocks_approved_revision_insert() -> None:

@@ -900,9 +900,9 @@ make test
 cd backend && uv run alembic heads
 ```
 
-Exercise expand -> backend-compatible -> activation -> head and guarded downgrade behavior against a disposable/test database. Expected head is the activation revision.
+Exercise expand -> backend-compatible -> activation -> forward reconciliation/head and guarded downgrade behavior against a disposable/test database. Expected head is `f0f422b00007`.
 
-The rollout order is exact: apply `d0f422b00005`, deploy the v2-writing backend, then apply `e0f422b00006`. The migration proof must also demonstrate empty-data downgrade success and post-audit downgrade refusal.
+The rollout order is exact: apply `d0f422b00005`, deploy the v2-writing backend, apply `e0f422b00006`, then apply `f0f422b00007` to reconcile already-stamped activation schemas. The migration proof must also demonstrate empty-data downgrade success and post-audit downgrade refusal.
 
 - [ ] **Step 2: Run frontend formatting, lint, tests, build, and focused E2E**
 

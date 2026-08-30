@@ -527,6 +527,7 @@ class PhenopacketStateService:
 
         approved_content = deepcopy(candidate.content_jsonb)
         decision_metadata = {
+            "schemaVersion": 1,
             "candidate_revision_id": candidate.id,
             "candidate_content_sha256": actual_digest,
             "attestation": attestation.model_dump(mode="json"),

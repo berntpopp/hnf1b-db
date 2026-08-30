@@ -3752,6 +3752,63 @@
         "title": "ResolutionStrategy",
         "type": "string"
       },
+      "ReviewIssueReopenRequest": {
+        "additionalProperties": false,
+        "description": "Evidence required to reopen one blocking review issue.",
+        "properties": {
+          "rationale": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "record_revision": {
+            "minimum": 0.0,
+            "title": "Record Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_revision",
+          "rationale"
+        ],
+        "title": "ReviewIssueReopenRequest",
+        "type": "object"
+      },
+      "ReviewIssueResolveRequest": {
+        "additionalProperties": false,
+        "description": "Evidence required to resolve or retract one blocking review issue.",
+        "properties": {
+          "disposition": {
+            "enum": [
+              "addressed",
+              "accepted_with_rationale",
+              "retracted",
+              "superseded"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "rationale": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "record_revision": {
+            "minimum": 0.0,
+            "title": "Record Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_revision",
+          "rationale",
+          "disposition"
+        ],
+        "title": "ReviewIssueResolveRequest",
+        "type": "object"
+      },
       "RoleResponse": {
         "description": "Role definition response.",
         "properties": {
@@ -7489,6 +7546,18 @@
           "content": {
             "application/json": {
               "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReviewIssueResolveRequest"
+                  },
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
                 "title": "Body"
               }
             }
@@ -7546,6 +7615,18 @@
           "content": {
             "application/json": {
               "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReviewIssueReopenRequest"
+                  },
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
                 "title": "Body"
               }
             }

@@ -334,6 +334,7 @@ async def test_approval_records_exact_decision_metadata_and_hashes_role_and_meta
     )
 
     expected_metadata = {
+        "schemaVersion": 1,
         "candidate_revision_id": candidate.id,
         "candidate_content_sha256": candidate.content_sha256,
         "attestation": {

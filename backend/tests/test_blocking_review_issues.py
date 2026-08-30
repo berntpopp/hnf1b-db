@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import event, select
+from sqlalchemy import event, select, text
 
 from app.comments.models import CommentResolutionEvent
 from app.comments.schemas import (
@@ -91,6 +91,21 @@ async def _post_issue(client, headers, record, candidate):
             "review_revision_id": candidate.id,
         },
     )
+
+
+async def _drop_resolution_projection_triggers(db_session) -> None:
+    """Emulate the d0 expansion-only schema where the app owns projection."""
+    for statement in (
+        "DROP TRIGGER IF EXISTS comment_resolution_events_project_comment "
+        "ON comment_resolution_events",
+        "DROP FUNCTION IF EXISTS project_comment_resolution_event()",
+        "DROP TRIGGER IF EXISTS comment_resolution_events_projection_final_state "
+        "ON comment_resolution_events",
+        "DROP FUNCTION IF EXISTS validate_resolution_event_projection()",
+        "DROP TRIGGER IF EXISTS comments_review_issue_mutation_guard ON comments",
+        "DROP FUNCTION IF EXISTS guard_review_issue_mutation()",
+    ):
+        await db_session.execute(text(statement))
 
 
 def test_review_issue_request_schemas_are_strict_trimmed_and_literal() -> None:
@@ -206,6 +221,90 @@ async def test_blocking_issue_lifecycle_appends_events_and_keeps_identity(
         ("reopened", None, "concern returned"),
         ("resolved", "retracted", "report was mistaken"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_blocking_issue_resolution_projects_on_expansion_only_schema(
+    db_session, curator_user, another_curator
+):
+    """Service fallback atomically projects events before e0 triggers exist."""
+    record, candidate = await _seed_review_cycle(
+        db_session, owner=curator_user, submitter=curator_user
+    )
+    service = CommentsService(db_session)
+    issue = await service.create(
+        record_type="phenopacket",
+        record_id=record.id,
+        body_markdown="Address this concern.",
+        mention_user_ids=[],
+        actor=another_curator,
+        record_revision=record.revision,
+        review_revision_id=candidate.id,
+    )
+    issue_id = issue.id
+    record_revision = record.revision
+    await db_session.commit()
+
+    await _drop_resolution_projection_triggers(db_session)
+    resolved = await service.resolve(
+        comment_id=issue_id,
+        actor=another_curator,
+        issue_input={
+            "record_revision": record_revision,
+            "disposition": "addressed",
+            "rationale": "fixed",
+        },
+    )
+    assert resolved.resolved_at is not None
+    assert resolved.resolved_by_id == another_curator.id
+    assert (
+        await db_session.execute(
+            select(CommentResolutionEvent).where(
+                CommentResolutionEvent.comment_id == issue_id
+            )
+        )
+    ).scalar_one().action == "resolved"
+
+    await db_session.rollback()
+    assert (
+        await db_session.execute(
+            select(CommentResolutionEvent).where(
+                CommentResolutionEvent.comment_id == issue_id
+            )
+        )
+    ).scalar_one_or_none() is None
+    rolled_back = await service.get_by_id(issue_id)
+    assert rolled_back is not None
+    assert rolled_back.resolved_at is None
+    assert rolled_back.resolved_by_id is None
+
+    await _drop_resolution_projection_triggers(db_session)
+    await service.resolve(
+        comment_id=issue_id,
+        actor=another_curator,
+        issue_input={
+            "record_revision": record_revision,
+            "disposition": "addressed",
+            "rationale": "fixed again",
+        },
+    )
+    reopened = await service.unresolve(
+        comment_id=issue_id,
+        actor=another_curator,
+        issue_input={
+            "record_revision": record_revision,
+            "rationale": "needs another look",
+        },
+    )
+    assert reopened.resolved_at is None
+    assert reopened.resolved_by_id is None
+    assert (
+        await db_session.execute(
+            select(CommentResolutionEvent).where(
+                CommentResolutionEvent.comment_id == issue_id
+            )
+        )
+    ).scalars().all()[1].action == "reopened"
 
 
 @pytest.mark.asyncio

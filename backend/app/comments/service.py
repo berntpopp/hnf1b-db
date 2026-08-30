@@ -374,6 +374,33 @@ class CommentsService:
                 "blocking issue reopen input is invalid"
             ) from exc
 
+    async def _project_resolution_event_if_needed(
+        self,
+        comment: Comment,
+        event: CommentResolutionEvent,
+    ) -> None:
+        """Apply the d0 application projection when no database trigger did it."""
+        await self.db.refresh(
+            comment,
+            attribute_names=["resolved_at", "resolved_by_id", "updated_at"],
+        )
+        await self.db.refresh(event, attribute_names=["created_at"])
+        if event.action == "resolved":
+            if (
+                comment.resolved_at is not None
+                and comment.resolved_by_id == event.actor_id
+            ):
+                return
+            comment.resolved_at = event.created_at
+            comment.resolved_by_id = event.actor_id
+        else:
+            if comment.resolved_at is None and comment.resolved_by_id is None:
+                return
+            comment.resolved_at = None
+            comment.resolved_by_id = None
+        comment.updated_at = event.created_at
+        await self.db.flush()
+
     async def update_body(
         self,
         *,
@@ -428,21 +455,17 @@ class CommentsService:
                 actor=actor,
                 action="resolve",
             )
-            self.db.add(
-                CommentResolutionEvent(
-                    comment_id=comment.id,
-                    action="resolved",
-                    disposition=request.disposition,
-                    rationale=request.rationale,
-                    actor_id=actor.id,
-                    actor_role=actor.role,
-                )
+            event = CommentResolutionEvent(
+                comment_id=comment.id,
+                action="resolved",
+                disposition=request.disposition,
+                rationale=request.rationale,
+                actor_id=actor.id,
+                actor_role=actor.role,
             )
+            self.db.add(event)
             await self.db.flush()
-            await self.db.refresh(
-                comment,
-                attribute_names=["resolved_at", "resolved_by_id", "updated_at"],
-            )
+            await self._project_resolution_event_if_needed(comment, event)
         else:
             comment.resolved_at = func.now()
             comment.resolved_by_id = actor.id
@@ -467,21 +490,17 @@ class CommentsService:
                 actor=actor,
                 action="reopen",
             )
-            self.db.add(
-                CommentResolutionEvent(
-                    comment_id=comment.id,
-                    action="reopened",
-                    disposition=None,
-                    rationale=request.rationale,
-                    actor_id=actor.id,
-                    actor_role=actor.role,
-                )
+            event = CommentResolutionEvent(
+                comment_id=comment.id,
+                action="reopened",
+                disposition=None,
+                rationale=request.rationale,
+                actor_id=actor.id,
+                actor_role=actor.role,
             )
+            self.db.add(event)
             await self.db.flush()
-            await self.db.refresh(
-                comment,
-                attribute_names=["resolved_at", "resolved_by_id", "updated_at"],
-            )
+            await self._project_resolution_event_if_needed(comment, event)
         else:
             comment.resolved_at = None
             comment.resolved_by_id = None

@@ -35,6 +35,8 @@ SNAPSHOT_PATH = (
 )
 
 ALL_VARIANTS_PATH = "/api/v2/phenopackets/aggregate/all-variants"
+COMMENT_RESOLVE_PATH = "/api/v2/comments/{comment_id}/resolve"
+COMMENT_UNRESOLVE_PATH = "/api/v2/comments/{comment_id}/unresolve"
 
 
 def _live_openapi() -> Dict[str, Any]:
@@ -106,3 +108,38 @@ def test_variant_vocab_params_are_enums() -> None:
         assert enum_values == expected_values, (
             f"Enum values for {name!r} drifted: {enum_values!r} != {expected_values!r}"
         )
+
+
+def _schema_refs(schema: Dict[str, Any]) -> set[str]:
+    refs = set()
+    if "$ref" in schema:
+        refs.add(schema["$ref"].split("/")[-1])
+    for value in schema.values():
+        if isinstance(value, dict):
+            refs.update(_schema_refs(value))
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    refs.update(_schema_refs(item))
+    return refs
+
+
+def _json_request_schema(operation: Dict[str, Any]) -> Dict[str, Any]:
+    request_body = operation["requestBody"]
+    assert not request_body.get("required", False)
+    return request_body["content"]["application/json"]["schema"]
+
+
+def test_comment_resolution_request_bodies_document_conditional_issue_inputs() -> None:
+    """Resolve routes advertise blocking-issue schemas without requiring a body."""
+    spec = app.openapi()
+
+    resolve_schema = _json_request_schema(
+        spec["paths"][COMMENT_RESOLVE_PATH]["post"]
+    )
+    unresolve_schema = _json_request_schema(
+        spec["paths"][COMMENT_UNRESOLVE_PATH]["post"]
+    )
+
+    assert "ReviewIssueResolveRequest" in _schema_refs(resolve_schema)
+    assert "ReviewIssueReopenRequest" in _schema_refs(unresolve_schema)
