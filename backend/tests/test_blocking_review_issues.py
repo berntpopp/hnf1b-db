@@ -245,8 +245,7 @@ def _create_d0_service_schema(schema: str) -> None:
             )
             connection.execute(
                 text(
-                    "INSERT INTO alembic_version (version_num) "
-                    "VALUES ('d0f422b00005')"
+                    "INSERT INTO alembic_version (version_num) VALUES ('d0f422b00005')"
                 )
             )
     except Exception:
@@ -333,9 +332,13 @@ async def _seed_d0_review_cycle(session) -> tuple[uuid.UUID, int, int, int, int]
 
 async def _create_d0_issue(session_maker) -> tuple[int, int, int, int]:
     async with session_maker() as session:
-        record_id, candidate_id, record_revision, _owner_id, reviewer_id = (
-            await _seed_d0_review_cycle(session)
-        )
+        (
+            record_id,
+            candidate_id,
+            record_revision,
+            _owner_id,
+            reviewer_id,
+        ) = await _seed_d0_review_cycle(session)
         await session.commit()
 
     async with session_maker() as session:
@@ -1099,6 +1102,56 @@ async def test_blocking_issue_create_route_rejects_partial_stale_and_closed_inpu
     )
     assert closed.status_code == 409
     assert closed.json()["detail"]["code"] == "review_closed"
+
+
+@pytest.mark.asyncio
+async def test_blocking_issue_response_exposes_ordered_append_only_events(
+    async_client, db_session, curator_user, another_curator
+):
+    """Create/resolve/reopen responses discriminate issues and retain evidence."""
+    headers = await _headers_for(
+        async_client, another_curator.username, "CuratorPass123!"
+    )
+    record, candidate = await _seed_review_cycle(
+        db_session, owner=curator_user, submitter=curator_user
+    )
+    await db_session.commit()
+
+    created = await _post_issue(async_client, headers, record, candidate)
+    assert created.status_code == 201, created.json()
+    assert created.json()["review_revision_id"] == candidate.id
+    assert created.json()["is_blocking_issue"] is True
+    assert created.json()["resolution_events"] == []
+
+    issue_id = created.json()["id"]
+    resolved = await async_client.post(
+        f"/api/v2/comments/{issue_id}/resolve",
+        headers=headers,
+        json={
+            "record_revision": record.revision,
+            "disposition": "addressed",
+            "rationale": "first resolution",
+        },
+    )
+    assert resolved.status_code == 200, resolved.json()
+    reopened = await async_client.post(
+        f"/api/v2/comments/{issue_id}/unresolve",
+        headers=headers,
+        json={
+            "record_revision": record.revision,
+            "rationale": "concern returned",
+        },
+    )
+    assert reopened.status_code == 200, reopened.json()
+    events = reopened.json()["resolution_events"]
+    assert [
+        (item["action"], item["disposition"], item["rationale"]) for item in events
+    ] == [
+        ("resolved", "addressed", "first resolution"),
+        ("reopened", None, "concern returned"),
+    ]
+    assert all(item["actor_id"] == another_curator.id for item in events)
+    assert all(item["actor_username"] == another_curator.username for item in events)
 
 
 @pytest.mark.asyncio

@@ -272,6 +272,24 @@ async def test_curator_list_includes_non_published(
     )
 
 
+@pytest.mark.asyncio
+async def test_curator_list_preserves_physical_state_and_adds_effective_state(
+    async_client, clone_in_progress_record, curator_headers
+):
+    """Curator list rows distinguish published physical and draft effective state."""
+    record = clone_in_progress_record["record"]
+    response = await async_client.get(_list_url(), headers=curator_headers)
+    assert response.status_code == 200, response.text
+    row = next(
+        item
+        for item in response.json()["data"]
+        if item.get("id") == record.phenopacket["id"]
+    )
+
+    assert row["state"] == "published"
+    assert row["effective_state"] == "draft"
+
+
 # ---------------------------------------------------------------------------
 # Non-curator state field is null
 # ---------------------------------------------------------------------------

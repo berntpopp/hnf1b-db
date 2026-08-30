@@ -119,6 +119,28 @@ class CommentsService:
         )
         return (await self.db.execute(stmt)).scalar_one()
 
+    async def load_resolution_events(
+        self, comment_ids: Sequence[int]
+    ) -> dict[int, List[CommentResolutionEvent]]:
+        """Bulk-load ordered issue resolution events and their actors."""
+        if not comment_ids:
+            return {}
+        stmt = (
+            select(CommentResolutionEvent)
+            .where(CommentResolutionEvent.comment_id.in_(list(comment_ids)))
+            .options(selectinload(CommentResolutionEvent.actor))
+            .order_by(
+                CommentResolutionEvent.created_at.asc(),
+                CommentResolutionEvent.id.asc(),
+            )
+        )
+        out: dict[int, List[CommentResolutionEvent]] = {
+            comment_id: [] for comment_id in comment_ids
+        }
+        for resolution_event in (await self.db.execute(stmt)).scalars().all():
+            out[resolution_event.comment_id].append(resolution_event)
+        return out
+
     # ------------------------------------------------------------------
     # Create
     # ------------------------------------------------------------------

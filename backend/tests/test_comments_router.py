@@ -18,6 +18,10 @@ async def test_post_comment_201(async_client, curator_headers, published_record)
         headers=curator_headers,
     )
     assert resp.status_code == 201, resp.json()
+    body = resp.json()
+    assert body["review_revision_id"] is None
+    assert body["is_blocking_issue"] is False
+    assert body["resolution_events"] == []
 
 
 @pytest.mark.asyncio

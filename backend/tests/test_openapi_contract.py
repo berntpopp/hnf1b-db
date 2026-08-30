@@ -37,6 +37,8 @@ SNAPSHOT_PATH = (
 ALL_VARIANTS_PATH = "/api/v2/phenopackets/aggregate/all-variants"
 COMMENT_RESOLVE_PATH = "/api/v2/comments/{comment_id}/resolve"
 COMMENT_UNRESOLVE_PATH = "/api/v2/comments/{comment_id}/unresolve"
+REVIEW_QUEUE_PATH = "/api/v2/phenopackets/review-queue"
+REVIEW_CONTEXT_PATH = "/api/v2/phenopackets/{record_id}/review-context"
 
 
 def _live_openapi() -> Dict[str, Any]:
@@ -134,12 +136,27 @@ def test_comment_resolution_request_bodies_document_conditional_issue_inputs() -
     """Resolve routes advertise blocking-issue schemas without requiring a body."""
     spec = app.openapi()
 
-    resolve_schema = _json_request_schema(
-        spec["paths"][COMMENT_RESOLVE_PATH]["post"]
-    )
+    resolve_schema = _json_request_schema(spec["paths"][COMMENT_RESOLVE_PATH]["post"])
     unresolve_schema = _json_request_schema(
         spec["paths"][COMMENT_UNRESOLVE_PATH]["post"]
     )
 
     assert "ReviewIssueResolveRequest" in _schema_refs(resolve_schema)
     assert "ReviewIssueReopenRequest" in _schema_refs(unresolve_schema)
+
+
+def test_review_routes_and_comment_issue_fields_are_typed() -> None:
+    """Review transport is explicit in OpenAPI rather than an ad hoc dict surface."""
+    spec = app.openapi()
+    schemas = spec["components"]["schemas"]
+
+    assert spec["paths"][REVIEW_QUEUE_PATH]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/ReviewQueueResponse"}
+    assert spec["paths"][REVIEW_CONTEXT_PATH]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/ReviewContext"}
+    comment_properties = schemas["CommentResponse"]["properties"]
+    assert "review_revision_id" in comment_properties
+    assert "is_blocking_issue" in comment_properties
+    assert "resolution_events" in comment_properties

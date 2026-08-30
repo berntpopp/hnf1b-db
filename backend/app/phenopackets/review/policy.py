@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from sqlalchemy import select
@@ -14,11 +15,25 @@ from app.phenopackets.review.schemas import (
     ReviewAction,
     ReviewBlockCode,
     ReviewCapabilities,
+    ReviewState,
 )
 
 DecisionAction = Literal["request_changes", "approve"]
 IssueAction = Literal["create", "resolve", "reopen"]
 _CONTENT_EVENTS = ("created", "draft_created", "draft_saved")
+
+
+@dataclass(frozen=True)
+class ReviewPolicyFacts:
+    """Precomputed actor/cycle facts for pure, bounded capability evaluation."""
+
+    effective_state: ReviewState
+    owner_id: int | None
+    submitter_id: int | None
+    actor_contributed: bool
+    unresolved_count: int
+    candidate_is_active: bool = True
+    authors_known: bool = True
 
 
 class ReviewPolicyError(PermissionError):
@@ -54,6 +69,79 @@ class ReviewPolicy:
         ),
         "review_closed": "This candidate is not open for the requested review action.",
     }
+
+    @classmethod
+    def evaluate_facts(
+        cls, actor: User, facts: ReviewPolicyFacts
+    ) -> ReviewCapabilities:
+        """Evaluate review decisions without issuing database statements."""
+        if not actor.is_active or actor.role not in ("curator", "admin"):
+            return ReviewCapabilities(actions=[])
+
+        blockers = cls._fact_blockers(actor, facts)
+        actions: list[ActionCapability] = []
+        if facts.effective_state == "in_review":
+            actions.append(cls._capability("request_changes", blockers))
+            approval_blockers = list(blockers)
+            if facts.unresolved_count > 0:
+                approval_blockers.append("unresolved_review_issues")
+            actions.append(cls._capability("approve", approval_blockers))
+        elif facts.effective_state == "approved":
+            actions.append(cls._capability("request_changes", blockers))
+            if actor.role == "admin":
+                actions.append(cls._capability("publish", []))
+        else:
+            actions.extend(
+                [
+                    cls._capability("request_changes", ["review_closed"]),
+                    cls._capability("approve", ["review_closed"]),
+                ]
+            )
+        return ReviewCapabilities(actions=actions)
+
+    @classmethod
+    def issue_capability_from_facts(
+        cls,
+        actor: User,
+        facts: ReviewPolicyFacts,
+        *,
+        action: Literal["create_issue", "resolve", "reopen"],
+        issue_is_current: bool = True,
+    ) -> ActionCapability:
+        """Evaluate one issue action from already-loaded review facts."""
+        allowed_states = (
+            {"in_review"}
+            if action == "create_issue"
+            else {"in_review", "changes_requested"}
+        )
+        if (
+            not actor.is_active
+            or actor.role not in ("curator", "admin")
+            or facts.effective_state not in allowed_states
+            or not issue_is_current
+        ):
+            return cls._capability(action, ["review_closed"])
+        return cls._capability(action, cls._fact_blockers(actor, facts))
+
+    @staticmethod
+    def _fact_blockers(actor: User, facts: ReviewPolicyFacts) -> list[ReviewBlockCode]:
+        """Return stable independence blockers from immutable precomputed facts."""
+        if (
+            not facts.authors_known
+            or facts.owner_id is None
+            or facts.submitter_id is None
+        ):
+            return ["review_author_unknown"]
+        if not facts.candidate_is_active:
+            return ["review_closed"]
+        blockers: list[ReviewBlockCode] = []
+        if actor.id == facts.owner_id:
+            blockers.append("self_review_forbidden")
+        if actor.id == facts.submitter_id:
+            blockers.append("reviewer_submitted")
+        if facts.actor_contributed:
+            blockers.append("reviewer_contributed")
+        return blockers
 
     @classmethod
     async def evaluate(

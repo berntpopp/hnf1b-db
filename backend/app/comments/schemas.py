@@ -21,6 +21,26 @@ class CommentMentionOut(BaseModel):
     is_active: bool
 
 
+class CommentResolutionEventOut(BaseModel):
+    """One immutable resolve/reopen event attached to a blocking issue."""
+
+    id: int
+    action: Literal["resolved", "reopened"]
+    disposition: Optional[
+        Literal[
+            "addressed",
+            "accepted_with_rationale",
+            "retracted",
+            "superseded",
+        ]
+    ] = None
+    rationale: str
+    actor_id: int
+    actor_username: str
+    actor_role: Literal["curator", "admin"]
+    created_at: datetime
+
+
 class CommentResponse(BaseModel):
     """Full comment representation returned by the API."""
 
@@ -40,6 +60,9 @@ class CommentResponse(BaseModel):
     updated_at: datetime
     deleted_at: Optional[datetime] = None
     deleted_by_id: Optional[int] = None
+    review_revision_id: Optional[int] = None
+    is_blocking_issue: bool = False
+    resolution_events: List[CommentResolutionEventOut] = Field(default_factory=list)
 
 
 class CommentCreate(BaseModel):

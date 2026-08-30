@@ -232,6 +232,12 @@ async def list_phenopackets(
         augmented = dict(content)
         if is_curator:
             augmented["state"] = pp.state
+            augmented["effective_state"] = (
+                pp.editing_revision.state
+                if pp.editing_revision_id is not None
+                and pp.editing_revision is not None
+                else pp.state
+            )
             augmented["head_published_revision_id"] = pp.head_published_revision_id
             augmented["editing_revision_id"] = pp.editing_revision_id
             augmented["draft_owner_id"] = pp.draft_owner_id
@@ -240,6 +246,7 @@ async def list_phenopackets(
             )
         else:
             augmented["state"] = None
+            augmented["effective_state"] = None
             augmented["head_published_revision_id"] = None
             augmented["editing_revision_id"] = None
             augmented["draft_owner_id"] = None

@@ -12,7 +12,7 @@ on {id} and surface as 422.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
@@ -24,6 +24,7 @@ from app.comments.schemas import (
     CommentCreate,
     CommentEditResponse,
     CommentMentionOut,
+    CommentResolutionEventOut,
     CommentResponse,
     CommentUpdate,
     ReviewIssueReopenRequest,
@@ -50,6 +51,7 @@ async def _build_comment_response(
     *,
     mentions_by_id: Optional[Dict[int, List[User]]] = None,
     edited_by_id: Optional[Dict[int, bool]] = None,
+    resolution_events_by_id: Optional[Dict[int, List[Any]]] = None,
 ) -> CommentResponse:
     """Assemble a CommentResponse from an eager-loaded Comment ORM row.
 
@@ -79,6 +81,22 @@ async def _build_comment_response(
     else:
         edited = len(await svc.list_edits(comment.id)) > 0
 
+    if resolution_events_by_id is None:
+        resolution_events_by_id = await svc.load_resolution_events([comment.id])
+    resolution_events = [
+        CommentResolutionEventOut(
+            id=item.id,
+            action=cast(Any, item.action),
+            disposition=cast(Any, item.disposition),
+            rationale=item.rationale,
+            actor_id=item.actor_id,
+            actor_username=item.actor.username,
+            actor_role=cast(Any, item.actor_role),
+            created_at=item.created_at,
+        )
+        for item in resolution_events_by_id.get(comment.id, [])
+    ]
+
     resolved_by_username = comment.resolved_by.username if comment.resolved_by else None
     return CommentResponse(
         id=comment.id,
@@ -97,6 +115,9 @@ async def _build_comment_response(
         updated_at=comment.updated_at,
         deleted_at=comment.deleted_at,
         deleted_by_id=comment.deleted_by_id,
+        review_revision_id=comment.review_revision_id,
+        is_blocking_issue=comment.review_revision_id is not None,
+        resolution_events=resolution_events,
     )
 
 
@@ -250,9 +271,14 @@ async def list_comments(
     comment_ids = [c.id for c in rows]
     mentions_by_id = await svc.load_mentions(comment_ids)
     edited_by_id = await svc.bulk_edit_existence(comment_ids)
+    resolution_events_by_id = await svc.load_resolution_events(comment_ids)
     data = [
         await _build_comment_response(
-            svc, c, mentions_by_id=mentions_by_id, edited_by_id=edited_by_id
+            svc,
+            c,
+            mentions_by_id=mentions_by_id,
+            edited_by_id=edited_by_id,
+            resolution_events_by_id=resolution_events_by_id,
         )
         for c in rows
     ]
