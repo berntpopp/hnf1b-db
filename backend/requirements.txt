@@ -53,7 +53,7 @@ chardet==5.2.0
     # via pronto
 charset-normalizer==3.5.1
     # via requests
-click==8.4.2
+click==8.5.0
     # via uvicorn
 colorama==0.4.6 ; sys_platform == 'win32'
     # via click
@@ -152,7 +152,7 @@ pydantic==2.13.4
     #   ga4gh-vrs
     #   hnf1b-api
     #   pydantic-settings
-pydantic-core==2.46.4
+pydantic-core==2.48.0
     # via pydantic
 pydantic-settings==2.15.0
     # via hnf1b-api

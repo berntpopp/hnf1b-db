@@ -59,7 +59,7 @@ chardet==5.2.0
     # via pronto
 charset-normalizer==3.5.1
     # via requests
-click==8.4.2
+click==8.5.0
     # via uvicorn
 colorama==0.4.6 ; sys_platform == 'win32'
     # via
@@ -68,7 +68,7 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   tqdm
 coverage==7.15.4
     # via pytest-cov
-cryptography==50.0.0
+cryptography==50.0.1
     # via
     #   types-pyopenssl
     #   types-redis
@@ -186,7 +186,7 @@ pydantic==2.13.4
     #   ga4gh-vrs
     #   hnf1b-api
     #   pydantic-settings
-pydantic-core==2.46.4
+pydantic-core==2.48.0
     # via pydantic
 pydantic-settings==2.15.0
     # via hnf1b-api
@@ -235,7 +235,7 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
-ruff==0.16.4
+ruff==0.16.5
 scipy==1.15.3 ; python_full_version < '3.11'
     # via hnf1b-api
 scipy==1.17.1 ; python_full_version >= '3.11'
@@ -255,7 +255,7 @@ tomli==2.4.1 ; python_full_version <= '3.11'
     #   mypy
     #   pytest
 tqdm==4.70.0
-types-cffi==2.0.0.20260518
+types-cffi==2.1.0.20260827
     # via types-pyopenssl
 types-jsonschema==4.26.0.20260518
 types-pyopenssl==24.1.0.20240722
