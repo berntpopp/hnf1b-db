@@ -1,8 +1,39 @@
 """CommentsService mutation methods (update_body, resolve, unresolve, soft_delete)."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from app.comments.service import CommentsService
+
+
+@pytest.mark.asyncio
+async def test_service_mutations_flush_but_never_commit(
+    monkeypatch, db_session, published_record, curator_user
+):
+    """The router is the sole transaction owner for every mutation."""
+    commit = AsyncMock(side_effect=AssertionError("service must not commit"))
+    monkeypatch.setattr(db_session, "commit", commit)
+    svc = CommentsService(db_session)
+
+    comment = await svc.create(
+        record_type="phenopacket",
+        record_id=published_record.id,
+        body_markdown="original",
+        mention_user_ids=[],
+        actor=curator_user,
+    )
+    await svc.update_body(
+        comment_id=comment.id,
+        body_markdown="edited",
+        mention_user_ids=[],
+        actor=curator_user,
+    )
+    await svc.resolve(comment_id=comment.id, actor=curator_user)
+    await svc.unresolve(comment_id=comment.id, actor=curator_user)
+    await svc.soft_delete(comment_id=comment.id, actor=curator_user)
+
+    commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio

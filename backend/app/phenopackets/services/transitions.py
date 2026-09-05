@@ -1,8 +1,8 @@
-"""Pure-function transition guard matrix for Wave 7/D.1.
+"""Pure structural transition guard matrix.
 
-No I/O. Feeds both the endpoint handler (which validates before mutating)
-and the frontend-mirrored decision-making in TransitionMenu.vue (via an
-API-exposed version of ``allowed_transitions``).
+No I/O. This layer validates state, role, and submit/withdraw ownership.
+Actor-specific reviewer independence and blocking-issue decisions belong to
+``ReviewPolicy`` and are enforced by the state service under its record lock.
 
 Spec reference:
   .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §4.1.
@@ -11,7 +11,7 @@ Spec reference:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 State = Literal[
     "draft",
@@ -22,6 +22,8 @@ State = Literal[
     "archived",
 ]
 Role = Literal["admin", "curator", "viewer"]
+StructuralAction = Literal["submit", "resubmit", "archive"]
+StructuralBlockCode = Literal["forbidden_role", "forbidden_not_owner"]
 
 
 class TransitionError(ValueError):
@@ -54,8 +56,17 @@ class StateTransition:
     is_archive: bool = False
 
 
+@dataclass(frozen=True)
+class StructuralTransitionCapability:
+    """One payload-compatible transition projected from the guard matrix."""
+
+    action: StructuralAction
+    allowed: bool
+    blocked_by: tuple[StructuralBlockCode, ...] = ()
+
+
 # ---------------------------------------------------------------------------
-# Enumerated rule table — every legal (from_state, to_state) pair from §4.1.
+# Enumerated rule table — every legal structural (from_state, to_state) pair.
 # Any pair NOT in this dict is an invalid transition.
 # ---------------------------------------------------------------------------
 
@@ -74,17 +85,18 @@ _RULES: dict[tuple[State, State], StateTransition] = {
         requires_admin=False,
         requires_ownership_or_admin=True,
     ),
-    # in_review → changes_requested  (request_changes): admin only
+    # in_review → changes_requested: structural role check only; the state
+    # service applies actor-specific independent-review policy under lock.
     ("in_review", "changes_requested"): StateTransition(
         "in_review",
         "changes_requested",
-        requires_admin=True,
+        requires_admin=False,
     ),
-    # in_review → approved  (approve): admin only
+    # in_review → approved: structural role check only; policy is service-side.
     ("in_review", "approved"): StateTransition(
         "in_review",
         "approved",
-        requires_admin=True,
+        requires_admin=False,
     ),
     # changes_requested → in_review  (resubmit): curator must own OR admin
     ("changes_requested", "in_review"): StateTransition(
@@ -92,6 +104,12 @@ _RULES: dict[tuple[State, State], StateTransition] = {
         "in_review",
         requires_admin=False,
         requires_ownership_or_admin=True,
+    ),
+    # approved → changes_requested: an independent reviewer may reopen.
+    ("approved", "changes_requested"): StateTransition(
+        "approved",
+        "changes_requested",
+        requires_admin=False,
     ),
     # approved → published  (publish): admin only; triggers head-swap §6.2
     ("approved", "published"): StateTransition(
@@ -190,3 +208,52 @@ def allowed_transitions(
         except TransitionError:
             pass
     return out
+
+
+def structural_transition_capabilities(
+    from_state: State,
+    *,
+    role: Role,
+    is_owner: bool,
+) -> list[StructuralTransitionCapability]:
+    """Project simple UI actions and denials from the canonical rule table.
+
+    Exact review decisions are intentionally excluded because they require
+    revision identities, digests, or attestations supplied by the focused
+    review workspace.
+    """
+    capabilities: list[StructuralTransitionCapability] = []
+    for (rule_from, rule_to), _rule in _RULES.items():
+        if rule_from != from_state:
+            continue
+        if rule_to == "in_review" and rule_from == "draft":
+            action: StructuralAction = "submit"
+        elif rule_to == "in_review" and rule_from == "changes_requested":
+            action = "resubmit"
+        elif rule_to == "archived":
+            action = "archive"
+        else:
+            continue
+
+        try:
+            check_transition(
+                from_state,
+                rule_to,
+                role=role,
+                is_owner=is_owner,
+            )
+        except TransitionError as exc:
+            if exc.code not in ("forbidden_role", "forbidden_not_owner"):
+                continue
+            capabilities.append(
+                StructuralTransitionCapability(
+                    action=action,
+                    allowed=False,
+                    blocked_by=(cast(StructuralBlockCode, exc.code),),
+                )
+            )
+        else:
+            capabilities.append(
+                StructuralTransitionCapability(action=action, allowed=True)
+            )
+    return capabilities

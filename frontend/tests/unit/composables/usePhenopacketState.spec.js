@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
+import { ref } from 'vue';
 import { usePhenopacketState } from '@/composables/usePhenopacketState';
 
 // Mock the API domain module so no real HTTP calls are made.
@@ -26,11 +27,81 @@ import {
 
 const PHENOPACKET_ID = 'test-pp-001';
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
 });
 
 describe('usePhenopacketState', () => {
+  it('resets record state synchronously and ignores stale work when the reactive id changes', async () => {
+    const phenopacketId = ref('PP-001');
+    const staleRevisions = deferred();
+    const staleHistoryRevisions = deferred();
+    const staleHistoryAudit = deferred();
+
+    fetchRevisions.mockImplementation((id, options) => {
+      if (id === 'PP-001' && options?.kind === 'revisions') return staleRevisions.promise;
+      if (id === 'PP-001') return staleHistoryRevisions.promise;
+      return Promise.resolve({
+        data: {
+          data: [
+            {
+              id: 22,
+              revision_number: 2,
+              state: 'in_review',
+              actor_username: 'curator.two',
+              created_at: '2026-08-30T12:00:00Z',
+              change_reason: 'New record history',
+            },
+          ],
+        },
+      });
+    });
+    getPhenopacketAuditHistory.mockImplementation((id) => {
+      if (id === 'PP-001') return staleHistoryAudit.promise;
+      return Promise.resolve({ data: [] });
+    });
+
+    const state = usePhenopacketState(phenopacketId);
+    const oldRevisionLoad = state.loadRevisions({ kind: 'revisions' });
+    const oldHistoryLoad = state.loadHistory();
+
+    expect(state.loading.value).toBe(true);
+    expect(state.historyLoading.value).toBe(true);
+
+    phenopacketId.value = 'PP-002';
+
+    expect(state.revisions.value).toEqual([]);
+    expect(state.historyEntries.value).toEqual([]);
+    expect(state.loading.value).toBe(false);
+    expect(state.error.value).toBe(null);
+    expect(state.historyLoading.value).toBe(false);
+    expect(state.historyError.value).toBe(null);
+
+    await state.loadHistory();
+    expect(fetchRevisions).toHaveBeenCalledWith('PP-002', undefined);
+    expect(getPhenopacketAuditHistory).toHaveBeenCalledWith('PP-002');
+    expect(state.historyEntries.value).toHaveLength(1);
+    expect(state.historyEntries.value[0].id).toBe('22');
+
+    staleRevisions.resolve({ data: { data: [{ id: 11 }] } });
+    staleHistoryRevisions.resolve({ data: { data: [{ id: 11, revision_number: 1 }] } });
+    staleHistoryAudit.resolve({ data: [] });
+    await Promise.all([oldRevisionLoad, oldHistoryLoad]);
+
+    expect(state.revisions.value).toEqual([]);
+    expect(state.historyEntries.value[0].id).toBe('22');
+    expect(state.loading.value).toBe(false);
+    expect(state.historyLoading.value).toBe(false);
+  });
+
   describe('transitionTo', () => {
     it('happy path: loading is true during call, false after, returns API data', async () => {
       const responseData = { phenopacket: { id: PHENOPACKET_ID }, revision: 2 };
@@ -66,7 +137,7 @@ describe('usePhenopacketState', () => {
 
       const { loading, error, transitionTo } = usePhenopacketState(PHENOPACKET_ID);
 
-      await expect(transitionTo('approved', 'LGTM', 3)).rejects.toThrow('Conflict');
+      await expect(transitionTo('archived', 'No longer active', 3)).rejects.toThrow('Conflict');
       await flushPromises();
 
       expect(loading.value).toBe(false);
@@ -80,9 +151,54 @@ describe('usePhenopacketState', () => {
 
       const { error, transitionTo } = usePhenopacketState(PHENOPACKET_ID);
 
-      await expect(transitionTo('published', 'Ship it', 5)).rejects.toThrow('Network Error');
+      await expect(transitionTo('draft', 'Withdraw for editing', 5)).rejects.toThrow(
+        'Network Error'
+      );
 
       expect(error.value).toBe('Network Error');
+    });
+
+    it.each(['changes_requested', 'approved', 'published'])(
+      'rejects exact review target %s without sending generic transition transport',
+      async (targetState) => {
+        const { loading, error, transitionTo } = usePhenopacketState(PHENOPACKET_ID);
+
+        await expect(transitionTo(targetState, 'Unsafe generic decision', 5)).rejects.toThrow(
+          'requires the review workspace'
+        );
+
+        expect(transitionPhenopacket).not.toHaveBeenCalled();
+        expect(loading.value).toBe(false);
+        expect(error.value).toContain('requires the review workspace');
+      }
+    );
+
+    it('reads the reactive id at operation start and ignores an older completion', async () => {
+      const phenopacketId = ref('PP-001');
+      const staleTransition = deferred();
+      transitionPhenopacket
+        .mockReturnValueOnce(staleTransition.promise)
+        .mockResolvedValueOnce({ data: { phenopacket: { id: 'PP-002' }, revision: 2 } });
+      const { loading, error, transitionTo } = usePhenopacketState(phenopacketId);
+
+      const oldTransition = transitionTo('draft', 'Old record transition', 1);
+      phenopacketId.value = 'PP-002';
+      const newResult = await transitionTo('in_review', 'New record transition', 1);
+
+      expect(transitionPhenopacket).toHaveBeenNthCalledWith(
+        2,
+        'PP-002',
+        'in_review',
+        'New record transition',
+        1
+      );
+      expect(newResult.phenopacket.id).toBe('PP-002');
+
+      staleTransition.resolve({ data: { phenopacket: { id: 'PP-001' }, revision: 2 } });
+      await oldTransition;
+
+      expect(loading.value).toBe(false);
+      expect(error.value).toBe(null);
     });
   });
 
@@ -108,6 +224,40 @@ describe('usePhenopacketState', () => {
   });
 
   describe('loadHistory', () => {
+    it('loads every server page when revision history exceeds the 50-row default', async () => {
+      const revisions = Array.from({ length: 51 }, (_, index) => ({
+        id: 100 - index,
+        revision_number: 51 - index,
+        state: 'in_review',
+        actor_username: 'curator.alice',
+        created_at: `2026-08-${String(30 - (index % 20)).padStart(2, '0')}T08:00:00Z`,
+      }));
+      fetchRevisions.mockImplementation((_id, options) => {
+        const pageNumber = options?.pageNumber ?? 1;
+        const start = (pageNumber - 1) * 50;
+        return Promise.resolve({
+          data: {
+            data: revisions.slice(start, start + 50),
+            meta: { total: 51, page: pageNumber, page_size: 50 },
+          },
+        });
+      });
+      getPhenopacketAuditHistory.mockResolvedValue({ data: [] });
+
+      const { historyEntries, historyTotal, historyLoading, loadHistory } =
+        usePhenopacketState(PHENOPACKET_ID);
+      await loadHistory();
+
+      expect(fetchRevisions).toHaveBeenNthCalledWith(1, PHENOPACKET_ID, undefined);
+      expect(fetchRevisions).toHaveBeenNthCalledWith(2, PHENOPACKET_ID, {
+        pageSize: 50,
+        pageNumber: 2,
+      });
+      expect(historyEntries.value).toHaveLength(51);
+      expect(historyTotal.value).toBe(51);
+      expect(historyLoading.value).toBe(false);
+    });
+
     it('merges revision and audit payloads into normalized history rows', async () => {
       fetchRevisions.mockResolvedValueOnce({
         data: {

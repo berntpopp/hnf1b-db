@@ -1,6 +1,85 @@
 {
   "components": {
     "schemas": {
+      "ActionCapability": {
+        "description": "One actor-specific action and its stable, content-free blockers.",
+        "properties": {
+          "action": {
+            "enum": [
+              "submit",
+              "resubmit",
+              "archive",
+              "create_issue",
+              "request_changes",
+              "withdraw",
+              "approve",
+              "publish",
+              "resolve",
+              "reopen"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "blocked_by": {
+            "default": [],
+            "items": {
+              "enum": [
+                "forbidden_role",
+                "forbidden_not_owner",
+                "self_review_forbidden",
+                "reviewer_submitted",
+                "reviewer_contributed",
+                "review_author_unknown",
+                "unresolved_review_issues",
+                "review_closed"
+              ],
+              "type": "string"
+            },
+            "title": "Blocked By",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "allowed"
+        ],
+        "title": "ActionCapability",
+        "type": "object"
+      },
+      "ActorSummary": {
+        "description": "Lean actor identity safe for curator-only review surfaces.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ],
+        "title": "ActorSummary",
+        "type": "object"
+      },
       "AggregationResult": {
         "description": "Result of aggregation queries.",
         "properties": {
@@ -52,6 +131,88 @@
           "count"
         ],
         "title": "AggregationResult",
+        "type": "object"
+      },
+      "ApiErrorEnvelope": {
+        "description": "Runtime-accurate envelope emitted by the global exception handlers.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ApiJsonValue"
+          },
+          "error_code": {
+            "title": "Error Code",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "required": [
+          "detail",
+          "error_code",
+          "request_id"
+        ],
+        "title": "ApiErrorEnvelope",
+        "type": "object"
+      },
+      "ApiJsonValue": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/ApiJsonValue"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ApiJsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "ApprovalAttestation": {
+        "description": "Affirmative statements required for an independent approval decision.",
+        "properties": {
+          "independent_review": {
+            "const": true,
+            "title": "Independent Review",
+            "type": "boolean"
+          },
+          "no_unmanaged_conflict": {
+            "const": true,
+            "title": "No Unmanaged Conflict",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "independent_review",
+          "no_unmanaged_conflict"
+        ],
+        "title": "ApprovalAttestation",
         "type": "object"
       },
       "AssessmentStatus": {
@@ -301,10 +462,34 @@
             "title": "Record Id",
             "type": "string"
           },
+          "record_revision": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Revision"
+          },
           "record_type": {
             "const": "phenopacket",
             "title": "Record Type",
             "type": "string"
+          },
+          "review_revision_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Revision Id"
           }
         },
         "required": [
@@ -385,6 +570,76 @@
         "title": "CommentMentionOut",
         "type": "object"
       },
+      "CommentResolutionEventOut": {
+        "description": "One immutable resolve/reopen event attached to a blocking issue.",
+        "properties": {
+          "action": {
+            "enum": [
+              "resolved",
+              "reopened"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_id": {
+            "title": "Actor Id",
+            "type": "integer"
+          },
+          "actor_role": {
+            "enum": [
+              "curator",
+              "admin"
+            ],
+            "title": "Actor Role",
+            "type": "string"
+          },
+          "actor_username": {
+            "title": "Actor Username",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "disposition": {
+            "anyOf": [
+              {
+                "enum": [
+                  "addressed",
+                  "accepted_with_rationale",
+                  "retracted",
+                  "superseded"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disposition"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "rationale",
+          "actor_id",
+          "actor_username",
+          "actor_role",
+          "created_at"
+        ],
+        "title": "CommentResolutionEventOut",
+        "type": "object"
+      },
       "CommentResponse": {
         "description": "Full comment representation returned by the API.",
         "properties": {
@@ -448,6 +703,11 @@
             "title": "Id",
             "type": "integer"
           },
+          "is_blocking_issue": {
+            "default": false,
+            "title": "Is Blocking Issue",
+            "type": "boolean"
+          },
           "mentions": {
             "items": {
               "$ref": "#/components/schemas/CommentMentionOut"
@@ -462,6 +722,13 @@
           "record_type": {
             "title": "Record Type",
             "type": "string"
+          },
+          "resolution_events": {
+            "items": {
+              "$ref": "#/components/schemas/CommentResolutionEventOut"
+            },
+            "title": "Resolution Events",
+            "type": "array"
           },
           "resolved_at": {
             "anyOf": [
@@ -496,6 +763,17 @@
               }
             ],
             "title": "Resolved By Username"
+          },
+          "review_revision_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Revision Id"
           },
           "updated_at": {
             "format": "date-time",
@@ -1063,6 +1341,35 @@
           "pending"
         ],
         "title": "DataSyncStatus",
+        "type": "object"
+      },
+      "DiscussionSummary": {
+        "description": "Counts that distinguish discussion from blocking review issues.",
+        "properties": {
+          "blocking_issues": {
+            "title": "Blocking Issues",
+            "type": "integer"
+          },
+          "open_blocking_issues": {
+            "title": "Open Blocking Issues",
+            "type": "integer"
+          },
+          "ordinary_comments": {
+            "title": "Ordinary Comments",
+            "type": "integer"
+          },
+          "total_comments": {
+            "title": "Total Comments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_comments",
+          "ordinary_comments",
+          "blocking_issues",
+          "open_blocking_issues"
+        ],
+        "title": "DiscussionSummary",
         "type": "object"
       },
       "DiseaseObservation": {
@@ -2536,6 +2843,13 @@
             "default": "draft",
             "title": "State"
           },
+          "transition_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/ActionCapability"
+            },
+            "title": "Transition Capabilities",
+            "type": "array"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -3707,6 +4021,738 @@
         "title": "ResolutionStrategy",
         "type": "string"
       },
+      "ReviewAudit": {
+        "description": "Owner and immutable lifecycle authorship for the active review cycle.",
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRevisionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contributors": {
+            "items": {
+              "$ref": "#/components/schemas/ActorSummary"
+            },
+            "title": "Contributors",
+            "type": "array"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActorSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "publication": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRevisionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "submission": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRevisionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "owner",
+          "submission",
+          "approval",
+          "publication"
+        ],
+        "title": "ReviewAudit",
+        "type": "object"
+      },
+      "ReviewContext": {
+        "description": "One coherent locked snapshot for the curator review workspace.",
+        "properties": {
+          "approved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRevision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "audit": {
+            "$ref": "#/components/schemas/ReviewAudit"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRevision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/ReviewRevision"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/ActionCapability"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "discussion_summary": {
+            "$ref": "#/components/schemas/DiscussionSummary"
+          },
+          "effective_state": {
+            "enum": [
+              "draft",
+              "in_review",
+              "changes_requested",
+              "approved"
+            ],
+            "title": "Effective State",
+            "type": "string"
+          },
+          "has_published_head": {
+            "title": "Has Published Head",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActorSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phenopacket_id": {
+            "title": "Phenopacket Id",
+            "type": "string"
+          },
+          "physical_state": {
+            "title": "Physical State",
+            "type": "string"
+          },
+          "record_id": {
+            "format": "uuid",
+            "title": "Record Id",
+            "type": "string"
+          },
+          "record_revision": {
+            "title": "Record Revision",
+            "type": "integer"
+          },
+          "semantic_changes": {
+            "items": {
+              "$ref": "#/components/schemas/SemanticChange"
+            },
+            "title": "Semantic Changes",
+            "type": "array"
+          },
+          "subject_label": {
+            "title": "Subject Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_id",
+          "phenopacket_id",
+          "subject_label",
+          "physical_state",
+          "effective_state",
+          "record_revision",
+          "has_published_head",
+          "owner",
+          "candidate",
+          "baseline",
+          "approved",
+          "audit",
+          "discussion_summary"
+        ],
+        "title": "ReviewContext",
+        "type": "object"
+      },
+      "ReviewIssue": {
+        "description": "Revision-bound comment with server-authoritative issue actions.",
+        "properties": {
+          "author_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Display Name"
+          },
+          "author_id": {
+            "title": "Author Id",
+            "type": "integer"
+          },
+          "author_username": {
+            "title": "Author Username",
+            "type": "string"
+          },
+          "body_markdown": {
+            "title": "Body Markdown",
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/ActionCapability"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "deleted_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted By Id"
+          },
+          "edited": {
+            "default": false,
+            "title": "Edited",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_blocking_issue": {
+            "default": false,
+            "title": "Is Blocking Issue",
+            "type": "boolean"
+          },
+          "mentions": {
+            "items": {
+              "$ref": "#/components/schemas/CommentMentionOut"
+            },
+            "title": "Mentions",
+            "type": "array"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "record_type": {
+            "title": "Record Type",
+            "type": "string"
+          },
+          "resolution_events": {
+            "items": {
+              "$ref": "#/components/schemas/CommentResolutionEventOut"
+            },
+            "title": "Resolution Events",
+            "type": "array"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "resolved_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By Id"
+          },
+          "resolved_by_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By Username"
+          },
+          "review_revision_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Revision Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "record_type",
+          "record_id",
+          "author_id",
+          "author_username",
+          "body_markdown",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReviewIssue",
+        "type": "object"
+      },
+      "ReviewIssueReopenRequest": {
+        "additionalProperties": false,
+        "description": "Evidence required to reopen one blocking review issue.",
+        "properties": {
+          "rationale": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "record_revision": {
+            "minimum": 0.0,
+            "title": "Record Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_revision",
+          "rationale"
+        ],
+        "title": "ReviewIssueReopenRequest",
+        "type": "object"
+      },
+      "ReviewIssueResolveRequest": {
+        "additionalProperties": false,
+        "description": "Evidence required to resolve or retract one blocking review issue.",
+        "properties": {
+          "disposition": {
+            "enum": [
+              "addressed",
+              "accepted_with_rationale",
+              "retracted",
+              "superseded"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "rationale": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "record_revision": {
+            "minimum": 0.0,
+            "title": "Record Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_revision",
+          "rationale",
+          "disposition"
+        ],
+        "title": "ReviewIssueResolveRequest",
+        "type": "object"
+      },
+      "ReviewQueueMeta": {
+        "description": "Stable page and facet metadata for the server-driven queue.",
+        "properties": {
+          "page_number": {
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "state_counts": {
+            "$ref": "#/components/schemas/StateCounts"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page_number",
+          "page_size",
+          "total",
+          "total_pages",
+          "state_counts"
+        ],
+        "title": "ReviewQueueMeta",
+        "type": "object"
+      },
+      "ReviewQueueResponse": {
+        "description": "Typed review queue response envelope.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewQueueRow"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ReviewQueueMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ReviewQueueResponse",
+        "type": "object"
+      },
+      "ReviewQueueRow": {
+        "description": "Lean queue projection with no ambiguous lifecycle state field.",
+        "properties": {
+          "active_cycle_change_count": {
+            "title": "Active Cycle Change Count",
+            "type": "integer"
+          },
+          "approved_content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Content Sha256"
+          },
+          "approved_revision_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Revision Id"
+          },
+          "candidate_content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Content Sha256"
+          },
+          "candidate_revision_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Revision Id"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/ActionCapability"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "effective_state": {
+            "enum": [
+              "draft",
+              "in_review",
+              "changes_requested",
+              "approved"
+            ],
+            "title": "Effective State",
+            "type": "string"
+          },
+          "has_published_head": {
+            "title": "Has Published Head",
+            "type": "boolean"
+          },
+          "open_issue_count": {
+            "title": "Open Issue Count",
+            "type": "integer"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActorSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phenopacket_id": {
+            "title": "Phenopacket Id",
+            "type": "string"
+          },
+          "physical_state": {
+            "title": "Physical State",
+            "type": "string"
+          },
+          "record_id": {
+            "format": "uuid",
+            "title": "Record Id",
+            "type": "string"
+          },
+          "record_revision": {
+            "title": "Record Revision",
+            "type": "integer"
+          },
+          "subject_label": {
+            "title": "Subject Label",
+            "type": "string"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActorSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "record_id",
+          "phenopacket_id",
+          "subject_label",
+          "physical_state",
+          "effective_state",
+          "owner",
+          "submitted_by",
+          "submitted_at",
+          "record_revision",
+          "candidate_revision_id",
+          "candidate_content_sha256",
+          "approved_revision_id",
+          "approved_content_sha256",
+          "active_cycle_change_count",
+          "open_issue_count",
+          "has_published_head"
+        ],
+        "title": "ReviewQueueRow",
+        "type": "object"
+      },
+      "ReviewRevision": {
+        "description": "An exact immutable revision including its complete content snapshot.",
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "actor_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Role"
+          },
+          "actor_role_at_decision_recorded": {
+            "title": "Actor Role At Decision Recorded",
+            "type": "boolean"
+          },
+          "content": {
+            "additionalProperties": true,
+            "title": "Content",
+            "type": "object"
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "revision_number": {
+            "title": "Revision Number",
+            "type": "integer"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision_number",
+          "state",
+          "content_sha256",
+          "created_at",
+          "actor",
+          "actor_role",
+          "actor_role_at_decision_recorded",
+          "content"
+        ],
+        "title": "ReviewRevision",
+        "type": "object"
+      },
+      "ReviewRevisionSummary": {
+        "description": "Immutable revision identity and actor metadata.",
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ActorSummary"
+          },
+          "actor_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Role"
+          },
+          "actor_role_at_decision_recorded": {
+            "title": "Actor Role At Decision Recorded",
+            "type": "boolean"
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "revision_number": {
+            "title": "Revision Number",
+            "type": "integer"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision_number",
+          "state",
+          "content_sha256",
+          "created_at",
+          "actor",
+          "actor_role",
+          "actor_role_at_decision_recorded"
+        ],
+        "title": "ReviewRevisionSummary",
+        "type": "object"
+      },
       "RoleResponse": {
         "description": "Role definition response.",
         "properties": {
@@ -3796,6 +4842,82 @@
         ],
         "title": "SearchResultItem",
         "type": "object"
+      },
+      "SemanticChange": {
+        "description": "One literal, sectioned server-computed candidate change.",
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/SemanticJsonValue"
+          },
+          "before": {
+            "$ref": "#/components/schemas/SemanticJsonValue"
+          },
+          "operation": {
+            "enum": [
+              "added",
+              "removed",
+              "changed"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "section": {
+            "enum": [
+              "Subject",
+              "Phenotypes",
+              "Diseases",
+              "Variants/Interpretations",
+              "Measurements",
+              "Metadata"
+            ],
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "operation",
+          "path",
+          "before",
+          "after"
+        ],
+        "title": "SemanticChange",
+        "type": "object"
+      },
+      "SemanticJsonValue": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/components/schemas/SemanticJsonValue"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SemanticJsonValue"
+            },
+            "type": "object"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "SourceManifestRef": {
         "additionalProperties": false,
@@ -3934,6 +5056,33 @@
         ],
         "title": "SourceStatus",
         "type": "string"
+      },
+      "StateCounts": {
+        "description": "Queue facet counts under the active non-state filters.",
+        "properties": {
+          "approved": {
+            "default": 0,
+            "title": "Approved",
+            "type": "integer"
+          },
+          "changes_requested": {
+            "default": 0,
+            "title": "Changes Requested",
+            "type": "integer"
+          },
+          "draft": {
+            "default": 0,
+            "title": "Draft",
+            "type": "integer"
+          },
+          "in_review": {
+            "default": 0,
+            "title": "In Review",
+            "type": "integer"
+          }
+        },
+        "title": "StateCounts",
+        "type": "object"
       },
       "SubjectObservation": {
         "additionalProperties": false,
@@ -4574,6 +5723,64 @@
       "TransitionRequest": {
         "description": "Request body for POST /phenopackets/{id}/transitions.\n\nSee .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md \u00a77.3.",
         "properties": {
+          "approved_content_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Content Sha256"
+          },
+          "approved_revision_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Revision Id"
+          },
+          "attestation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApprovalAttestation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidate_content_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Content Sha256"
+          },
+          "candidate_revision_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Revision Id"
+          },
           "reason": {
             "maxLength": 500,
             "minLength": 1,
@@ -5292,7 +6499,7 @@
   "info": {
     "description": "GA4GH Phenopackets v2 compliant API for HNF1B disease data",
     "title": "HNF1B Phenopackets API",
-    "version": "0.2.3"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7131,15 +8338,65 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           }
         },
         "security": [
@@ -7382,6 +8639,27 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReviewIssueResolveRequest"
+                  },
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -7393,15 +8671,65 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           }
         },
         "security": [
@@ -7430,6 +8758,27 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReviewIssueReopenRequest"
+                  },
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -7441,15 +8790,65 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           }
         },
         "security": [
@@ -9192,6 +10591,188 @@
         ]
       }
     },
+    "/api/v2/phenopackets/review-queue": {
+      "get": {
+        "description": "Return a fully SQL-filtered queue with actor-specific capabilities.",
+        "operationId": "list_review_queue_api_v2_phenopackets_review_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page[number]",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page[Number]",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page[size]",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page[Size]",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter[state]",
+            "required": false,
+            "schema": {
+              "default": "in_review",
+              "enum": [
+                "draft",
+                "in_review",
+                "changes_requested",
+                "approved"
+              ],
+              "title": "Filter[State]",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter[owner]",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Owner]"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter[eligibility]",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "reviewable_by_me",
+                "all"
+              ],
+              "title": "Filter[Eligibility]",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter[issues]",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "open",
+                "none",
+                "all"
+              ],
+              "title": "Filter[Issues]",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueueResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List the server-driven curator review queue",
+        "tags": [
+          "phenopackets-review"
+        ]
+      }
+    },
     "/api/v2/phenopackets/search": {
       "get": {
         "description": "Advanced phenopacket search with full-text and structured filters.\n\nUses cursor-based pagination for stable results during browsing.",
@@ -10486,15 +12067,65 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
           }
         },
         "security": [
@@ -10505,6 +12136,69 @@
         "summary": "Perform a state transition",
         "tags": [
           "phenopackets-state"
+        ]
+      }
+    },
+    "/api/v2/phenopackets/{record_id}/review-context": {
+      "get": {
+        "description": "Return candidate/head/issues/audit materialized under a share lock.",
+        "operationId": "get_review_context_api_v2_phenopackets__record_id__review_context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewContext"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get one coherent curator review context",
+        "tags": [
+          "phenopackets-review"
         ]
       }
     },

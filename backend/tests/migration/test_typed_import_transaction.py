@@ -20,7 +20,12 @@ from app.phenopackets.curation.models import (
     ProjectionResolution,
 )
 from app.phenopackets.curation.projection import project_individual
-from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.models import (
+    ApprovalAttestation,
+    Phenopacket,
+    PhenopacketRevision,
+)
+from app.phenopackets.services.state_service import PhenopacketStateService
 from migration.direct_sheets_to_phenopackets import run_source_import_transaction
 from migration.phenopackets.laterality import modifier_vocabulary_from_rows
 from migration.phenopackets.observation_extractor import extract_observation
@@ -111,6 +116,51 @@ def _with_renal_cyst_status(observation, status: AssessmentStatus):
             )
         }
     )
+
+
+async def _finish_import_draft_as_published(
+    db_session,
+    *,
+    record: Phenopacket,
+    initial_revision: PhenopacketRevision,
+    author,
+    reviewer,
+    publisher,
+) -> PhenopacketRevision:
+    """Give reimport tests a policy-valid immutable published lineage."""
+    assert record.editing_revision_id == initial_revision.id
+    service = PhenopacketStateService(db_session)
+    record, candidate = await service.transition(
+        record.id,
+        to_state="in_review",
+        reason="submit imported fixture",
+        expected_revision=record.revision,
+        actor=author,
+    )
+    record, approved = await service.transition(
+        record.id,
+        to_state="approved",
+        reason="approve imported fixture",
+        expected_revision=record.revision,
+        actor=reviewer,
+        candidate_revision_id=candidate.id,
+        candidate_content_sha256=candidate.content_sha256,
+        attestation=ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
+    )
+    record, published = await service.transition(
+        record.id,
+        to_state="published",
+        reason="publish imported fixture",
+        expected_revision=record.revision,
+        actor=publisher,
+        approved_revision_id=approved.id,
+        approved_content_sha256=approved.content_sha256,
+    )
+    await db_session.flush()
+    return published
 
 
 @pytest.mark.asyncio
@@ -270,7 +320,7 @@ async def test_changed_snapshot_refuses_to_overwrite_an_active_import_draft(
 
 @pytest.mark.asyncio
 async def test_changed_snapshot_appends_one_revision_to_a_nonediting_record(
-    db_session, curator_user
+    db_session, curator_user, another_curator, admin_user
 ):
     manifest, observations = _input()
     service = TypedObservationImportService(db_session, actor=curator_user)
@@ -279,10 +329,14 @@ async def test_changed_snapshot_appends_one_revision_to_a_nonediting_record(
     initial_revision = (
         await db_session.execute(select(PhenopacketRevision))
     ).scalar_one()
-    record.state = "published"
-    record.head_published_revision_id = initial_revision.id
-    record.editing_revision_id = None
-    await db_session.flush()
+    await _finish_import_draft_as_published(
+        db_session,
+        record=record,
+        initial_revision=initial_revision,
+        author=curator_user,
+        reviewer=another_curator,
+        publisher=admin_user,
+    )
 
     changed_manifest, changed_observations = _input(changed=True)
     result = await service.apply(
@@ -293,13 +347,13 @@ async def test_changed_snapshot_appends_one_revision_to_a_nonediting_record(
     assert await db_session.scalar(select(func.count()).select_from(Phenopacket)) == 1
     assert (
         await db_session.scalar(select(func.count()).select_from(PhenopacketRevision))
-        == 2
+        == 5
     )
 
 
 @pytest.mark.asyncio
 async def test_complete_changed_snapshot_retires_missing_report_binding(
-    db_session, curator_user
+    db_session, curator_user, another_curator, admin_user
 ):
     report_ids = ("source-report-1", "source-report-2")
     manifest, observations = _input(report_ids=report_ids)
@@ -307,10 +361,14 @@ async def test_complete_changed_snapshot_retires_missing_report_binding(
     await service.apply(manifest=manifest, observations_by_subject=observations)
     record = (await db_session.execute(select(Phenopacket))).scalar_one()
     revision = (await db_session.execute(select(PhenopacketRevision))).scalar_one()
-    record.state = "published"
-    record.head_published_revision_id = revision.id
-    record.editing_revision_id = None
-    await db_session.flush()
+    await _finish_import_draft_as_published(
+        db_session,
+        record=record,
+        initial_revision=revision,
+        author=curator_user,
+        reviewer=another_curator,
+        publisher=admin_user,
+    )
 
     changed_manifest, changed_observations = _input(
         changed=True, report_ids=("source-report-1",)
@@ -384,7 +442,7 @@ async def test_complete_changed_snapshot_retires_missing_subject_binding(
 
 @pytest.mark.asyncio
 async def test_changed_snapshot_preserves_unaffected_curator_correction(
-    db_session, curator_user
+    db_session, curator_user, another_curator, admin_user
 ):
     report_ids = ("source-report-1", "source-report-2")
     manifest, observations = _input(report_ids=report_ids)
@@ -413,10 +471,14 @@ async def test_changed_snapshot_preserves_unaffected_curator_correction(
         **record.phenopacket,
         "hnf1bCuration": updated.model_dump(by_alias=True, mode="json"),
     }
-    record.state = "published"
-    record.head_published_revision_id = initial_revision.id
-    record.editing_revision_id = None
-    await db_session.flush()
+    await _finish_import_draft_as_published(
+        db_session,
+        record=record,
+        initial_revision=initial_revision,
+        author=curator_user,
+        reviewer=another_curator,
+        publisher=admin_user,
+    )
 
     changed_manifest, changed_observations = _input(
         changed=True,
@@ -437,7 +499,7 @@ async def test_changed_snapshot_preserves_unaffected_curator_correction(
 
 @pytest.mark.asyncio
 async def test_changed_snapshot_preserves_a_valid_curator_resolution(
-    db_session, curator_user
+    db_session, curator_user, another_curator, admin_user
 ):
     report_ids = ("source-report-1", "source-report-2")
     manifest, observations = _input(report_ids=report_ids)
@@ -480,10 +542,14 @@ async def test_changed_snapshot_preserves_a_valid_curator_resolution(
             }
         ).model_dump(by_alias=True, mode="json"),
     }
-    record.state = "published"
-    record.head_published_revision_id = initial_revision.id
-    record.editing_revision_id = None
-    await db_session.flush()
+    await _finish_import_draft_as_published(
+        db_session,
+        record=record,
+        initial_revision=initial_revision,
+        author=curator_user,
+        reviewer=another_curator,
+        publisher=admin_user,
+    )
 
     changed_manifest, changed_observations = _input(
         changed=True, report_ids=report_ids, changed_report="source-report-2"

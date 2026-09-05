@@ -79,6 +79,21 @@ async def validation_exception_handler(
     """Convert pydantic validation errors into the standardized shape."""
     assert isinstance(exc, RequestValidationError)
     errors = exc.errors()
+    if request.url.path.endswith("/transitions") and any(
+        err["type"] == "attestation_required" for err in errors
+    ):
+        return _build_error_response(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "code": "attestation_required",
+                "message": (
+                    "Approval requires affirmative independent-review and "
+                    "no-conflict attestations."
+                ),
+            },
+            error_code="validation_error",
+            request=request,
+        )
     is_curation_write = "/curation" in request.url.path or (
         "/phenopackets/" in request.url.path and "/reports/" in request.url.path
     )

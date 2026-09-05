@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt
 
 
 class CommentMentionOut(BaseModel):
@@ -19,6 +19,26 @@ class CommentMentionOut(BaseModel):
     username: str
     display_name: Optional[str] = None
     is_active: bool
+
+
+class CommentResolutionEventOut(BaseModel):
+    """One immutable resolve/reopen event attached to a blocking issue."""
+
+    id: int
+    action: Literal["resolved", "reopened"]
+    disposition: Optional[
+        Literal[
+            "addressed",
+            "accepted_with_rationale",
+            "retracted",
+            "superseded",
+        ]
+    ] = None
+    rationale: str
+    actor_id: int
+    actor_username: str
+    actor_role: Literal["curator", "admin"]
+    created_at: datetime
 
 
 class CommentResponse(BaseModel):
@@ -40,6 +60,9 @@ class CommentResponse(BaseModel):
     updated_at: datetime
     deleted_at: Optional[datetime] = None
     deleted_by_id: Optional[int] = None
+    review_revision_id: Optional[int] = None
+    is_blocking_issue: bool = False
+    resolution_events: List[CommentResolutionEventOut] = Field(default_factory=list)
 
 
 class CommentCreate(BaseModel):
@@ -49,6 +72,32 @@ class CommentCreate(BaseModel):
     record_id: UUID
     body_markdown: str = Field(min_length=1, max_length=10000)
     mention_user_ids: List[int] = Field(default_factory=list, max_length=50)
+    record_revision: Optional[NonNegativeInt] = None
+    review_revision_id: Optional[PositiveInt] = None
+
+
+class _ReviewIssueRequest(BaseModel):
+    """Strict optimistic-concurrency input shared by issue actions."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    record_revision: NonNegativeInt
+    rationale: str = Field(min_length=1, max_length=500)
+
+
+class ReviewIssueResolveRequest(_ReviewIssueRequest):
+    """Evidence required to resolve or retract one blocking review issue."""
+
+    disposition: Literal[
+        "addressed",
+        "accepted_with_rationale",
+        "retracted",
+        "superseded",
+    ]
+
+
+class ReviewIssueReopenRequest(_ReviewIssueRequest):
+    """Evidence required to reopen one blocking review issue."""
 
 
 class CommentUpdate(BaseModel):

@@ -5,7 +5,9 @@ from __future__ import annotations
 from copy import deepcopy
 
 import pytest
+from sqlalchemy import select
 
+from app.models.user import User
 from app.phenopackets.curation.adapters import (
     CurationProjectionError,
     _apply_active_corrections,
@@ -40,6 +42,10 @@ async def _insert_conflicting_record(db_session) -> Phenopacket:
     second["identifiers"]["reportId"] = "RPT-2"
     second["phenotypes"] = [_assessment("report-2", "EXCLUDED")]
     document["hnf1bCuration"]["observationsById"]["report-2"] = second
+    owner_id = await db_session.scalar(
+        select(User.id).where(User.role == "admin").order_by(User.id)
+    )
+    assert owner_id is not None
     record = Phenopacket(
         phenopacket_id="curation-projection-317",
         version="2.0",
@@ -47,6 +53,8 @@ async def _insert_conflicting_record(db_session) -> Phenopacket:
         state="draft",
         phenopacket=document,
         subject_id="317",
+        created_by_id=owner_id,
+        draft_owner_id=owner_id,
     )
     db_session.add(record)
     await db_session.commit()
@@ -71,6 +79,10 @@ async def _insert_sex_conflict_record(db_session) -> Phenopacket:
         "value": "FEMALE",
     }
     document["hnf1bCuration"]["observationsById"]["report-2"] = second
+    owner_id = await db_session.scalar(
+        select(User.id).where(User.role == "admin").order_by(User.id)
+    )
+    assert owner_id is not None
     record = Phenopacket(
         phenopacket_id="curation-sex-conflict-317",
         version="2.0",
@@ -78,6 +90,8 @@ async def _insert_sex_conflict_record(db_session) -> Phenopacket:
         state="draft",
         phenopacket=document,
         subject_id="317",
+        created_by_id=owner_id,
+        draft_owner_id=owner_id,
     )
     db_session.add(record)
     await db_session.commit()

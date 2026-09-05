@@ -13,7 +13,7 @@ export function buildLoginLocation(fullPath) {
   };
 }
 
-const routes = [
+export const routes = [
   {
     path: '/',
     name: 'Home',
@@ -33,7 +33,7 @@ const routes = [
       import(
         /* webpackChunkName: "phenopacket-create-edit" */ '../views/PhenopacketCreateEdit.vue'
       ),
-    meta: { title: 'Create Phenopacket', requiresAuth: true },
+    meta: { title: 'Create Phenopacket', requiresAuth: true, requiresCurator: true },
   },
   {
     path: '/phenopackets/:phenopacket_id/edit',
@@ -42,7 +42,7 @@ const routes = [
       import(
         /* webpackChunkName: "phenopacket-create-edit" */ '../views/PhenopacketCreateEdit.vue'
       ),
-    meta: { title: 'Edit Phenopacket', requiresAuth: true },
+    meta: { title: 'Edit Phenopacket', requiresAuth: true, requiresCurator: true },
   },
   // /new is a common curator guess — alias to the real create route.
   { path: '/phenopackets/new', redirect: '/phenopackets/create' },
@@ -99,6 +99,19 @@ const routes = [
     name: 'SearchResults',
     component: () => import(/* webpackChunkName: "search-results" */ '../views/SearchResults.vue'),
     meta: { title: 'Search Results' },
+  },
+  {
+    path: '/review',
+    name: 'ReviewQueue',
+    component: () => import(/* webpackChunkName: "review-queue" */ '../views/ReviewQueue.vue'),
+    meta: { title: 'Review Queue', requiresAuth: true, requiresCurator: true },
+  },
+  {
+    path: '/review/:phenopacket_id',
+    name: 'PhenopacketReview',
+    component: () =>
+      import(/* webpackChunkName: "phenopacket-review" */ '../views/PhenopacketReview.vue'),
+    meta: { title: 'Phenopacket Review', requiresAuth: true, requiresCurator: true },
   },
   {
     path: '/about',
@@ -181,13 +194,12 @@ const router = createRouter({
   routes,
 });
 
-// Global navigation guard: Check authentication before each route
-// Uses the modern return-value signature (Vue Router 4.1+) instead of next()
-// callbacks to eliminate the deprecation warning (Copilot review #254 comment #10).
-router.beforeEach(async (to, from) => {
-  const authStore = useAuthStore();
+const canCurate = (authStore) => {
+  const userRole = authStore.user?.role;
+  return userRole === 'curator' || userRole === 'admin';
+};
 
-  // Check if route requires authentication
+export async function resolveRouteAccess(to, from, authStore) {
   if (to.meta.requiresAuth) {
     if (!authStore.accessToken && !authStore.hasInitialized) {
       await authStore.initialize();
@@ -225,6 +237,14 @@ router.beforeEach(async (to, from) => {
       });
       return { name: 'Home' };
     }
+    if (to.meta.requiresCurator && !canCurate(authStore)) {
+      window.logService.warn('Route requires curator role, access denied', {
+        from: from.path,
+        to: to.path,
+        userRole: authStore.user?.role,
+      });
+      return { name: 'NotFound' };
+    }
     // Has token and proper role, allow navigation
   } else if (to.name === 'Login' && authStore.accessToken) {
     // User already has token, redirect to home
@@ -233,6 +253,13 @@ router.beforeEach(async (to, from) => {
   }
 
   // All good, proceed with navigation (returning undefined/true is equivalent)
+}
+
+// Global navigation guard: Check authentication before each route
+// Uses the modern return-value signature (Vue Router 4.1+) instead of next()
+// callbacks to eliminate the deprecation warning (Copilot review #254 comment #10).
+router.beforeEach(async (to, from) => {
+  return resolveRouteAccess(to, from, useAuthStore());
 });
 
 // Global navigation guard to update page title dynamically

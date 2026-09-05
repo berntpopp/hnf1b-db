@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.sql import Select
 
 from app.phenopackets.models import Phenopacket, PhenopacketResponse
+from app.phenopackets.review.schemas import ActionCapability
 
 
 def add_has_variants_filter(
@@ -87,6 +88,7 @@ def build_phenopacket_response(
     *,
     phenopacket_override: Optional[Dict[str, Any]] = None,
     include_state: bool = True,
+    transition_capabilities: Optional[List[ActionCapability]] = None,
 ) -> PhenopacketResponse:
     """Transform database model to response model.
 
@@ -113,6 +115,8 @@ def build_phenopacket_response(
             ``draft_owner_id``, ``draft_owner_username``) are set to ``None``
             in the response, hiding internal workflow metadata from non-curator
             callers (spec §7.2).
+        transition_capabilities: Actor-specific structural actions for a
+            curator detail response. Public responses default to an empty list.
 
     Returns:
         PhenopacketResponse Pydantic model for API response
@@ -161,6 +165,7 @@ def build_phenopacket_response(
         draft_owner_id=pp.draft_owner_id if include_state else None,
         draft_owner_username=draft_owner_username if include_state else None,
         effective_state=effective_state_value,
+        transition_capabilities=transition_capabilities or [],
     )
 
 

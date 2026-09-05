@@ -42,6 +42,14 @@
         role="link"
         @click="closeDrawer"
       />
+      <v-list-item
+        prepend-icon="mdi-clipboard-text-search"
+        title="Review Queue"
+        to="/review"
+        aria-label="Open review queue"
+        role="link"
+        @click="closeDrawer"
+      />
     </v-list>
 
     <v-divider v-if="canCurate" />

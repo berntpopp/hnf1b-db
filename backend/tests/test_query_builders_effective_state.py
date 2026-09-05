@@ -37,6 +37,7 @@ async def test_effective_state_reads_revision_when_editing(
     )
     db_session.add(rev)
     await db_session.flush()
+    pp.draft_owner_id = admin_user.id
     pp.editing_revision_id = rev.id
     await db_session.commit()
     # Refresh to reload scalar columns after commit; then re-attach the

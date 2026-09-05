@@ -105,7 +105,7 @@ db-test-init:  ## Create and migrate the dedicated test database (hnf1b_phenopac
 db-create-admin:  ## Create or update admin user
 	uv run python scripts/create_admin_user.py
 
-dev-seed-users:  ## Seed dev-mode fixture users (dev-admin/dev-curator/dev-viewer)
+dev-seed-users:  ## Seed dev-mode admin, curator A/B, legacy curator, and viewer fixtures
 	@ENVIRONMENT=development uv run python scripts/seed_dev_users.py
 
 # Phenopackets Migration Commands (Primary method for data import)

@@ -4,6 +4,8 @@ Wave 7 D.1 Tasks 4 + 5.
 See .planning/specs/2026-04-12-wave-7-d1-state-machine-design.md §4 and §7.3.
 """
 
+from datetime import datetime, timezone
+
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
@@ -151,8 +153,8 @@ def test_phenopacket_response_has_state_fields() -> None:
         schema_version="2.0.0",
         phenopacket={},
         revision=1,
-        created_at="2026-01-01T00:00:00Z",
-        updated_at="2026-01-01T00:00:00Z",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         state="published",
         head_published_revision_id=10,
         editing_revision_id=None,
@@ -164,30 +166,109 @@ def test_phenopacket_response_has_state_fields() -> None:
     assert resp.editing_revision_id is None
     assert resp.draft_owner_id is None
     assert resp.draft_owner_username is None
+    assert resp.transition_capabilities == []
 
 
 def test_transition_request_validation() -> None:
     """TransitionRequest validates to_state and reason correctly."""
-    r = TransitionRequest(to_state="in_review", reason="please review", revision=1)
+    r = TransitionRequest.model_validate(
+        {"to_state": "in_review", "reason": "please review", "revision": 1}
+    )
     assert r.to_state == "in_review"
     assert r.reason == "please review"
     assert r.revision == 1
 
     with pytest.raises(ValueError):
         # reason min_length=1 violated by empty string
-        TransitionRequest(to_state="in_review", reason="", revision=1)
+        TransitionRequest.model_validate(
+            {"to_state": "in_review", "reason": "", "revision": 1}
+        )
 
 
 def test_transition_request_rejects_bad_state() -> None:
     """TransitionRequest rejects states not in the Literal enum."""
     with pytest.raises(ValueError):
-        TransitionRequest(to_state="not_a_state", reason="x", revision=1)  # type: ignore[arg-type]
+        TransitionRequest.model_validate(
+            {"to_state": "not_a_state", "reason": "x", "revision": 1}
+        )
+
+
+@pytest.mark.parametrize(
+    ("base_payload", "irrelevant_field"),
+    [
+        (
+            {
+                "to_state": "approved",
+                "candidate_revision_id": 1,
+                "candidate_content_sha256": "sha256:" + "1" * 64,
+                "attestation": {
+                    "independent_review": True,
+                    "no_unmanaged_conflict": True,
+                },
+            },
+            "approved_revision_id",
+        ),
+        (
+            {
+                "to_state": "approved",
+                "candidate_revision_id": 1,
+                "candidate_content_sha256": "sha256:" + "1" * 64,
+                "attestation": {
+                    "independent_review": True,
+                    "no_unmanaged_conflict": True,
+                },
+            },
+            "approved_content_sha256",
+        ),
+        (
+            {
+                "to_state": "published",
+                "approved_revision_id": 2,
+                "approved_content_sha256": "sha256:" + "2" * 64,
+            },
+            "candidate_revision_id",
+        ),
+        (
+            {
+                "to_state": "published",
+                "approved_revision_id": 2,
+                "approved_content_sha256": "sha256:" + "2" * 64,
+            },
+            "candidate_content_sha256",
+        ),
+        (
+            {
+                "to_state": "published",
+                "approved_revision_id": 2,
+                "approved_content_sha256": "sha256:" + "2" * 64,
+            },
+            "attestation",
+        ),
+        ({"to_state": "in_review"}, "candidate_revision_id"),
+        ({"to_state": "in_review"}, "candidate_content_sha256"),
+        ({"to_state": "in_review"}, "approved_revision_id"),
+        ({"to_state": "in_review"}, "approved_content_sha256"),
+        ({"to_state": "in_review"}, "attestation"),
+    ],
+)
+def test_transition_request_rejects_explicit_null_irrelevant_fields(
+    base_payload: dict,
+    irrelevant_field: str,
+) -> None:
+    """Explicit null is still field presence and cannot cross discriminants."""
+    with pytest.raises(ValueError):
+        TransitionRequest.model_validate(
+            {
+                "reason": "reject irrelevant null",
+                "revision": 1,
+                **base_payload,
+                irrelevant_field: None,
+            }
+        )
 
 
 def test_revision_response_schema() -> None:
     """RevisionResponse accepts a full set of fields."""
-    from datetime import datetime
-
     rr = RevisionResponse(
         id=1,
         record_id="00000000-0000-0000-0000-000000000001",

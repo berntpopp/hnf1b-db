@@ -41,6 +41,11 @@ from app.phenopackets.models import (
     PhenopacketUpdate,
 )
 from app.phenopackets.repositories import PhenopacketRepository
+from app.phenopackets.services.revision_ledger import (
+    build_ledger_v2_payload,
+    content_sha256,
+    ledger_sha256,
+)
 from app.phenopackets.services.state_service import PhenopacketStateService
 from app.phenopackets.validation.domain import DomainValidator
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
@@ -231,6 +236,11 @@ class PhenopacketService:
             raise ServiceValidationError(domain_errors)
 
         revision_actor_id = await self._resolve_revision_actor_id(actor_id)
+        revision_actor_role = await self._repo.session.scalar(
+            select(User.role).where(User.id == revision_actor_id)
+        )
+        if revision_actor_role is None:
+            raise ServiceDatabaseError("revision actor could not be resolved")
 
         phenopacket = Phenopacket(
             phenopacket_id=sanitized["id"],
@@ -238,7 +248,7 @@ class PhenopacketService:
             subject_id=sanitized["subject"]["id"],
             subject_sex=sanitized["subject"].get("sex", "UNKNOWN_SEX"),
             created_by_id=actor_id,
-            draft_owner_id=actor_id,
+            draft_owner_id=revision_actor_id,
         )
         self._repo.add(phenopacket)
 
@@ -264,19 +274,22 @@ class PhenopacketService:
                     projection_payload, sort_keys=True, separators=(",", ":")
                 ).encode()
             ).hexdigest()
-            ledger_hash = hashlib.sha256(
-                json.dumps(
-                    {
-                        "parent_revision_id": None,
-                        "revision_number": phenopacket.revision,
-                        "state": "draft",
-                        "event_type": "created",
-                        "projection_hash": projection_hash,
-                    },
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ).encode()
-            ).hexdigest()
+            full_content_sha256 = content_sha256(sanitized)
+            ledger_payload = build_ledger_v2_payload(
+                parent_revision_id=None,
+                revision_number=phenopacket.revision,
+                state="draft",
+                event_type="created",
+                from_state=None,
+                to_state="draft",
+                change_reason="Initial creation",
+                change_patch=None,
+                content_sha256=full_content_sha256,
+                projection_hash=projection_hash,
+                actor_id=revision_actor_id,
+                actor_role=revision_actor_role,
+                decision_metadata=None,
+            )
             initial_revision = PhenopacketRevision(
                 record_id=phenopacket.id,
                 revision_number=phenopacket.revision,
@@ -295,8 +308,12 @@ class PhenopacketService:
                     .get("projection", {})
                     .get("algorithmVersion", "legacy")
                 ),
-                ledger_hash=ledger_hash,
+                ledger_hash=ledger_sha256(ledger_payload),
                 projection_hash=projection_hash,
+                actor_role=revision_actor_role,
+                decision_metadata=None,
+                content_sha256=full_content_sha256,
+                ledger_version=2,
             )
             self._repo.session.add(initial_revision)
             await self._repo.session.flush()

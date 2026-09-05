@@ -21,7 +21,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.repositories.visibility import public_head_query
 
 router = APIRouter(tags=["seo"])
 
@@ -131,14 +132,12 @@ async def sitemap_variants(db: AsyncSession = Depends(get_db)) -> Response:
     Returns:
         XML sitemap for variant pages
     """
-    # Get all unique variants from published phenopackets only (public filter I3+I7)
-    from app.phenopackets.repositories.visibility import public_filter
-
-    query = public_filter(
+    # Public identifiers and timestamps come from the immutable published head.
+    query = public_head_query(
         select(
-            Phenopacket.phenopacket,
-            Phenopacket.updated_at,
-        )
+            PhenopacketRevision.content_jsonb,
+            PhenopacketRevision.created_at,
+        ).select_from(Phenopacket)
     )
 
     result = await db.execute(query)
@@ -148,8 +147,8 @@ async def sitemap_variants(db: AsyncSession = Depends(get_db)) -> Response:
     variants_seen: dict[str, datetime] = {}
 
     for record in records:
-        phenopacket = record.phenopacket
-        updated_at = record.updated_at
+        phenopacket = record.content_jsonb
+        updated_at = record.created_at
 
         # Navigate to variants in phenopacket structure
         interpretations = phenopacket.get("interpretations", [])
@@ -198,13 +197,11 @@ async def sitemap_phenopackets(db: AsyncSession = Depends(get_db)) -> Response:
     Returns:
         XML sitemap for phenopacket pages
     """
-    from app.phenopackets.repositories.visibility import public_filter
-
-    query = public_filter(
+    query = public_head_query(
         select(
             Phenopacket.phenopacket_id,
-            Phenopacket.updated_at,
-        )
+            PhenopacketRevision.created_at,
+        ).select_from(Phenopacket)
     )
 
     result = await db.execute(query)
@@ -213,7 +210,7 @@ async def sitemap_phenopackets(db: AsyncSession = Depends(get_db)) -> Response:
     urls = []
     for record in records:
         encoded_id = quote(str(record.phenopacket_id), safe="")
-        lastmod = format_lastmod(record.updated_at)
+        lastmod = format_lastmod(record.created_at)
 
         urls.append(f"""  <url>
     <loc>{BASE_URL}/phenopackets/{encoded_id}</loc>
@@ -237,22 +234,21 @@ async def sitemap_publications(db: AsyncSession = Depends(get_db)) -> Response:
     Returns:
         XML sitemap for publication pages
     """
-    # Extract unique PMIDs from published phenopackets only (public filter I3+I7)
-    from app.phenopackets.repositories.visibility import public_filter
-
-    query = public_filter(
+    # Extract unique PMIDs and their public update time from published heads.
+    query = public_head_query(
         select(
-            Phenopacket.phenopacket,
-        )
+            PhenopacketRevision.content_jsonb,
+            PhenopacketRevision.created_at,
+        ).select_from(Phenopacket)
     )
 
     result = await db.execute(query)
     records = result.all()
 
-    pmids_seen: set[str] = set()
+    pmids_seen: dict[str, datetime] = {}
 
     for record in records:
-        phenopacket = record.phenopacket
+        phenopacket = record.content_jsonb
         # Extract PMIDs from metaData.externalReferences
         metadata = phenopacket.get("metaData", {})
         external_refs = metadata.get("externalReferences", [])
@@ -260,15 +256,15 @@ async def sitemap_publications(db: AsyncSession = Depends(get_db)) -> Response:
             ref_id = ref.get("id", "")
             if ref_id.startswith("PMID:"):
                 pmid = ref_id.replace("PMID:", "")
-                pmids_seen.add(pmid)
-
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                existing = pmids_seen.get(pmid)
+                if existing is None or record.created_at > existing:
+                    pmids_seen[pmid] = record.created_at
 
     urls = []
-    for pmid in sorted(pmids_seen):
+    for pmid, updated_at in sorted(pmids_seen.items()):
         urls.append(f"""  <url>
     <loc>{BASE_URL}/publications/{pmid}</loc>
-    <lastmod>{today}</lastmod>
+    <lastmod>{format_lastmod(updated_at)}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>""")

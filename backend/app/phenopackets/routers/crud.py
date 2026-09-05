@@ -54,6 +54,7 @@ from app.phenopackets.repositories import (
     resolve_curator_content,
     resolve_public_content,
 )
+from app.phenopackets.review.structural import structural_capabilities
 from app.phenopackets.routers.crud_helpers import parse_sort_parameter
 from app.phenopackets.services.phenopacket_service import (
     PhenopacketService,
@@ -232,6 +233,12 @@ async def list_phenopackets(
         augmented = dict(content)
         if is_curator:
             augmented["state"] = pp.state
+            augmented["effective_state"] = (
+                pp.editing_revision.state
+                if pp.editing_revision_id is not None
+                and pp.editing_revision is not None
+                else pp.state
+            )
             augmented["head_published_revision_id"] = pp.head_published_revision_id
             augmented["editing_revision_id"] = pp.editing_revision_id
             augmented["draft_owner_id"] = pp.draft_owner_id
@@ -240,6 +247,7 @@ async def list_phenopackets(
             )
         else:
             augmented["state"] = None
+            augmented["effective_state"] = None
             augmented["head_published_revision_id"] = None
             augmented["editing_revision_id"] = None
             augmented["draft_owner_id"] = None
@@ -370,11 +378,22 @@ async def get_phenopacket(
         raise HTTPException(status_code=404, detail="Phenopacket not found")
 
     if is_curator:
+        assert current_user is not None
         content = resolve_curator_content(pp)
+        effective_state = (
+            pp.editing_revision.state
+            if pp.editing_revision_id is not None and pp.editing_revision is not None
+            else pp.state
+        )
         return build_phenopacket_response(
             pp,
             phenopacket_override=content,
             include_state=True,
+            transition_capabilities=structural_capabilities(
+                current_user,
+                effective_state,
+                pp.draft_owner_id,
+            ),
         )
     else:
         public_content = await resolve_public_content(db, pp)

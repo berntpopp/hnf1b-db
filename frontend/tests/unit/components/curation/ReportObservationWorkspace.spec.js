@@ -1,14 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getLedger, previewProjection, saveObservation, appendResolution, transitionPhenopacket } =
-  vi.hoisted(() => ({
-    getLedger: vi.fn(),
-    previewProjection: vi.fn(),
-    saveObservation: vi.fn(),
-    appendResolution: vi.fn(),
-    transitionPhenopacket: vi.fn(),
-  }));
+const { getLedger, previewProjection, saveObservation, appendResolution } = vi.hoisted(() => ({
+  getLedger: vi.fn(),
+  previewProjection: vi.fn(),
+  saveObservation: vi.fn(),
+  appendResolution: vi.fn(),
+}));
 
 vi.mock('@/api/domain/curation', () => ({
   getCurationLedger: getLedger,
@@ -17,8 +15,6 @@ vi.mock('@/api/domain/curation', () => ({
   appendCurationResolution: appendResolution,
   appendCurationCorrection: vi.fn(),
 }));
-vi.mock('@/api/domain/phenopackets', () => ({ transitionPhenopacket }));
-
 import ReportObservationWorkspace from '@/components/curation/reports/ReportObservationWorkspace.vue';
 
 const report = (id, reportId, pmid) => ({
@@ -47,6 +43,18 @@ const ledger = {
   },
 };
 
+const mountWorkspace = (options = {}) =>
+  mount(ReportObservationWorkspace, {
+    ...options,
+    global: {
+      ...options.global,
+      stubs: {
+        ...options.global?.stubs,
+        RouterLink: RouterLinkStub,
+      },
+    },
+  });
+
 describe('ReportObservationWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -59,8 +67,8 @@ describe('ReportObservationWorkspace', () => {
   });
 
   it('loads one individual ledger and saves only the selected report draft', async () => {
-    const wrapper = mount(ReportObservationWorkspace, {
-      props: { phenopacketId: 'PP-317', recordState: 'draft', userRole: 'curator' },
+    const wrapper = mountWorkspace({
+      props: { phenopacketId: 'PP-317', recordState: 'draft' },
     });
     await flushPromises();
     await wrapper.get('[name="pmid"]').setValue('999');
@@ -78,7 +86,7 @@ describe('ReportObservationWorkspace', () => {
   });
 
   it('uses an accessible discard dialog instead of silently switching a dirty report', async () => {
-    const wrapper = mount(ReportObservationWorkspace, {
+    const wrapper = mountWorkspace({
       attachTo: document.body,
       props: { phenopacketId: 'PP-317' },
     });
@@ -97,19 +105,27 @@ describe('ReportObservationWorkspace', () => {
     wrapper.unmount();
   });
 
-  it('keeps publish separate and disabled until the canonical projection is approved', async () => {
-    const wrapper = mount(ReportObservationWorkspace, {
-      props: { phenopacketId: 'PP-317', recordState: 'draft', userRole: 'admin' },
+  it('routes publication to the exact-revision review workspace', async () => {
+    const wrapper = mountWorkspace({
+      props: { phenopacketId: 'PP-317', recordState: 'approved' },
     });
     await flushPromises();
-    const publish = wrapper.get('[data-action="publish-projection"]');
-    expect(publish.attributes('disabled')).toBeDefined();
-    expect(wrapper.text()).toContain('Projection must be approved before publication');
+
+    expect(wrapper.find('[data-action="publish-projection"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('Publication requires the exact approved revision');
+    const reviewLink = wrapper.getComponent(RouterLinkStub);
+    expect(reviewLink.props('to')).toEqual({
+      name: 'PhenopacketReview',
+      params: { phenopacket_id: 'PP-317' },
+    });
+    expect(reviewLink.text()).toContain('Open review workspace');
+    expect(Object.keys(wrapper.vm.$options.props)).not.toContain('userRole');
+    expect(wrapper.vm.$options.emits).not.toContain('published');
   });
 
   it('makes report editing read-only for in-review and approved revisions', async () => {
-    const wrapper = mount(ReportObservationWorkspace, {
-      props: { phenopacketId: 'PP-317', recordState: 'in_review', userRole: 'curator' },
+    const wrapper = mountWorkspace({
+      props: { phenopacketId: 'PP-317', recordState: 'in_review' },
     });
     await flushPromises();
 
@@ -120,8 +136,8 @@ describe('ReportObservationWorkspace', () => {
   it.each(['published', 'changes_requested'])(
     'allows backend-supported %s edits',
     async (state) => {
-      const wrapper = mount(ReportObservationWorkspace, {
-        props: { phenopacketId: 'PP-317', recordState: state, userRole: 'curator' },
+      const wrapper = mountWorkspace({
+        props: { phenopacketId: 'PP-317', recordState: state },
       });
       await flushPromises();
       expect(wrapper.get('fieldset').attributes('disabled')).toBeUndefined();
@@ -146,7 +162,7 @@ describe('ReportObservationWorkspace', () => {
         },
       },
     });
-    const wrapper = mount(ReportObservationWorkspace, {
+    const wrapper = mountWorkspace({
       attachTo: document.body,
       props: { phenopacketId: 'PP-317', recordState: 'draft' },
     });
@@ -173,7 +189,7 @@ describe('ReportObservationWorkspace', () => {
     saveObservation.mockRejectedValueOnce({
       response: { status: 409, data: { detail: { code: 'revision_mismatch' } } },
     });
-    const wrapper = mount(ReportObservationWorkspace, {
+    const wrapper = mountWorkspace({
       props: { phenopacketId: 'PP-317', recordState: 'draft' },
     });
     await flushPromises();
@@ -196,7 +212,7 @@ describe('ReportObservationWorkspace', () => {
     getLedger.mockRejectedValue({
       response: { status: 422, data: { detail: { code: 'curation_not_available' } } },
     });
-    const wrapper = mount(ReportObservationWorkspace, { props: { phenopacketId: 'PP-legacy' } });
+    const wrapper = mountWorkspace({ props: { phenopacketId: 'PP-legacy' } });
     await flushPromises();
     expect(wrapper.emitted('unavailable')).toEqual([[]]);
   });

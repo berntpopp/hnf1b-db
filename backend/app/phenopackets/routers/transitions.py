@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import get_current_user, is_curator_or_admin, require_curator
+from app.core.api_models import ApiErrorEnvelope
 from app.database import get_db
 from app.models.user import User
 from app.phenopackets.models import (
@@ -36,6 +37,7 @@ from app.phenopackets.models import (
 )
 from app.phenopackets.query_builders import build_phenopacket_response
 from app.phenopackets.repositories import PhenopacketRepository
+from app.phenopackets.review.policy import ReviewPolicyError
 from app.phenopackets.services.state_service import PhenopacketStateService
 
 router = APIRouter(tags=["phenopackets-state"])
@@ -70,6 +72,11 @@ def _build_revision_response(
         change_reason=rev.change_reason,
         actor_id=rev.actor_id,
         actor_username=actor_username,
+        actor_role=rev.actor_role,
+        actor_role_at_decision_recorded=rev.actor_role is not None,
+        decision_metadata=rev.decision_metadata,
+        content_sha256=rev.content_sha256,
+        ledger_version=rev.ledger_version,
         change_patch=rev.change_patch,
         created_at=rev.created_at,
         content_jsonb=rev.content_jsonb if include_content else None,
@@ -96,6 +103,9 @@ async def _get_phenopacket_or_404(
 @router.post(
     "/{phenopacket_id}/transitions",
     response_model=Dict[str, Any],
+    responses={
+        status: {"model": ApiErrorEnvelope} for status in (401, 403, 404, 409, 422, 500)
+    },
     summary="Perform a state transition",
 )
 async def post_transition(
@@ -128,33 +138,77 @@ async def post_transition(
             reason=body.reason,
             expected_revision=body.revision,
             actor=current_user,
+            candidate_revision_id=body.candidate_revision_id,
+            candidate_content_sha256=body.candidate_content_sha256,
+            approved_revision_id=body.approved_revision_id,
+            approved_content_sha256=body.approved_content_sha256,
+            attestation=body.attestation,
         )
         await db.commit()
     except PhenopacketStateService.RecordNotFound as exc:
+        await db.rollback()
         raise HTTPException(status_code=404, detail="Phenopacket not found") from exc
     except PhenopacketStateService.RevisionMismatch as exc:
+        await db.rollback()
         raise HTTPException(
             status_code=409,
             detail={"code": "revision_mismatch", "message": str(exc)},
         ) from exc
+    except PhenopacketStateService.ReviewRevisionMismatch as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "review_revision_mismatch", "message": str(exc)},
+        ) from exc
+    except PhenopacketStateService.InvalidRationale as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_rationale", "message": str(exc)},
+        ) from exc
+    except PhenopacketStateService.AttestationRequired as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "attestation_required", "message": str(exc)},
+        ) from exc
     except PhenopacketStateService.InvalidTransition as exc:
+        await db.rollback()
         raise HTTPException(
             status_code=409,
             detail={"code": "invalid_transition", "message": str(exc)},
         ) from exc
     except PhenopacketStateService.ForbiddenNotOwner as exc:
+        await db.rollback()
         raise HTTPException(
             status_code=403,
             detail={"code": "forbidden_not_owner", "message": str(exc)},
         ) from exc
+    except ReviewPolicyError as exc:
+        await db.rollback()
+        status_code = (
+            409
+            if exc.code
+            in {
+                "review_closed",
+                "unresolved_review_issues",
+            }
+            else 403
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": exc.message, **exc.context},
+        ) from exc
     except PermissionError as exc:
+        await db.rollback()
         raise HTTPException(
             status_code=403,
             detail={"code": "forbidden_role", "message": str(exc)},
         ) from exc
     except RuntimeError as exc:
+        await db.rollback()
         logger.exception("Unexpected error during transition of %s", phenopacket_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Transition failed") from exc
 
     # Re-fetch to get eager-loaded actor relationships for the response builder
     repo = PhenopacketRepository(db)

@@ -89,6 +89,14 @@
             >
               <v-list-item-title>Create Phenopacket</v-list-item-title>
             </v-list-item>
+            <v-list-item
+              prepend-icon="mdi-clipboard-text-search"
+              role="menuitem"
+              aria-label="Open review queue"
+              @click="navigateToReviewQueue"
+            >
+              <v-list-item-title>Review Queue</v-list-item-title>
+            </v-list-item>
           </v-list>
         </v-menu>
       </div>
@@ -272,6 +280,13 @@ const goToAdmin = () => {
  */
 const navigateToCreatePhenopacket = () => {
   router.push({ name: 'CreatePhenopacket' });
+};
+
+/**
+ * Navigate to the review queue.
+ */
+const navigateToReviewQueue = () => {
+  router.push({ name: 'ReviewQueue' });
 };
 
 /**

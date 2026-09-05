@@ -36,12 +36,10 @@
           v-else-if="isEditing && curationMode !== 'legacy' && !loadError"
           :phenopacket-id="$route.params.phenopacket_id"
           :record-state="savedRecordState || 'draft'"
-          :user-role="authStore?.user?.role || 'curator'"
           :inert="showUnsavedDialog ? '' : undefined"
           @available="curationMode = 'ledger'"
           @unavailable="activateLegacyMode"
           @dirty-change="ledgerDirty = $event"
-          @published="handleLedgerPublished"
         />
 
         <!-- Form -->
@@ -723,12 +721,6 @@ export default {
 
     addPublication() {
       this.publications.push({ pmid: '' });
-    },
-
-    handleLedgerPublished(result) {
-      this.savedRecordState = result?.effective_state ?? result?.state ?? 'published';
-      if (result?.revision !== undefined) this.revision = result.revision;
-      this.ledgerDirty = false;
     },
 
     removePublication(index) {

@@ -23,8 +23,31 @@ from app.phenopackets.curation.import_models import (
     SourceImportRun,
     SourceSnapshot,
 )
-from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.models import (
+    ApprovalAttestation,
+    Phenopacket,
+    PhenopacketRevision,
+)
 from app.phenopackets.services.state_service import PhenopacketStateService
+
+
+def _approval_fields(candidate: PhenopacketRevision) -> dict:
+    return {
+        "candidate_revision_id": candidate.id,
+        "candidate_content_sha256": candidate.content_sha256,
+        "attestation": ApprovalAttestation(
+            independent_review=True,
+            no_unmanaged_conflict=True,
+        ),
+    }
+
+
+def _publication_fields(approved: PhenopacketRevision) -> dict:
+    return {
+        "approved_revision_id": approved.id,
+        "approved_content_sha256": approved.content_sha256,
+    }
+
 
 # ---------------------------------------------------------------------------
 # I1 — state='published' does NOT imply working copy == public copy
@@ -127,7 +150,7 @@ async def test_I2_at_most_one_head_published_per_record(
     svc = PhenopacketStateService(db_session)
 
     # submit → approve → publish
-    await svc.transition(
+    _, candidate = await svc.transition(
         draft_record.id,
         to_state="in_review",
         reason="r",
@@ -136,12 +159,13 @@ async def test_I2_at_most_one_head_published_per_record(
     )
     await db_session.flush()
     await db_session.refresh(draft_record)
-    await svc.transition(
+    _, approved = await svc.transition(
         draft_record.id,
         to_state="approved",
         reason="r",
         expected_revision=draft_record.revision,
         actor=admin_user,
+        **_approval_fields(candidate),
     )
     await db_session.flush()
     await db_session.refresh(draft_record)
@@ -151,6 +175,7 @@ async def test_I2_at_most_one_head_published_per_record(
         reason="r",
         expected_revision=draft_record.revision,
         actor=admin_user,
+        **_publication_fields(approved),
     )
     await db_session.flush()
 
@@ -245,7 +270,7 @@ async def test_I5b_draft_owner_cleared_on_publish(
     """I5b: publishing clears draft_owner_id (per spec §6.2 step 11)."""
     svc = PhenopacketStateService(db_session)
 
-    await svc.transition(
+    _, candidate = await svc.transition(
         draft_record.id,
         to_state="in_review",
         reason="r",
@@ -254,12 +279,13 @@ async def test_I5b_draft_owner_cleared_on_publish(
     )
     await db_session.flush()
     await db_session.refresh(draft_record)
-    await svc.transition(
+    _, approved = await svc.transition(
         draft_record.id,
         to_state="approved",
         reason="r",
         expected_revision=draft_record.revision,
         actor=admin_user,
+        **_approval_fields(candidate),
     )
     await db_session.flush()
     await db_session.refresh(draft_record)
@@ -269,6 +295,7 @@ async def test_I5b_draft_owner_cleared_on_publish(
         reason="r",
         expected_revision=draft_record.revision,
         actor=admin_user,
+        **_publication_fields(approved),
     )
     await db_session.flush()
     await db_session.refresh(draft_record)

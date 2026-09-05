@@ -111,8 +111,9 @@ class TestPhenopacketServiceCreate:
             )
         ).scalar_one()
         # Anonymous/batch creation remains supported, but the immutable ledger
-        # must never contain an unattributed revision.
+        # and the active edit must never contain an unattributed owner.
         assert revision.actor_id is not None
+        assert result.draft_owner_id == revision.actor_id
 
     @pytest.mark.asyncio
     async def test_create_unknown_sex_defaults_to_unknown(self, make_service):

@@ -40,6 +40,7 @@ async def test_update_phenopacket_success(
         subject_sex="MALE",
         created_by_id=None,
         updated_by_id=None,
+        draft_owner_id=admin_user.id,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()
@@ -523,6 +524,7 @@ async def test_get_audit_history(
         subject_sex="UNKNOWN_SEX",
         created_by_id=admin_user.id,
         updated_by_id=admin_user.id,
+        draft_owner_id=admin_user.id,
     )
     db_session.add(test_phenopacket)
     await db_session.commit()

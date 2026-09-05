@@ -128,6 +128,75 @@ export async function loginAsAdmin(req, apiBase) {
   );
 }
 
+const CURATOR_DEFAULTS = {
+  A: { username: 'dev-curator-a', password: 'DevCuratorA!2026' },
+  B: { username: 'dev-curator-b', password: 'DevCuratorB!2026' },
+};
+
+function pairedCredentials(usernameKey, passwordKey, fallback) {
+  const username = process.env[usernameKey];
+  const password = process.env[passwordKey];
+  if (Boolean(username) !== Boolean(password)) {
+    throw new Error(`${usernameKey} and ${passwordKey} must be set together`);
+  }
+  return username && password ? { username, password } : fallback;
+}
+
+async function loginAsCurator(req, apiBase, actor) {
+  const credentials = pairedCredentials(
+    `E2E_CURATOR_${actor}_USERNAME`,
+    `E2E_CURATOR_${actor}_PASSWORD`,
+    CURATOR_DEFAULTS[actor]
+  );
+  try {
+    return await apiLogin(req, apiBase, credentials.username, credentials.password);
+  } catch (error) {
+    throw new Error(
+      `E2E curator ${actor} login failed for ${credentials.username} against ${apiBase}. ` +
+        `Set E2E_CURATOR_${actor}_USERNAME / E2E_CURATOR_${actor}_PASSWORD to the matching ` +
+        `seeded curator pair. Details: ${error.message}`,
+      { cause: error }
+    );
+  }
+}
+
+/** Log in as the review-cycle owner and submitter. */
+export async function loginAsCuratorA(req, apiBase) {
+  return loginAsCurator(req, apiBase, 'A');
+}
+
+/** Log in as the independent reviewer. */
+export async function loginAsCuratorB(req, apiBase) {
+  return loginAsCurator(req, apiBase, 'B');
+}
+
+/**
+ * Compatibility alias for older specs and external E2E jobs.
+ * @param {import('@playwright/test').APIRequestContext} req
+ * @param {string} apiBase
+ * @returns {Promise<{accessToken: string, cookies: object[]}>}
+ */
+export async function loginAsReviewer(req, apiBase) {
+  const legacyUsername = process.env.E2E_REVIEWER_USERNAME;
+  const legacyPassword = process.env.E2E_REVIEWER_PASSWORD;
+  if (!legacyUsername && !legacyPassword) return loginAsCuratorB(req, apiBase);
+  const { username, password } = pairedCredentials(
+    'E2E_REVIEWER_USERNAME',
+    'E2E_REVIEWER_PASSWORD',
+    CURATOR_DEFAULTS.B
+  );
+  try {
+    return await apiLogin(req, apiBase, username, password);
+  } catch (error) {
+    throw new Error(
+      `E2E reviewer login failed for ${username} against ${apiBase}. ` +
+        `Set E2E_REVIEWER_USERNAME / E2E_REVIEWER_PASSWORD to an independent ` +
+        `seeded curator. Details: ${error.message}`,
+      { cause: error }
+    );
+  }
+}
+
 /**
  * Seed the browser's auth cookies before the app bootstraps.
  * @param {import('@playwright/test').Page} page

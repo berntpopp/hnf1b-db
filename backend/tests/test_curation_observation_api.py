@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from sqlalchemy import select
+
+from app.models.user import User
 from app.phenopackets.models import Phenopacket
 
 
@@ -52,6 +55,10 @@ def _curation_document() -> dict:
 
 
 async def _insert_curation_record(db_session) -> Phenopacket:
+    owner_id = await db_session.scalar(
+        select(User.id).where(User.role == "admin").order_by(User.id)
+    )
+    assert owner_id is not None
     record = Phenopacket(
         phenopacket_id="curation-api-317",
         version="2.0",
@@ -59,8 +66,9 @@ async def _insert_curation_record(db_session) -> Phenopacket:
         state="draft",
         phenopacket=_curation_document(),
         subject_id="317",
-        created_by_id=None,
+        created_by_id=owner_id,
         updated_by_id=None,
+        draft_owner_id=owner_id,
     )
     db_session.add(record)
     await db_session.commit()

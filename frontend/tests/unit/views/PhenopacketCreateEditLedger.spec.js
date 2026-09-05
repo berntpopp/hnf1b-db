@@ -18,7 +18,7 @@ vi.mock('@/stores/authStore', () => ({
 vi.mock('@/components/curation/reports/ReportObservationWorkspace.vue', () => ({
   default: {
     name: 'ReportObservationWorkspace',
-    props: ['phenopacketId', 'recordState', 'userRole'],
+    props: ['phenopacketId', 'recordState'],
     emits: ['available', 'unavailable', 'dirty-change'],
     template: '<div data-testid="ledger-workspace">Ledger workspace</div>',
   },
@@ -74,8 +74,8 @@ describe('PhenopacketCreateEdit observation-ledger integration', () => {
     expect(workspace.props()).toMatchObject({
       phenopacketId: 'PP-317',
       recordState: 'draft',
-      userRole: 'admin',
     });
+    expect(workspace.attributes()).not.toHaveProperty('user-role');
     expect(wrapper.find('form').exists()).toBe(false);
   });
 

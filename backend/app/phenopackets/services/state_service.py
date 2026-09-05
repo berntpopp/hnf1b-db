@@ -17,12 +17,22 @@ from copy import deepcopy
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.comments.models import Comment
 from app.models.user import User
-from app.phenopackets.models import Phenopacket, PhenopacketRevision
+from app.phenopackets.models import (
+    ApprovalAttestation,
+    Phenopacket,
+    PhenopacketRevision,
+)
+from app.phenopackets.review.policy import ReviewPolicy, ReviewPolicyError
+from app.phenopackets.services.revision_ledger import (
+    build_ledger_v2_payload,
+    content_sha256,
+    ledger_sha256,
+)
 from app.phenopackets.services.transitions import (
     Role,
     State,
@@ -46,6 +56,15 @@ class PhenopacketStateService:
 
     class RevisionMismatch(Exception):
         """Optimistic-lock failure: expected_revision != current revision."""
+
+    class ReviewRevisionMismatch(Exception):
+        """The nominated immutable review snapshot is no longer active or exact."""
+
+    class InvalidRationale(Exception):
+        """A transition rationale is empty after normalization or too long."""
+
+    class AttestationRequired(Exception):
+        """Approval lacks the affirmative independent-review attestations."""
 
     class EditInProgress(Exception):
         """Record already has a clone-to-draft edit open (editing_revision_id set)."""
@@ -151,6 +170,7 @@ class PhenopacketStateService:
         event_type: str,
         parent_revision_id: int | None = None,
         import_run_id: UUID | None = None,
+        decision_metadata: dict[str, Any] | None = None,
     ) -> PhenopacketRevision:
         """Append and flush a revision; never update historical revision rows."""
         parent = parent_revision_id
@@ -177,20 +197,22 @@ class PhenopacketStateService:
                 projection_payload, sort_keys=True, separators=(",", ":")
             ).encode()
         ).hexdigest()
-        ledger_payload = {
-            "parent_revision_id": parent,
-            "revision_number": pp.revision,
-            "state": state,
-            "event_type": event_type,
-            "from_state": from_state,
-            "to_state": to_state,
-            "change_reason": change_reason,
-            "change_patch": change_patch,
-            "projection_hash": projection_hash,
-        }
-        ledger_hash = hashlib.sha256(
-            json.dumps(ledger_payload, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
+        full_content_sha256 = content_sha256(content)
+        ledger_payload = build_ledger_v2_payload(
+            parent_revision_id=parent,
+            revision_number=pp.revision,
+            state=state,
+            event_type=event_type,
+            from_state=from_state,
+            to_state=to_state,
+            change_reason=change_reason,
+            change_patch=change_patch,
+            content_sha256=full_content_sha256,
+            projection_hash=projection_hash,
+            actor_id=actor.id,
+            actor_role=actor.role,
+            decision_metadata=decision_metadata,
+        )
         revision = PhenopacketRevision(
             record_id=pp.id,
             parent_revision_id=parent,
@@ -208,8 +230,12 @@ class PhenopacketStateService:
             projection_version=str(
                 curation.get("projection", {}).get("algorithmVersion", "legacy")
             ),
-            ledger_hash=ledger_hash,
+            ledger_hash=ledger_sha256(ledger_payload),
             projection_hash=projection_hash,
+            actor_role=actor.role,
+            decision_metadata=decision_metadata,
+            content_sha256=full_content_sha256,
+            ledger_version=2,
         )
         self.db.add(revision)
         await self.db.flush()
@@ -379,12 +405,27 @@ class PhenopacketStateService:
         reason: str,
         expected_revision: int,
         actor: User,
+        candidate_revision_id: int | None = None,
+        candidate_content_sha256: str | None = None,
+        approved_revision_id: int | None = None,
+        approved_content_sha256: str | None = None,
+        attestation: ApprovalAttestation | None = None,
     ) -> tuple[Phenopacket, PhenopacketRevision]:
         """Perform a state transition per the §4.1 guard matrix.
 
         Delegates to :meth:`_publish` for ``to_state='published'`` (§6.2).
         All other transitions follow the §6.4 simple-transition path.
         """
+        reason = reason.strip()
+        if not reason or len(reason) > 500:
+            raise self.InvalidRationale(
+                "Transition rationale must contain 1 to 500 non-whitespace characters."
+            )
+        if to_state == "approved" and not isinstance(attestation, ApprovalAttestation):
+            raise self.AttestationRequired(
+                "Approval requires affirmative independent-review and "
+                "no-conflict attestations."
+            )
         pp = await self._lock_and_check(record_id, expected_revision)
 
         # §4.2.1: guard matrix reads the *effective* state (revision row if a
@@ -407,10 +448,171 @@ class PhenopacketStateService:
             # forbidden_role
             raise PermissionError(str(exc)) from exc
 
+        if to_state == "approved":
+            return await self._approve(
+                pp,
+                reason,
+                actor,
+                candidate_revision_id=candidate_revision_id,
+                candidate_content_sha256=candidate_content_sha256,
+                attestation=attestation,
+            )
+
+        if (effective, to_state) in {
+            ("in_review", "changes_requested"),
+            ("approved", "changes_requested"),
+        }:
+            candidate = await self._active_review_candidate(pp)
+            await ReviewPolicy.require_independent_reviewer(
+                self.db,
+                pp,
+                candidate,
+                actor,
+                0,
+                action="request_changes",
+            )
+
         if to_state == "published":
-            return await self._publish(pp, reason, actor)
+            return await self._publish(
+                pp,
+                reason,
+                actor,
+                approved_revision_id=approved_revision_id,
+                approved_content_sha256=approved_content_sha256,
+            )
+
+        if to_state == "in_review":
+            pp.phenopacket = self._canonicalize_for_persistence(
+                pp.phenopacket, publish=True
+            )
 
         return await self._simple_transition(pp, to_state, reason, actor)
+
+    async def _approve(
+        self,
+        pp: Phenopacket,
+        reason: str,
+        actor: User,
+        *,
+        candidate_revision_id: int | None,
+        candidate_content_sha256: str | None,
+        attestation: ApprovalAttestation | None,
+    ) -> tuple[Phenopacket, PhenopacketRevision]:
+        """Approve the exact active canonical candidate under the record lock."""
+        if (
+            candidate_revision_id is None
+            or candidate_content_sha256 is None
+            or attestation is None
+            or pp.editing_revision_id != candidate_revision_id
+        ):
+            raise self.ReviewRevisionMismatch(
+                "active review candidate does not match the nominated snapshot"
+            )
+
+        candidate = (
+            await self.db.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.id == candidate_revision_id,
+                    PhenopacketRevision.record_id == pp.id,
+                    PhenopacketRevision.state == "in_review",
+                )
+            )
+        ).scalar_one_or_none()
+        if candidate is None:
+            raise self.ReviewRevisionMismatch(
+                "active review candidate does not match the nominated snapshot"
+            )
+        actual_digest = content_sha256(candidate.content_jsonb)
+        if (
+            candidate.content_sha256 != actual_digest
+            or candidate_content_sha256 != actual_digest
+        ):
+            raise self.ReviewRevisionMismatch(
+                "active review candidate does not match the nominated snapshot"
+            )
+
+        unresolved_count = await self._unresolved_review_issue_count(pp)
+        await ReviewPolicy.require_independent_reviewer(
+            self.db,
+            pp,
+            candidate,
+            actor,
+            unresolved_count,
+            action="approve",
+        )
+
+        approved_content = deepcopy(candidate.content_jsonb)
+        decision_metadata = {
+            "schemaVersion": 1,
+            "candidate_revision_id": candidate.id,
+            "candidate_content_sha256": actual_digest,
+            "attestation": attestation.model_dump(mode="json"),
+            "rationale": reason,
+        }
+        approved = await self._append_revision(
+            pp,
+            state="approved",
+            content=approved_content,
+            change_patch=compute_json_patch(pp.phenopacket, approved_content),
+            change_reason=reason,
+            actor=actor,
+            from_state="in_review",
+            to_state="approved",
+            event_type="state_transition",
+            parent_revision_id=candidate.id,
+            decision_metadata=decision_metadata,
+        )
+
+        if pp.head_published_revision_id is None:
+            pp.state = "approved"
+        pp.phenopacket = approved_content
+        pp.editing_revision_id = approved.id
+        return pp, approved
+
+    async def _active_review_candidate(self, pp: Phenopacket) -> PhenopacketRevision:
+        """Load the immutable submission snapshot for the active review cycle."""
+        if pp.editing_revision_id is None:
+            raise ReviewPolicyError(
+                "review_author_unknown",
+                "Reviewer independence cannot be established from the audit history.",
+            )
+        active = await self.db.get(PhenopacketRevision, pp.editing_revision_id)
+        if active is None or active.record_id != pp.id:
+            raise ReviewPolicyError(
+                "review_author_unknown",
+                "Reviewer independence cannot be established from the audit history.",
+            )
+        return await ReviewPolicy.active_candidate(self.db, pp, active)
+
+    async def _unresolved_review_issue_count(self, pp: Phenopacket) -> int:
+        """Count live unresolved blocking issues in the active edit cycle."""
+        stmt = (
+            select(func.count(Comment.id))
+            .join(
+                PhenopacketRevision,
+                PhenopacketRevision.id == Comment.review_revision_id,
+            )
+            .where(
+                Comment.record_type == "phenopacket",
+                Comment.record_id == pp.id,
+                Comment.review_revision_id.is_not(None),
+                Comment.resolved_at.is_(None),
+                Comment.deleted_at.is_(None),
+                PhenopacketRevision.record_id == pp.id,
+            )
+        )
+        if pp.head_published_revision_id is not None:
+            head = await self.db.get(PhenopacketRevision, pp.head_published_revision_id)
+            if head is None or head.record_id != pp.id:
+                raise ReviewPolicyError(
+                    "review_author_unknown",
+                    "Reviewer independence cannot be established "
+                    "from the audit history.",
+                )
+            stmt = stmt.where(
+                PhenopacketRevision.revision_number > head.revision_number
+            )
+        return int((await self.db.execute(stmt)).scalar_one())
 
     async def _simple_transition(
         self,
@@ -469,6 +671,10 @@ class PhenopacketStateService:
             # so the curator can continue owning through the review cycle.
             pp.editing_revision_id = rev.id
 
+        # Persist the projection after the immutable revision insert so any
+        # same-transaction review-issue writer observes the active candidate.
+        # Transaction ownership remains with the router/caller.
+        await self.db.flush()
         return pp, rev
 
     async def _publish(
@@ -476,30 +682,42 @@ class PhenopacketStateService:
         pp: Phenopacket,
         reason: str,
         actor: User,
+        *,
+        approved_revision_id: int | None,
+        approved_content_sha256: str | None,
     ) -> tuple[Phenopacket, PhenopacketRevision]:
         """§6.2 head-swap: promote the approved revision to published + head."""
-        if pp.editing_revision_id is None:
-            raise self.InvalidTransition(
-                "cannot publish: no active approved editing revision"
+        if (
+            approved_revision_id is None
+            or approved_content_sha256 is None
+            or pp.editing_revision_id != approved_revision_id
+        ):
+            raise self.ReviewRevisionMismatch(
+                "active approval does not match the nominated snapshot"
             )
-        try:
-            approved = (
-                await self.db.execute(
-                    select(PhenopacketRevision).where(
-                        PhenopacketRevision.id == pp.editing_revision_id,
-                        PhenopacketRevision.record_id == pp.id,
-                        PhenopacketRevision.state == "approved",
-                    )
+        approved = (
+            await self.db.execute(
+                select(PhenopacketRevision).where(
+                    PhenopacketRevision.id == approved_revision_id,
+                    PhenopacketRevision.record_id == pp.id,
+                    PhenopacketRevision.state == "approved",
                 )
-            ).scalar_one()
-        except NoResultFound:
-            raise self.InvalidTransition(
-                "cannot publish: active editing revision is not an approved revision"
+            )
+        ).scalar_one_or_none()
+        if approved is None:
+            raise self.ReviewRevisionMismatch(
+                "active approval does not match the nominated snapshot"
+            )
+        actual_digest = content_sha256(approved.content_jsonb)
+        if (
+            approved.content_sha256 != actual_digest
+            or approved_content_sha256 != actual_digest
+        ):
+            raise self.ReviewRevisionMismatch(
+                "active approval does not match the nominated snapshot"
             )
 
-        published_content = self._canonicalize_for_persistence(
-            approved.content_jsonb, publish=True
-        )
+        published_content = deepcopy(approved.content_jsonb)
         published = await self._append_revision(
             pp,
             state="published",

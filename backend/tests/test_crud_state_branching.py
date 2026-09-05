@@ -272,6 +272,24 @@ async def test_curator_list_includes_non_published(
     )
 
 
+@pytest.mark.asyncio
+async def test_curator_list_preserves_physical_state_and_adds_effective_state(
+    async_client, clone_in_progress_record, curator_headers
+):
+    """Curator list rows distinguish published physical and draft effective state."""
+    record = clone_in_progress_record["record"]
+    response = await async_client.get(_list_url(), headers=curator_headers)
+    assert response.status_code == 200, response.text
+    row = next(
+        item
+        for item in response.json()["data"]
+        if item.get("id") == record.phenopacket["id"]
+    )
+
+    assert row["state"] == "published"
+    assert row["effective_state"] == "draft"
+
+
 # ---------------------------------------------------------------------------
 # Non-curator state field is null
 # ---------------------------------------------------------------------------
@@ -291,6 +309,38 @@ async def test_non_curator_state_field_is_null(
     body = resp.json()
 
     assert body.get("state") is None
+    assert body.get("transition_capabilities") == []
+
+
+@pytest.mark.asyncio
+async def test_detail_projects_actor_specific_structural_transition_capabilities(
+    async_client,
+    draft_record,
+    published_record,
+    curator_headers,
+    admin_headers,
+):
+    """Detail actions come from the backend and preserve published archival."""
+    owner_response = await async_client.get(
+        _pp_url(draft_record.phenopacket_id), headers=curator_headers
+    )
+    published_response = await async_client.get(
+        _pp_url(published_record.phenopacket_id), headers=admin_headers
+    )
+
+    assert owner_response.status_code == 200, owner_response.text
+    assert owner_response.json()["transition_capabilities"] == [
+        {"action": "submit", "allowed": True, "blocked_by": []},
+        {
+            "action": "archive",
+            "allowed": False,
+            "blocked_by": ["forbidden_role"],
+        },
+    ]
+    assert published_response.status_code == 200, published_response.text
+    assert published_response.json()["transition_capabilities"] == [
+        {"action": "archive", "allowed": True, "blocked_by": []}
+    ]
 
 
 # ---------------------------------------------------------------------------

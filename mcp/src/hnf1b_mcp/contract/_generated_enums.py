@@ -131,6 +131,20 @@ COMPARISON_VALUES: tuple[str, ...] = (
 DiabetesType = Literal["Type 1", "Type 2", "MODY"]
 DIABETES_TYPE_VALUES: tuple[str, ...] = ("Type 1", "Type 2", "MODY")
 
+FilterEligibility = Literal["reviewable_by_me", "all"]
+FILTER_ELIGIBILITY_VALUES: tuple[str, ...] = ("reviewable_by_me", "all")
+
+FilterIssues = Literal["open", "none", "all"]
+FILTER_ISSUES_VALUES: tuple[str, ...] = ("open", "none", "all")
+
+FilterState = Literal["draft", "in_review", "changes_requested", "approved"]
+FILTER_STATE_VALUES: tuple[str, ...] = (
+    "draft",
+    "in_review",
+    "changes_requested",
+    "approved",
+)
+
 ReportingMode = Literal["all_cases", "reported_only"]
 REPORTING_MODE_VALUES: tuple[str, ...] = ("all_cases", "reported_only")
 

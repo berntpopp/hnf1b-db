@@ -12,27 +12,29 @@ on {id} and surface as 422.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import (
-    require_comment_author_or_admin,
-    require_curator,
-)
+from app.auth.dependencies import require_curator
 from app.comments.models import Comment
 from app.comments.schemas import (
     CommentCreate,
     CommentEditResponse,
     CommentMentionOut,
+    CommentResolutionEventOut,
     CommentResponse,
     CommentUpdate,
+    ReviewIssueReopenRequest,
+    ReviewIssueResolveRequest,
 )
 from app.comments.service import CommentsService
+from app.core.api_models import ApiErrorEnvelope
 from app.database import get_db
 from app.models.user import User
+from app.phenopackets.review.policy import ReviewPolicyError
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ async def _build_comment_response(
     *,
     mentions_by_id: Optional[Dict[int, List[User]]] = None,
     edited_by_id: Optional[Dict[int, bool]] = None,
+    resolution_events_by_id: Optional[Dict[int, List[Any]]] = None,
 ) -> CommentResponse:
     """Assemble a CommentResponse from an eager-loaded Comment ORM row.
 
@@ -79,6 +82,22 @@ async def _build_comment_response(
     else:
         edited = len(await svc.list_edits(comment.id)) > 0
 
+    if resolution_events_by_id is None:
+        resolution_events_by_id = await svc.load_resolution_events([comment.id])
+    resolution_events = [
+        CommentResolutionEventOut(
+            id=item.id,
+            action=cast(Any, item.action),
+            disposition=cast(Any, item.disposition),
+            rationale=item.rationale,
+            actor_id=item.actor_id,
+            actor_username=item.actor.username,
+            actor_role=cast(Any, item.actor_role),
+            created_at=item.created_at,
+        )
+        for item in resolution_events_by_id.get(comment.id, [])
+    ]
+
     resolved_by_username = comment.resolved_by.username if comment.resolved_by else None
     return CommentResponse(
         id=comment.id,
@@ -97,6 +116,9 @@ async def _build_comment_response(
         updated_at=comment.updated_at,
         deleted_at=comment.deleted_at,
         deleted_by_id=comment.deleted_by_id,
+        review_revision_id=comment.review_revision_id,
+        is_blocking_issue=comment.review_revision_id is not None,
+        resolution_events=resolution_events,
     )
 
 
@@ -137,6 +159,38 @@ def _map_service_error(exc: Exception) -> HTTPException:
             status_code=404,
             detail={"code": "not_found", "message": str(exc)},
         )
+    if isinstance(exc, CommentsService.IssueInputInvalid):
+        return HTTPException(
+            status_code=422,
+            detail={"code": "review_issue_input_invalid", "message": str(exc)},
+        )
+    conflict_errors = (
+        (CommentsService.RevisionMismatch, "revision_mismatch"),
+        (CommentsService.ReviewRevisionMismatch, "review_revision_mismatch"),
+        (CommentsService.ReviewClosed, "review_closed"),
+        (
+            CommentsService.ReviewIssueDeleteForbidden,
+            "review_issue_delete_forbidden",
+        ),
+    )
+    for error_type, code in conflict_errors:
+        if isinstance(exc, error_type):
+            return HTTPException(
+                status_code=409,
+                detail={"code": code, "message": str(exc)},
+            )
+    if isinstance(exc, ReviewPolicyError):
+        status_code = (
+            409 if exc.code in {"review_closed", "unresolved_review_issues"} else 403
+        )
+        return HTTPException(
+            status_code=status_code,
+            detail={
+                "code": exc.code,
+                "message": exc.message,
+                **({"context": exc.context} if exc.context else {}),
+            },
+        )
     # Unmapped exception path: log the real cause server-side, return a
     # generic 500 so we don't leak SQL fragments / stack context to the
     # client (Copilot PR #254 routers.py:137).
@@ -152,7 +206,14 @@ def _map_service_error(exc: Exception) -> HTTPException:
 # ---------------------------------------------------------------------------
 
 
-@router.post("", response_model=CommentResponse, status_code=201)
+@router.post(
+    "",
+    response_model=CommentResponse,
+    status_code=201,
+    responses={
+        status: {"model": ApiErrorEnvelope} for status in (401, 403, 404, 409, 422, 500)
+    },
+)
 async def create_comment(
     body: CommentCreate,
     db: AsyncSession = Depends(get_db),
@@ -167,10 +228,15 @@ async def create_comment(
             body_markdown=body.body_markdown,
             mention_user_ids=body.mention_user_ids,
             actor=current_user,
+            record_revision=body.record_revision,
+            review_revision_id=body.review_revision_id,
         )
+        response = await _build_comment_response(svc, comment)
+        await db.commit()
+        return response
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return await _build_comment_response(svc, comment)
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +279,14 @@ async def list_comments(
     comment_ids = [c.id for c in rows]
     mentions_by_id = await svc.load_mentions(comment_ids)
     edited_by_id = await svc.bulk_edit_existence(comment_ids)
+    resolution_events_by_id = await svc.load_resolution_events(comment_ids)
     data = [
         await _build_comment_response(
-            svc, c, mentions_by_id=mentions_by_id, edited_by_id=edited_by_id
+            svc,
+            c,
+            mentions_by_id=mentions_by_id,
+            edited_by_id=edited_by_id,
+            resolution_events_by_id=resolution_events_by_id,
         )
         for c in rows
     ]
@@ -267,9 +338,12 @@ async def update_comment(
             mention_user_ids=body.mention_user_ids,
             actor=current_user,
         )
+        response = await _build_comment_response(svc, comment)
+        await db.commit()
+        return response
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return await _build_comment_response(svc, comment)
 
 
 # ---------------------------------------------------------------------------
@@ -277,34 +351,62 @@ async def update_comment(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/{comment_id}/resolve", response_model=CommentResponse)
+@router.post(
+    "/{comment_id}/resolve",
+    response_model=CommentResponse,
+    responses={
+        status: {"model": ApiErrorEnvelope} for status in (401, 403, 404, 409, 422, 500)
+    },
+)
 async def resolve_comment(
     comment_id: int,
+    body: ReviewIssueResolveRequest | dict[str, Any] | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ) -> CommentResponse:
     """Mark a comment as resolved."""
     svc = CommentsService(db)
     try:
-        comment = await svc.resolve(comment_id=comment_id, actor=current_user)
+        comment = await svc.resolve(
+            comment_id=comment_id,
+            actor=current_user,
+            issue_input=body,
+        )
+        response = await _build_comment_response(svc, comment)
+        await db.commit()
+        return response
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return await _build_comment_response(svc, comment)
 
 
-@router.post("/{comment_id}/unresolve", response_model=CommentResponse)
+@router.post(
+    "/{comment_id}/unresolve",
+    response_model=CommentResponse,
+    responses={
+        status: {"model": ApiErrorEnvelope} for status in (401, 403, 404, 409, 422, 500)
+    },
+)
 async def unresolve_comment(
     comment_id: int,
+    body: ReviewIssueReopenRequest | dict[str, Any] | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ) -> CommentResponse:
     """Clear the resolved flag on a comment."""
     svc = CommentsService(db)
     try:
-        comment = await svc.unresolve(comment_id=comment_id, actor=current_user)
+        comment = await svc.unresolve(
+            comment_id=comment_id,
+            actor=current_user,
+            issue_input=body,
+        )
+        response = await _build_comment_response(svc, comment)
+        await db.commit()
+        return response
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return await _build_comment_response(svc, comment)
 
 
 # ---------------------------------------------------------------------------
@@ -316,15 +418,17 @@ async def unresolve_comment(
 async def delete_comment(
     comment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_comment_author_or_admin),
+    current_user: User = Depends(require_curator),
 ) -> Response:
     """Soft-delete a comment (author or admin only)."""
     svc = CommentsService(db)
     try:
         await svc.soft_delete(comment_id=comment_id, actor=current_user)
+        await db.commit()
+        return Response(status_code=204)
     except Exception as exc:
+        await db.rollback()
         raise _map_service_error(exc) from exc
-    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------------------

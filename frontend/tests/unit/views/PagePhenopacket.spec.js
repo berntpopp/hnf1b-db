@@ -10,6 +10,10 @@ vi.mock('@/api', () => ({
   exportPhenopacket: vi.fn(),
 }));
 
+vi.mock('@/api/domain/reviews', () => ({
+  getReviewContext: vi.fn(),
+}));
+
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: vi.fn(),
 }));
@@ -31,12 +35,14 @@ vi.mock('vue-router', () => ({
 }));
 
 import { exportPhenopacket, getPhenopacket } from '@/api';
+import { getReviewContext } from '@/api/domain/reviews';
 import { useAuthStore } from '@/stores/authStore';
 import { usePhenopacketState } from '@/composables/usePhenopacketState';
 import { useRoute } from 'vue-router';
 
 const basePhenopacketResponse = {
   id: 'record-uuid',
+  phenopacket_id: 'PP-001',
   phenopacket: {
     id: 'PP-001',
     subject: {
@@ -50,6 +56,51 @@ const basePhenopacketResponse = {
   },
   revision: 7,
   effective_state: 'approved',
+  transition_capabilities: [{ action: 'archive', allowed: false, blocked_by: ['forbidden_role'] }],
+};
+
+const reviewContextResponse = {
+  record_id: 'record-uuid',
+  phenopacket_id: 'PP-001',
+  subject_label: 'SUB-001',
+  physical_state: 'approved',
+  effective_state: 'approved',
+  record_revision: 7,
+  has_published_head: false,
+  owner: { id: 42, username: 'curator.user', display_name: null },
+  candidate: {
+    id: 12,
+    revision_number: 7,
+    state: 'in_review',
+    content_sha256: `sha256:${'1'.repeat(64)}`,
+    created_at: '2026-08-30T10:00:00Z',
+    actor: { id: 42, username: 'curator.user', display_name: null },
+    actor_role: 'curator',
+    actor_role_at_decision_recorded: true,
+    content: { id: 'PP-001' },
+  },
+  baseline: null,
+  approved: null,
+  semantic_changes: [],
+  audit: {
+    owner: { id: 42, username: 'curator.user', display_name: null },
+    submission: null,
+    contributors: [],
+    approval: null,
+    publication: null,
+  },
+  discussion_summary: {
+    total_comments: 0,
+    ordinary_comments: 0,
+    blocking_issues: 0,
+    open_blocking_issues: 0,
+  },
+  issues: [],
+  capabilities: [
+    { action: 'request_changes', allowed: true, blocked_by: [] },
+    { action: 'publish', allowed: false, blocked_by: ['forbidden_role'] },
+    { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+  ],
 };
 
 function createAuthStore(role) {
@@ -61,6 +112,14 @@ function createAuthStore(role) {
     },
     isCurator: ['curator', 'admin'].includes(role),
   });
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 describe('PagePhenopacket', () => {
@@ -87,6 +146,7 @@ describe('PagePhenopacket', () => {
     });
 
     getPhenopacket.mockResolvedValue({ data: basePhenopacketResponse });
+    getReviewContext.mockResolvedValue({ data: reviewContextResponse });
     exportPhenopacket.mockResolvedValue({ data: basePhenopacketResponse.phenopacket });
 
     usePhenopacketState.mockReturnValue({
@@ -226,12 +286,12 @@ describe('PagePhenopacket', () => {
     await flushPromises();
     expect(loadHistoryMock).toHaveBeenCalledTimes(1);
 
-    wrapper.vm.pendingTargetState = 'approved';
-    wrapper.vm.phenopacketMeta = { revision: 7 };
+    wrapper.vm.pendingTargetState = 'archived';
+    wrapper.vm.phenopacketMeta = { ...basePhenopacketResponse, revision: 7 };
 
-    await wrapper.vm.onTransitionConfirm({ reason: 'Approved after review' });
+    await wrapper.vm.onTransitionConfirm({ reason: 'Archive obsolete record' });
 
-    expect(transitionToMock).toHaveBeenCalledWith('approved', 'Approved after review', 7);
+    expect(transitionToMock).toHaveBeenCalledWith('archived', 'Archive obsolete record', 7);
     expect(loadHistoryMock).toHaveBeenCalledTimes(2);
   });
 
@@ -343,16 +403,16 @@ describe('PagePhenopacket', () => {
     const inFlightLoad = wrapper.vm.historyLoadPromise;
     expect(loadHistoryMock).toHaveBeenCalledTimes(1);
 
-    wrapper.vm.pendingTargetState = 'approved';
-    wrapper.vm.phenopacketMeta = { revision: 7 };
+    wrapper.vm.pendingTargetState = 'archived';
+    wrapper.vm.phenopacketMeta = { ...basePhenopacketResponse, revision: 7 };
 
-    const transitionPromise = wrapper.vm.onTransitionConfirm({ reason: 'Approved after review' });
+    const transitionPromise = wrapper.vm.onTransitionConfirm({ reason: 'Archive obsolete record' });
     resolveFirstHistoryLoad();
 
     await Promise.all([inFlightLoad, transitionPromise]);
     await flushPromises();
 
-    expect(transitionToMock).toHaveBeenCalledWith('approved', 'Approved after review', 7);
+    expect(transitionToMock).toHaveBeenCalledWith('archived', 'Archive obsolete record', 7);
     expect(loadHistoryMock).toHaveBeenCalledTimes(2);
   });
 
@@ -398,5 +458,353 @@ describe('PagePhenopacket', () => {
 
     expect(wrapper.vm.ageDisplay).toBe('32 weeks 3 days');
     expect(wrapper.text()).toContain('32 weeks 3 days');
+  });
+
+  it('uses coherent review-context capability ordering and opens the named review route', async () => {
+    useAuthStore.mockReturnValue(createAuthStore('curator'));
+    getPhenopacket.mockResolvedValue({
+      data: {
+        ...basePhenopacketResponse,
+        phenopacket: {
+          ...basePhenopacketResponse.phenopacket,
+          id: 'CONTENT-ID-MUST-NOT-BECOME-ROUTE-ID',
+        },
+      },
+    });
+    const push = vi.fn();
+    const wrapper = shallowMount(PagePhenopacket, {
+      global: {
+        mocks: {
+          $route: {
+            params: { phenopacket_id: 'PP-001' },
+            path: '/phenopackets/PP-001',
+          },
+          $router: { push, back: vi.fn() },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    expect(getReviewContext).toHaveBeenCalledTimes(1);
+    expect(getReviewContext).toHaveBeenCalledWith('PP-001');
+    const menu = wrapper.getComponent({ name: 'TransitionMenu' });
+    expect(menu.props('capabilities')).toEqual([
+      { action: 'request_changes', allowed: true, blocked_by: [] },
+      { action: 'publish', allowed: false, blocked_by: ['forbidden_role'] },
+      { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+    ]);
+    expect(menu.props()).not.toHaveProperty('role');
+    expect(menu.props()).not.toHaveProperty('isOwner');
+    expect(menu.props()).not.toHaveProperty('currentState');
+    expect(wrapper.text()).toContain('Open review workspace');
+
+    menu.vm.$emit('open-review', 'request_changes');
+    await nextTick();
+
+    expect(push).toHaveBeenCalledWith({
+      name: 'PhenopacketReview',
+      params: { phenopacket_id: 'PP-001' },
+    });
+  });
+
+  it('never unions mismatched revisions and adopts coherent retry context ordering', async () => {
+    useAuthStore.mockReturnValue(createAuthStore('curator'));
+    const retryDetail = deferred();
+    const retryContext = deferred();
+    const structuralFallback = [
+      { action: 'submit', allowed: true, blocked_by: [] },
+      { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+    ];
+    getPhenopacket
+      .mockResolvedValueOnce({
+        data: {
+          ...basePhenopacketResponse,
+          revision: 7,
+          effective_state: 'draft',
+          transition_capabilities: structuralFallback,
+        },
+      })
+      .mockReturnValueOnce(retryDetail.promise);
+    getReviewContext
+      .mockResolvedValueOnce({
+        data: {
+          ...reviewContextResponse,
+          effective_state: 'in_review',
+          record_revision: 8,
+          capabilities: [{ action: 'approve', allowed: true, blocked_by: [] }],
+        },
+      })
+      .mockReturnValueOnce(retryContext.promise);
+
+    const wrapper = shallowMount(PagePhenopacket, {
+      global: {
+        mocks: {
+          $route: {
+            params: { phenopacket_id: 'PP-001' },
+            path: '/phenopackets/PP-001',
+          },
+          $router: { push: vi.fn(), back: vi.fn() },
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(getPhenopacket).toHaveBeenCalledTimes(2);
+    expect(wrapper.vm.reviewContext).toBeNull();
+    expect(wrapper.vm.transitionCapabilities).toEqual(structuralFallback);
+    expect(wrapper.vm.transitionCapabilities).not.toContainEqual(
+      expect.objectContaining({ action: 'approve' })
+    );
+
+    retryDetail.resolve({
+      data: {
+        ...basePhenopacketResponse,
+        revision: 8,
+        effective_state: 'in_review',
+        transition_capabilities: [
+          { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+        ],
+      },
+    });
+    await flushPromises();
+    retryContext.resolve({
+      data: {
+        ...reviewContextResponse,
+        effective_state: 'in_review',
+        record_revision: 8,
+        capabilities: [
+          { action: 'withdraw', allowed: true, blocked_by: [] },
+          { action: 'request_changes', allowed: true, blocked_by: [] },
+          { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+        ],
+      },
+    });
+    await flushPromises();
+
+    expect(getReviewContext).toHaveBeenCalledTimes(2);
+    expect(wrapper.vm.transitionCapabilities).toEqual([
+      { action: 'withdraw', allowed: true, blocked_by: [] },
+      { action: 'request_changes', allowed: true, blocked_by: [] },
+      { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+    ]);
+  });
+
+  it('bounds persistent context mismatch and retains only retry detail structural actions', async () => {
+    useAuthStore.mockReturnValue(createAuthStore('curator'));
+    getPhenopacket
+      .mockResolvedValueOnce({
+        data: {
+          ...basePhenopacketResponse,
+          revision: 7,
+          effective_state: 'draft',
+          transition_capabilities: [{ action: 'submit', allowed: true, blocked_by: [] }],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          ...basePhenopacketResponse,
+          revision: 8,
+          effective_state: 'in_review',
+          transition_capabilities: [
+            { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+          ],
+        },
+      });
+    getReviewContext
+      .mockResolvedValueOnce({
+        data: {
+          ...reviewContextResponse,
+          record_revision: 8,
+          capabilities: [{ action: 'approve', allowed: true, blocked_by: [] }],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          ...reviewContextResponse,
+          record_id: 'different-record-uuid',
+          record_revision: 8,
+          capabilities: [{ action: 'request_changes', allowed: true, blocked_by: [] }],
+        },
+      });
+
+    const wrapper = shallowMount(PagePhenopacket, {
+      global: {
+        mocks: {
+          $route: {
+            params: { phenopacket_id: 'PP-001' },
+            path: '/phenopackets/PP-001',
+          },
+          $router: { push: vi.fn(), back: vi.fn() },
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(getPhenopacket).toHaveBeenCalledTimes(2);
+    expect(getReviewContext).toHaveBeenCalledTimes(2);
+    expect(wrapper.vm.reviewContext).toBeNull();
+    expect(wrapper.vm.transitionCapabilities).toEqual([
+      { action: 'archive', allowed: false, blocked_by: ['forbidden_role'] },
+    ]);
+    expect(wrapper.vm.hasReviewWorkspace).toBe(false);
+  });
+
+  it('fails exact review actions closed while retaining detail structural capabilities', async () => {
+    useAuthStore.mockReturnValue(createAuthStore('admin'));
+    getPhenopacket.mockResolvedValue({
+      data: {
+        ...basePhenopacketResponse,
+        effective_state: 'published',
+        transition_capabilities: [{ action: 'archive', allowed: true, blocked_by: [] }],
+      },
+    });
+    getReviewContext.mockRejectedValueOnce(
+      Object.assign(new Error('Phenopacket not found'), { response: { status: 404 } })
+    );
+
+    const wrapper = shallowMount(PagePhenopacket, {
+      global: {
+        mocks: {
+          $route: {
+            params: { phenopacket_id: 'PP-001' },
+            path: '/phenopackets/PP-001',
+          },
+          $router: { push: vi.fn(), back: vi.fn() },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    expect(wrapper.vm.reviewContext).toBeNull();
+    expect(wrapper.getComponent({ name: 'TransitionMenu' }).props('capabilities')).toEqual([
+      { action: 'archive', allowed: true, blocked_by: [] },
+    ]);
+    expect(wrapper.text()).not.toContain('Open review workspace');
+    expect(window.logService.error).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stale context response after a newer detail load owns the request', async () => {
+    useAuthStore.mockReturnValue(createAuthStore('curator'));
+    const staleContext = deferred();
+    const nextDetail = deferred();
+    const route = reactive({
+      params: { phenopacket_id: 'PP-001' },
+      path: '/phenopackets/PP-001',
+    });
+    useRoute.mockReturnValue(route);
+    getPhenopacket.mockImplementation((phenopacketId) => {
+      const response = {
+        data: {
+          ...basePhenopacketResponse,
+          phenopacket_id: phenopacketId,
+          phenopacket: {
+            ...basePhenopacketResponse.phenopacket,
+            id: `content-${phenopacketId}`,
+          },
+        },
+      };
+      return phenopacketId === 'PP-002' ? nextDetail.promise : Promise.resolve(response);
+    });
+    getReviewContext.mockImplementation((phenopacketId) => {
+      if (phenopacketId === 'PP-001') return staleContext.promise;
+      return Promise.resolve({
+        data: {
+          ...reviewContextResponse,
+          phenopacket_id: phenopacketId,
+          capabilities: [{ action: 'approve', allowed: true, blocked_by: [] }],
+        },
+      });
+    });
+
+    const wrapper = shallowMount(PagePhenopacket, {
+      global: {
+        mocks: {
+          $route: route,
+          $router: { push: vi.fn(), back: vi.fn() },
+        },
+      },
+    });
+    await nextTick();
+    await nextTick();
+    expect(getReviewContext).toHaveBeenCalledWith('PP-001');
+
+    route.params.phenopacket_id = 'PP-002';
+    route.path = '/phenopackets/PP-002';
+    await nextTick();
+    expect(getPhenopacket).toHaveBeenLastCalledWith('PP-002');
+
+    staleContext.resolve({ data: reviewContextResponse });
+    await flushPromises();
+    expect(wrapper.vm.reviewContext).toBeNull();
+    expect(wrapper.vm.loading).toBe(true);
+
+    nextDetail.resolve({
+      data: {
+        ...basePhenopacketResponse,
+        phenopacket_id: 'PP-002',
+        phenopacket: { ...basePhenopacketResponse.phenopacket, id: 'content-PP-002' },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.vm.reviewContext.phenopacket_id).toBe('PP-002');
+    expect(wrapper.vm.transitionCapabilities).toContainEqual({
+      action: 'approve',
+      allowed: true,
+      blocked_by: [],
+    });
+  });
+
+  it('ignores an older detail response that resolves after the newer record', async () => {
+    useAuthStore.mockReturnValue(createAuthStore('curator'));
+    const staleDetail = deferred();
+    const route = reactive({
+      params: { phenopacket_id: 'PP-001' },
+      path: '/phenopackets/PP-001',
+    });
+    useRoute.mockReturnValue(route);
+    getPhenopacket.mockImplementation((phenopacketId) => {
+      if (phenopacketId === 'PP-001') return staleDetail.promise;
+      return Promise.resolve({
+        data: {
+          ...basePhenopacketResponse,
+          phenopacket_id: 'PP-002',
+          phenopacket: { ...basePhenopacketResponse.phenopacket, id: 'content-PP-002' },
+          transition_capabilities: [{ action: 'archive', allowed: true, blocked_by: [] }],
+        },
+      });
+    });
+    getReviewContext.mockResolvedValue({
+      data: {
+        ...reviewContextResponse,
+        phenopacket_id: 'PP-002',
+        capabilities: [{ action: 'approve', allowed: true, blocked_by: [] }],
+      },
+    });
+
+    const wrapper = shallowMount(PagePhenopacket, {
+      global: {
+        mocks: {
+          $route: route,
+          $router: { push: vi.fn(), back: vi.fn() },
+        },
+      },
+    });
+    await nextTick();
+    expect(getPhenopacket).toHaveBeenCalledWith('PP-001');
+
+    route.params.phenopacket_id = 'PP-002';
+    route.path = '/phenopackets/PP-002';
+    await flushPromises();
+    expect(wrapper.vm.phenopacketMeta.phenopacket_id).toBe('PP-002');
+
+    staleDetail.resolve({ data: basePhenopacketResponse });
+    await flushPromises();
+
+    expect(wrapper.vm.phenopacketMeta.phenopacket_id).toBe('PP-002');
+    expect(wrapper.vm.reviewContext.phenopacket_id).toBe('PP-002');
+    expect(wrapper.vm.loading).toBe(false);
   });
 });
