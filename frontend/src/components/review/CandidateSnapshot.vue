@@ -11,6 +11,7 @@
       <DiseasesCard :diseases="content.diseases || []" />
       <InterpretationsCard :interpretations="content.interpretations || []" />
       <MeasurementsCard :measurements="content.measurements || []" />
+      <Hnf1bCurationCard v-if="content.hnf1bCuration" :curation="content.hnf1bCuration" />
       <MetadataCard v-if="content.metaData" :meta-data="content.metaData" />
     </div>
 
@@ -25,6 +26,7 @@
 import { computed } from 'vue';
 
 import DiseasesCard from '@/components/phenopacket/DiseasesCard.vue';
+import Hnf1bCurationCard from '@/components/phenopacket/Hnf1bCurationCard.vue';
 import InterpretationsCard from '@/components/phenopacket/InterpretationsCard.vue';
 import MeasurementsCard from '@/components/phenopacket/MeasurementsCard.vue';
 import MetadataCard from '@/components/phenopacket/MetadataCard.vue';
@@ -43,6 +45,7 @@ const DISPLAYED_FIELDS = new Set([
   'diseases',
   'interpretations',
   'measurements',
+  'hnf1bCuration',
   'metaData',
 ]);
 

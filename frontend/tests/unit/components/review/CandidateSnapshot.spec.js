@@ -11,6 +11,7 @@ const content = {
   interpretations: [{ id: 'I-1', progressStatus: 'SOLVED' }],
   measurements: [{ id: 'M-1', value: { quantity: { value: 1 } } }],
   metaData: { created: '2026-08-14T00:00:00Z' },
+  hnf1bCuration: { cohort: 'born', detectionMethod: 'sequencing' },
   customExtension: { raw: '<script>alert(1)</script>', preserved: true },
 };
 
@@ -37,6 +38,9 @@ describe('CandidateSnapshot', () => {
     expect(wrapper.getComponent({ name: 'MeasurementsCard' }).props('measurements')).toEqual(
       content.measurements
     );
+    expect(wrapper.getComponent({ name: 'Hnf1bCurationCard' }).props('curation')).toEqual(
+      content.hnf1bCuration
+    );
     expect(wrapper.getComponent({ name: 'MetadataCard' }).props('metaData')).toEqual(
       content.metaData
     );
@@ -48,6 +52,7 @@ describe('CandidateSnapshot', () => {
     expect(wrapper.text()).toContain('Raw extension content');
     expect(wrapper.text()).toContain('customExtension');
     expect(wrapper.text()).toContain('preserved');
+    expect(wrapper.text()).not.toContain('hnf1bCuration');
     expect(wrapper.html()).not.toContain('<script>');
   });
 });

@@ -37,7 +37,14 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" :disabled="submitting" @click="close(false)">Cancel</v-btn>
+          <v-btn
+            data-testid="issue-cancel"
+            variant="text"
+            :disabled="submitting"
+            @click="close(false)"
+          >
+            Cancel
+          </v-btn>
           <v-btn
             data-testid="issue-submit"
             color="primary"

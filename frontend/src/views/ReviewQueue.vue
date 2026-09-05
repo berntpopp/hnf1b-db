@@ -97,24 +97,49 @@
         </template>
 
         <template #item.open_issue_count="{ item }">
-          <span :aria-label="issueLabel(item.open_issue_count)">
+          <v-chip
+            v-if="item.open_issue_count > 0"
+            size="x-small"
+            color="warning"
+            variant="tonal"
+            class="font-weight-medium"
+            :aria-label="issueLabel(item.open_issue_count)"
+          >
+            <v-icon start size="x-small">mdi-alert-circle-outline</v-icon>
+            {{ issueLabel(item.open_issue_count) }}
+          </v-chip>
+          <span
+            v-else
+            class="text-caption text-medium-emphasis"
+            :aria-label="issueLabel(item.open_issue_count)"
+          >
             {{ issueLabel(item.open_issue_count) }}
           </span>
         </template>
 
         <template #item.eligibility="{ item }">
-          {{ eligibilityLabel(item) }}
+          <v-chip
+            size="x-small"
+            :color="isReviewable(item) ? 'success' : 'default'"
+            :variant="isReviewable(item) ? 'tonal' : 'outlined'"
+            class="font-weight-medium"
+          >
+            <v-icon start size="x-small">
+              {{ isReviewable(item) ? 'mdi-account-check-outline' : 'mdi-account-lock-outline' }}
+            </v-icon>
+            {{ eligibilityLabel(item) }}
+          </v-chip>
         </template>
 
         <template #item.actions="{ item }">
           <v-btn
             class="review-link"
-            color="primary"
+            :color="isReviewable(item) ? 'primary' : 'default'"
             size="small"
             variant="tonal"
             :to="reviewLocation(item)"
           >
-            Review
+            {{ actionButtonLabel(item) }}
           </v-btn>
         </template>
 
@@ -250,13 +275,20 @@ function issueLabel(count) {
   return `${count || 0} open issue${count === 1 ? '' : 's'}`;
 }
 
-function eligibilityLabel(item) {
+function isReviewable(item) {
   const decisions = item.capabilities || [];
   return decisions.some(
     (capability) => ['approve', 'request_changes'].includes(capability.action) && capability.allowed
-  )
-    ? 'Reviewable by you'
-    : 'Not reviewable by you';
+  );
+}
+
+function actionButtonLabel(item) {
+  if (queue.tab.value === 'my-drafts') return 'Open';
+  return isReviewable(item) ? 'Review' : 'Inspect';
+}
+
+function eligibilityLabel(item) {
+  return isReviewable(item) ? 'Reviewable by you' : 'Not reviewable by you';
 }
 
 function formatDate(value) {
