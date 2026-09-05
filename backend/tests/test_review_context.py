@@ -115,6 +115,92 @@ def test_semantic_changes_are_sectioned_literal_and_identity_aware() -> None:
     ]
 
 
+def test_semantic_changes_genomic_interpretations_identity_aware() -> None:
+    """Genomic interpretations with variationDescriptor.id match by identity, not index."""
+    baseline = {
+        "id": "case-1",
+        "interpretations": [
+            {
+                "id": "interp-1",
+                "diagnosis": {
+                    "genomicInterpretations": [
+                        {
+                            "subjectOrBiosampleId": "S1",
+                            "variantInterpretation": {
+                                "acmgPathogenicityClassification": "PATHOGENIC",
+                                "variationDescriptor": {
+                                    "id": "var:HNF1B:c.544C>T",
+                                    "label": "c.544C>T",
+                                },
+                            },
+                        },
+                        {
+                            "subjectOrBiosampleId": "S1",
+                            "variantInterpretation": {
+                                "acmgPathogenicityClassification": "BENIGN",
+                                "variationDescriptor": {
+                                    "id": "var:HNF1B:c.100A>G",
+                                    "label": "c.100A>G",
+                                },
+                            },
+                        },
+                    ]
+                },
+            }
+        ],
+    }
+    # Candidate reorders the variants and modifies one classification
+    candidate = {
+        "id": "case-1",
+        "interpretations": [
+            {
+                "id": "interp-1",
+                "diagnosis": {
+                    "genomicInterpretations": [
+                        {
+                            "subjectOrBiosampleId": "S1",
+                            "variantInterpretation": {
+                                "acmgPathogenicityClassification": "LIKELY_BENIGN",
+                                "variationDescriptor": {
+                                    "id": "var:HNF1B:c.100A>G",
+                                    "label": "c.100A>G",
+                                },
+                            },
+                        },
+                        {
+                            "subjectOrBiosampleId": "S1",
+                            "variantInterpretation": {
+                                "acmgPathogenicityClassification": "PATHOGENIC",
+                                "variationDescriptor": {
+                                    "id": "var:HNF1B:c.544C>T",
+                                    "label": "c.544C>T",
+                                },
+                            },
+                        },
+                    ]
+                },
+            }
+        ],
+    }
+
+    changes = [
+        item.model_dump(mode="json")
+        for item in ReviewService.semantic_changes(baseline, candidate)
+    ]
+
+    # Only the modified classification for c.100A>G is flagged as changed;
+    # c.544C>T is recognized as unchanged despite index shift!
+    assert len(changes) == 1
+    assert changes[0]["section"] == "Variants/Interpretations"
+    assert changes[0]["operation"] == "changed"
+    assert (
+        changes[0]["path"]
+        == "/interpretations/0/diagnosis/genomicInterpretations/0/variantInterpretation/acmgPathogenicityClassification"
+    )
+    assert changes[0]["before"] == "BENIGN"
+    assert changes[0]["after"] == "LIKELY_BENIGN"
+
+
 def test_new_record_semantic_changes_are_candidate_values_added() -> None:
     """A missing immutable public baseline never becomes a fake empty document."""
     candidate = {

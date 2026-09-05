@@ -52,4 +52,13 @@ describe('SemanticDiff', () => {
 
     expect(wrapper.text()).toContain('New phenopacket');
   });
+
+  it('groups changes by clinical section and provides section headers', () => {
+    const wrapper = mount(SemanticDiff, { props: { changes, baseline: { id: 8 } } });
+
+    expect(wrapper.text()).toContain('Subject');
+    expect(wrapper.text()).toContain('Phenotypes');
+    expect(wrapper.text()).toContain('Measurements');
+    expect(wrapper.findAll('.section-group').length).toBe(3);
+  });
 });

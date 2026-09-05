@@ -31,7 +31,18 @@ def _identity(value: Any) -> str | None:
     direct = value.get("id")
     if isinstance(direct, str):
         return direct
-    for key in ("type", "term", "measurement", "variantInterpretation"):
+    # For genomicInterpretations or variantInterpretations with variationDescriptor:
+    var_desc = value.get("variationDescriptor")
+    if isinstance(var_desc, dict) and isinstance(var_desc.get("id"), str):
+        return cast(str, var_desc["id"])
+    var_interp = value.get("variantInterpretation")
+    if isinstance(var_interp, dict):
+        if isinstance(var_interp.get("id"), str):
+            return cast(str, var_interp["id"])
+        nested_desc = var_interp.get("variationDescriptor")
+        if isinstance(nested_desc, dict) and isinstance(nested_desc.get("id"), str):
+            return cast(str, nested_desc["id"])
+    for key in ("type", "term", "measurement"):
         nested = value.get(key)
         if isinstance(nested, dict) and isinstance(nested.get("id"), str):
             return cast(str, nested["id"])
