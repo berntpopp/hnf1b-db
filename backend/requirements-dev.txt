@@ -191,7 +191,7 @@ pydantic-settings==2.15.0
     # via hnf1b-api
 pygments==2.21.0
     # via pytest
-pyjwt==2.13.0
+pyjwt==2.15.0
     # via hnf1b-api
 pytest==9.1.1
     # via
