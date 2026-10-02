@@ -150,7 +150,7 @@ pydantic==2.13.5
     #   ga4gh-vrs
     #   hnf1b-api
     #   pydantic-settings
-pydantic-core==2.46.5
+pydantic-core==2.49.0
     # via pydantic
 pydantic-settings==2.15.0
     # via hnf1b-api
