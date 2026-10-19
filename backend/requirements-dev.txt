@@ -258,7 +258,7 @@ tomli==2.4.1 ; python_full_version <= '3.11'
 tqdm==4.70.1
 types-cffi==2.1.0.20260827
     # via types-pyopenssl
-types-jsonschema==4.26.0.20260518
+types-jsonschema==4.26.0.20261006
 types-pyopenssl==24.1.0.20240722
     # via types-redis
 types-pyyaml==6.0.12.20260815
