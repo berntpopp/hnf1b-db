@@ -258,6 +258,33 @@ describe('PhenotypicFeaturesSection laterality (Task 7 §1)', () => {
 
     expect(original).toEqual(snapshot);
   });
+
+  it('preserves non-laterality compound modifiers when setting and clearing laterality [DATA-08]', async () => {
+    const severityModifier = { id: 'HP:0012828', label: 'Severe' };
+    const feature = {
+      type: { id: 'HP:0000122', label: 'Unilateral renal agenesis' },
+      excluded: false,
+      modifiers: [severityModifier, { id: 'HP:0012835', label: 'Left' }],
+    };
+    const wrapper = mountSection([feature]);
+    await flushPromises();
+
+    const select = findSelectByLabelSubstring(wrapper, 'Unilateral renal agenesis');
+    expect(select.props('modelValue')).toBe('HP:0012835');
+
+    // Change laterality to Right: severity must remain intact
+    await select.vm.$emit('update:modelValue', 'HP:0012834');
+    const updated = wrapper.emitted('update:modelValue').at(-1)[0];
+    expect(updated[0].modifiers).toEqual([
+      severityModifier,
+      { id: 'HP:0012834', label: 'Right' },
+    ]);
+
+    // Clear laterality: severity must still remain intact
+    await select.vm.$emit('update:modelValue', null);
+    const cleared = wrapper.emitted('update:modelValue').at(-1)[0];
+    expect(cleared[0].modifiers).toEqual([severityModifier]);
+  });
 });
 
 // ── KidneyBiopsy verification (Task 7 §2) ────────────────────────────────────

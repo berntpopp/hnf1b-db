@@ -249,22 +249,24 @@ export default {
     },
 
     formatExternalReferenceUrl(ref) {
-      // If reference is already a URL, use it
-      if (ref.reference) {
-        return ref.reference;
+      if (!ref) return '#';
+
+      // If reference is already a valid HTTP(S) URL, use it
+      if (ref.reference && /^https?:\/\//i.test(ref.reference.trim())) {
+        return ref.reference.trim();
       }
 
       // Otherwise, construct URL based on ID type
-      if (ref.id.startsWith('PMID:')) {
+      if (ref.id && ref.id.startsWith('PMID:')) {
         const pmid = ref.id.replace('PMID:', '');
         return `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`;
-      } else if (ref.id.startsWith('DOI:')) {
+      } else if (ref.id && ref.id.startsWith('DOI:')) {
         const doi = ref.id.replace('DOI:', '');
         return `https://doi.org/${doi}`;
       }
 
-      // Fallback to reference field or empty
-      return ref.reference || '#';
+      // Fallback
+      return '#';
     },
 
     getPmidNumber(pmidId) {

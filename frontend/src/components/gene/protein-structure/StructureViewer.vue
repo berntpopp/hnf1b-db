@@ -20,7 +20,6 @@
 </template>
 
 <script>
-import * as NGL from 'ngl';
 import { markRaw } from 'vue';
 import {
   DNADistanceCalculator,
@@ -33,6 +32,7 @@ import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomai
 
 // Store NGL objects outside Vue's reactivity system
 // This prevents Vue 3 Proxy conflicts with Three.js internal properties
+let NGL = null;
 let nglStage = null;
 let nglStructureComponent = null;
 let nglVariantRepresentation = null;
@@ -184,6 +184,10 @@ export default {
           nglLabelRepresentation = null;
           nglDistanceShape = null;
           distanceCalculator = null;
+        }
+
+        if (!NGL) {
+          NGL = await import('ngl');
         }
 
         // Initialize NGL Stage

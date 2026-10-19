@@ -58,6 +58,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { createUser } from '@/api';
+import { formatApiError } from '@/utils/apiError';
 
 const emit = defineEmits(['created']);
 
@@ -104,7 +105,7 @@ const handleSubmit = async () => {
     close();
   } catch (err) {
     window.logService.error('Failed to create user', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to create user';
+    error.value = formatApiError(err, 'Failed to create user');
   } finally {
     saving.value = false;
   }

@@ -36,6 +36,7 @@
           v-else-if="isEditing && curationMode !== 'legacy' && !loadError"
           :phenopacket-id="$route.params.phenopacket_id"
           :record-state="savedRecordState || 'draft'"
+          :phenopacket="phenopacket"
           :inert="showUnsavedDialog ? '' : undefined"
           @available="curationMode = 'ledger'"
           @unavailable="activateLegacyMode"

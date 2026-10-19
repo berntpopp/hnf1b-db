@@ -7,7 +7,7 @@
       :headers="displayHeaders"
       :items="variants"
       :loading="loading"
-      :items-length="variants.length"
+      :items-length="pagination.totalRecords"
       :custom-sort="customSort"
       hide-default-footer
       title="Variants Registry"

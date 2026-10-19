@@ -195,6 +195,7 @@ import ReportObservationList from './ReportObservationList.vue';
 const props = defineProps({
   phenopacketId: { type: String, required: true },
   recordState: { type: String, default: 'draft' },
+  phenopacket: { type: Object, default: null },
 });
 const emit = defineEmits(['available', 'unavailable', 'dirty-change']);
 const curation = usePhenopacketCuration(props.phenopacketId);
@@ -232,6 +233,16 @@ watch(
 );
 
 onMounted(async () => {
+  if (
+    props.phenopacket &&
+    !(
+      props.phenopacket?.metaData?.ext?.hnf1bCuration?.observationsById ||
+      props.phenopacket?.hnf1bCuration?.observationsById
+    )
+  ) {
+    emit('unavailable');
+    return;
+  }
   try {
     await curation.load();
     available.value = true;
