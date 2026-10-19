@@ -218,4 +218,3 @@ async def test_search_refresh_unauthorized_for_anonymous(
     """Anonymous request to /search/refresh must return 401."""
     resp = await async_client.post("/api/v2/search/refresh")
     assert resp.status_code == 401
-

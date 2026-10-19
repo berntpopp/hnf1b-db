@@ -358,10 +358,10 @@ async def get_liver_abnormalities(
         PhenopacketRevision.content_jsonb,
         text(
             "'$.measurements[*] ? ("
-            "@.assay.id == \"LOINC:1742-6\" || "
-            "@.assay.id == \"LOINC:1920-8\" || "
-            "@.assay.id == \"LOINC:6768-6\" || "
-            "@.assay.id == \"LOINC:1975-2\""
+            '@.assay.id == "LOINC:1742-6" || '
+            '@.assay.id == "LOINC:1920-8" || '
+            '@.assay.id == "LOINC:6768-6" || '
+            '@.assay.id == "LOINC:1975-2"'
             ")'::jsonpath"
         ),
     ).label("lft_result")

@@ -167,10 +167,18 @@ async def test_resolve_public_content_during_clone_uses_head_revision(
     await db_session.flush()
     await db_session.refresh(published_record)
 
-    # Sanity: working copy changed
-    assert published_record.phenopacket == new_content
+    # Sanity: phenopacket column is isolated and retains original public content
+    assert published_record.phenopacket == original_public_content
     # editing_revision_id is set (clone in progress)
     assert published_record.editing_revision_id is not None
+    # curator draft is stored in editing_revision
+    from app.phenopackets.models import PhenopacketRevision
+
+    editing_rev = await db_session.get(
+        PhenopacketRevision, published_record.editing_revision_id
+    )
+    assert editing_rev is not None
+    assert editing_rev.content_jsonb == new_content
 
     # resolve_public_content must return the OLD head content, not the new working copy
     public_content = await resolve_public_content(db_session, published_record)
@@ -200,7 +208,9 @@ async def test_resolve_public_content_returns_none_when_no_head(
 
 
 @pytest.mark.asyncio
-async def test_resolve_public_contents_batch(db_session, published_record, draft_record):
+async def test_resolve_public_contents_batch(
+    db_session, published_record, draft_record
+):
     """resolve_public_contents batch fetches published content in a single lookup."""
     # Batch query with both a published record and a draft record
     batch = await resolve_public_contents(db_session, [published_record, draft_record])
@@ -209,4 +219,3 @@ async def test_resolve_public_contents_batch(db_session, published_record, draft
 
     single = await resolve_public_content(db_session, published_record)
     assert batch[published_record.id] == single
-

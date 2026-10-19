@@ -26,7 +26,15 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -165,7 +173,13 @@ async def list_phenopackets(
 
     # Apply visibility filter
     if is_curator:
-        query = curator_filter(base_stmt)
+        query = curator_filter(base_stmt).outerjoin(
+            PhenopacketRevision,
+            PhenopacketRevision.id == Phenopacket.editing_revision_id,
+        )
+        public_json_column: Any = func.coalesce(
+            PhenopacketRevision.content_jsonb, Phenopacket.phenopacket
+        )
     else:
         # Public listing also drops synthetic e2e-* fixtures so they never
         # appear in anonymous discovery/browse. Single-record GET below keeps
@@ -173,9 +187,9 @@ async def list_phenopackets(
         query = public_head_query(base_stmt).where(
             Phenopacket.phenopacket_id.not_like("e2e-%")
         )
+        public_json_column = PhenopacketRevision.content_jsonb
 
     # Apply sex and variant filters
-    public_json_column = PhenopacketRevision.content_jsonb if not is_curator else None
     query = add_sex_filter(query, filter_sex, content=public_json_column)
     query = add_has_variants_filter(
         query, filter_has_variants, content=public_json_column
@@ -195,7 +209,10 @@ async def list_phenopackets(
     # Count (same filters, no sort/pagination)
     count_base = select(func.count()).select_from(Phenopacket)
     if is_curator:
-        count_base = curator_filter(count_base)
+        count_base = curator_filter(count_base).outerjoin(
+            PhenopacketRevision,
+            PhenopacketRevision.id == Phenopacket.editing_revision_id,
+        )
     else:
         count_base = public_head_query(count_base).where(
             Phenopacket.phenopacket_id.not_like("e2e-%")
@@ -447,7 +464,11 @@ async def export_phenopacket(
     except RepresentationValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    stmt = select(Phenopacket).where(Phenopacket.phenopacket_id == phenopacket_id)
+    stmt = (
+        select(Phenopacket)
+        .where(Phenopacket.phenopacket_id == phenopacket_id)
+        .options(selectinload(Phenopacket.editing_revision))
+    )
     stmt = (
         curator_filter(stmt)
         if selected_representation == "profile" and is_curator
@@ -490,6 +511,7 @@ async def export_phenopacket(
 @router.post("/", response_model=PhenopacketResponse)
 async def create_phenopacket(
     phenopacket_data: PhenopacketCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ):
@@ -501,7 +523,9 @@ async def create_phenopacket(
         409: Phenopacket with this ID already exists
         500: Database error
     """
-    service = PhenopacketService(PhenopacketRepository(db))
+    service = PhenopacketService(
+        PhenopacketRepository(db), background_tasks=background_tasks
+    )
     try:
         new_phenopacket = await service.create(
             phenopacket_data, actor_id=current_user.id
@@ -576,7 +600,7 @@ async def update_phenopacket(
     pp = await repo.get_by_id(phenopacket_id)
     if pp is None:
         raise HTTPException(status_code=404, detail="Phenopacket not found")
-    current_curation = pp.phenopacket.get("hnf1bCuration")
+    current_curation = resolve_curator_content(pp).get("hnf1bCuration")
     if isinstance(current_curation, dict) and "observationsById" in current_curation:
         raise HTTPException(
             status_code=409,
@@ -662,6 +686,7 @@ async def update_phenopacket(
 async def delete_phenopacket(
     phenopacket_id: str,
     delete_request: PhenopacketDelete,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ):
@@ -675,7 +700,9 @@ async def delete_phenopacket(
         404: Phenopacket not found or already deleted
         500: Database error
     """
-    service = PhenopacketService(PhenopacketRepository(db))
+    service = PhenopacketService(
+        PhenopacketRepository(db), background_tasks=background_tasks
+    )
     try:
         response = await service.soft_delete(
             phenopacket_id,

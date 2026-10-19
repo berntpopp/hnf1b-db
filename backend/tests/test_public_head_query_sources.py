@@ -53,4 +53,3 @@ def test_measurement_cases_query_uses_parameterized_jsonb_build_object():
     assert "jsonb_build_object" in sql
     assert "1234-5" not in sql
     assert "HP:0000107" not in sql
-

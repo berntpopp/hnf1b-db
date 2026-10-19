@@ -68,9 +68,9 @@ async def test_clone_to_draft_on_published(db_session, published_record, curator
     await db_session.flush()
     await db_session.refresh(published_record)
 
-    # working copy updated
+    # DATA-04: phenopacket column retains published head content; curator content is in editing_revision
     assert published_record.phenopacket["id"] == "wave7-published-1"
-    assert published_record.phenopacket["a"] == 2
+    assert "a" not in published_record.phenopacket
     # public head pointer UNCHANGED (I1)
     assert published_record.head_published_revision_id == old_head_id
     # edit pointer and owner set
@@ -96,7 +96,8 @@ async def test_clone_to_draft_on_published(db_session, published_record, curator
     assert len(rows) == 2
     assert rows[1].to_state == "draft"
     assert rows[1].id != published_record.head_published_revision_id
-    assert rows[1].content_jsonb == published_record.phenopacket
+    assert rows[1].content_jsonb == new_content
+    assert rows[1].content_jsonb != published_record.phenopacket
 
 
 @pytest.mark.asyncio

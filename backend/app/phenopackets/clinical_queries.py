@@ -359,9 +359,7 @@ class ClinicalQueries:
             loinc_conditions.append(
                 func.jsonb_path_exists(
                     PhenopacketRevision.content_jsonb,
-                    text(
-                        "'$.measurements[*] ? (@.assay.id == $code)'::jsonpath"
-                    ),
+                    text("'$.measurements[*] ? (@.assay.id == $code)'::jsonpath"),
                     func.jsonb_build_object("code", code),
                 )
             )

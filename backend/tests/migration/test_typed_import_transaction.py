@@ -390,11 +390,16 @@ async def test_complete_changed_snapshot_retires_missing_report_binding(
         ("source-report-1", True),
         ("source-report-2", False),
     ]
-    profile = (
-        (await db_session.execute(select(Phenopacket)))
-        .scalar_one()
-        .phenopacket["hnf1bCuration"]
-    )
+    from sqlalchemy.orm import selectinload
+
+    from app.phenopackets.repositories.visibility import resolve_curator_content
+
+    reloaded = (
+        await db_session.execute(
+            select(Phenopacket).options(selectinload(Phenopacket.editing_revision))
+        )
+    ).scalar_one()
+    profile = resolve_curator_content(reloaded)["hnf1bCuration"]
     assert len(profile["observationsById"]) == 1
 
 

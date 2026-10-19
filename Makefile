@@ -8,7 +8,7 @@
         publications-backfill publications-backfill-dry publications-backfill-test publications-backfill-embeddings \
         variants-sync variants-sync-dry variants-sync-test docker-variants-sync \
         reference-init reference-init-docker genes-sync genes-sync-dry genes-sync-test docker-genes-sync \
-        dev-seed-users
+        dev-seed-users openapi-types
 
 # Detect docker compose command
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "docker compose"; fi)
@@ -100,6 +100,9 @@ format:  ## Format code (ruff)
 
 typecheck:  ## Run type checking (mypy)
 	cd backend && uv run --group dev --group test mypy app/ migration/
+
+openapi-types:  ## Generate TypeScript types from OpenAPI schema
+	npx --yes openapi-typescript mcp/contract/openapi.snapshot.json -o frontend/src/api/schema.d.ts
 
 server:  ## Start development server
 	cd backend && uv run python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

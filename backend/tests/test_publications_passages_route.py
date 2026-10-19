@@ -149,4 +149,3 @@ async def test_shared_provider_async_offloaded():
     p2 = await _shared_provider()
     assert p1 is p2
     assert "provider" in _PROVIDER_CACHE
-

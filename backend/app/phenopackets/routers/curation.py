@@ -159,9 +159,9 @@ async def _write_response(
     record: Any, response: Response, db: AsyncSession
 ) -> dict[str, Any]:
     await db.commit()
-    await db.refresh(record)
-    payload = CurationService(db).read(record)
-    response.headers["ETag"] = f'"{record.revision}"'
+    reloaded = await _record_or_404(db, record.phenopacket_id)
+    payload = CurationService(db).read(reloaded)
+    response.headers["ETag"] = f'"{reloaded.revision}"'
     return payload
 
 

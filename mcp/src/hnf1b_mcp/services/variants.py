@@ -766,9 +766,7 @@ async def get_variant(
         offset = len(raw_carriers)
         while True:
             page_rows: list[dict[str, Any]] = (
-                await client.get(
-                    endpoint, params={"limit": 500, "offset": offset}
-                )
+                await client.get(endpoint, params={"limit": 500, "offset": offset})
                 or []
             )
             raw_carriers.extend(page_rows)

@@ -89,4 +89,3 @@ async def test_cursor_decode_invalid_primitives():
     with pytest.raises(HTTPException) as exc_info:
         decode_cursor("WzEsIDIsIDNd")
     assert exc_info.value.status_code == 400
-

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Computed,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -45,6 +46,11 @@ class Phenopacket(Base):
         CheckConstraint(
             "editing_revision_id IS NULL OR draft_owner_id IS NOT NULL",
             name=conv("ck_phenopackets_active_edit_owner"),
+        ),
+        Index("idx_phenopackets_editing_revision_id", "editing_revision_id"),
+        Index(
+            "idx_phenopackets_head_published_revision_id",
+            "head_published_revision_id",
         ),
     )
 
@@ -258,9 +264,9 @@ class Resource(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     namespace_prefix: Mapped[Optional[str]] = mapped_column(String(50))
-    url: Mapped[Optional[str]] = mapped_column(Text)
+    url: Mapped[Optional[str]] = mapped_column(String(500))
     version: Mapped[Optional[str]] = mapped_column(String(50))
-    iri_prefix: Mapped[Optional[str]] = mapped_column(Text)
+    iri_prefix: Mapped[Optional[str]] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -275,7 +281,7 @@ class PhenopacketAudit(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     phenopacket_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
     old_value: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
     new_value: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB)
     changed_by_id: Mapped[Optional[int]] = mapped_column(
@@ -326,6 +332,11 @@ class PhenopacketRevision(Base):
             "(ledger_version IS NOT NULL AND ledger_version = 2)",
             name=conv("ck_phenopacket_revisions_decision_metadata_ledger"),
         ),
+        Index(
+            "idx_phenopacket_revisions_parent_revision_id",
+            "parent_revision_id",
+        ),
+        Index("idx_phenopacket_revisions_actor_id", "actor_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -359,8 +370,8 @@ class PhenopacketRevision(Base):
     event_type: Mapped[str] = mapped_column(
         Text, nullable=False, default="snapshot", server_default="snapshot"
     )
-    profile_schema_version: Mapped[Optional[str]] = mapped_column(String(40))
-    projection_version: Mapped[Optional[str]] = mapped_column(String(40))
+    profile_schema_version: Mapped[Optional[str]] = mapped_column(String(128))
+    projection_version: Mapped[Optional[str]] = mapped_column(String(128))
     ledger_hash: Mapped[Optional[str]] = mapped_column(String(128))
     projection_hash: Mapped[Optional[str]] = mapped_column(String(128))
     actor_role: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

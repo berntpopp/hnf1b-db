@@ -77,9 +77,14 @@ class PhenopacketStateService:
 
     # ------------------------------------------------------------------
 
-    def __init__(self, db: AsyncSession) -> None:
-        """Initialise with an async database session."""
+    def __init__(
+        self,
+        db: AsyncSession,
+        background_tasks: Any | None = None,
+    ) -> None:
+        """Initialise with an async database session and optional background tasks."""
         self.db = db
+        self.background_tasks = background_tasks
 
     @staticmethod
     def _canonicalize_for_persistence(
@@ -345,8 +350,13 @@ class PhenopacketStateService:
             import_run_id=import_run_id,
         )
 
-        pp.phenopacket = new_content
+        # pp.phenopacket is NOT overwritten when cloning an already-published
+        # phenopacket. It continues to hold the head_published_revision content
+        # so stored generated columns (features_count, has_variant, search_vector)
+        # and Materialized Views never leak uncommitted draft changes (DATA-04).
+        # Curator working copies are served from editing_revision.content_jsonb.
         pp.editing_revision_id = rev.id
+        pp.editing_revision = rev
         pp.draft_owner_id = actor.id
         # state stays 'published'; head_published_revision_id unchanged
 
@@ -389,8 +399,10 @@ class PhenopacketStateService:
             event_type="draft_saved",
             import_run_id=import_run_id,
         )
-        pp.phenopacket = new_content
+        if pp.head_published_revision_id is None:
+            pp.phenopacket = new_content
         pp.editing_revision_id = revision.id
+        pp.editing_revision = revision
         return pp
 
     # ------------------------------------------------------------------
@@ -472,21 +484,43 @@ class PhenopacketStateService:
                 action="request_changes",
             )
 
+        if to_state == "in_review":
+            if (
+                pp.editing_revision_id is not None
+                and pp.head_published_revision_id is not None
+            ):
+                editing_rev = await self.db.get(
+                    PhenopacketRevision, pp.editing_revision_id
+                )
+                if editing_rev is not None and editing_rev.content_jsonb is not None:
+                    editing_rev.content_jsonb = self._canonicalize_for_persistence(
+                        editing_rev.content_jsonb, publish=True
+                    )
+            else:
+                pp.phenopacket = self._canonicalize_for_persistence(
+                    pp.phenopacket, publish=True
+                )
+
         if to_state == "published":
-            return await self._publish(
+            res = await self._publish(
                 pp,
                 reason,
                 actor,
                 approved_revision_id=approved_revision_id,
                 approved_content_sha256=approved_content_sha256,
             )
+        else:
+            res = await self._simple_transition(pp, to_state, reason, actor)
 
-        if to_state == "in_review":
-            pp.phenopacket = self._canonicalize_for_persistence(
-                pp.phenopacket, publish=True
-            )
+        if self.background_tasks is not None and hasattr(
+            self.background_tasks, "add_task"
+        ):
+            if to_state in ("published", "archived"):
+                from app.search.mv_refresh import schedule_refresh_if_stale
 
-        return await self._simple_transition(pp, to_state, reason, actor)
+                self.background_tasks.add_task(schedule_refresh_if_stale)
+
+        return res
 
     async def _approve(
         self,
@@ -565,8 +599,9 @@ class PhenopacketStateService:
 
         if pp.head_published_revision_id is None:
             pp.state = "approved"
-        pp.phenopacket = approved_content
+            pp.phenopacket = approved_content
         pp.editing_revision_id = approved.id
+        pp.editing_revision = approved
         return pp, approved
 
     async def _active_review_candidate(self, pp: Phenopacket) -> PhenopacketRevision:
@@ -628,9 +663,19 @@ class PhenopacketStateService:
         """
         from_state = await self._effective_state(pp)
 
+        # Determine the current working content being transitioned
+        content_to_snapshot = pp.phenopacket
+        if (
+            pp.editing_revision_id is not None
+            and pp.head_published_revision_id is not None
+        ):
+            editing_rev = await self.db.get(PhenopacketRevision, pp.editing_revision_id)
+            if editing_rev is not None and editing_rev.content_jsonb is not None:
+                content_to_snapshot = editing_rev.content_jsonb
+
         # Compute the patch against the *previous transition's* content, not the
         # latest draft-in-progress row. After a clone + in-place save the latest
-        # row is the draft row, whose content equals pp.phenopacket, giving an
+        # row is the draft row, whose content equals content_to_snapshot, giving an
         # empty patch. We want "content before this transition → content after."
         prev = (
             await self.db.execute(
@@ -643,12 +688,16 @@ class PhenopacketStateService:
                 .limit(1)
             )
         ).scalar_one_or_none()
-        patch = compute_json_patch(prev.content_jsonb, pp.phenopacket) if prev else None
+        patch = (
+            compute_json_patch(prev.content_jsonb, content_to_snapshot)
+            if prev
+            else None
+        )
 
         rev = await self._append_revision(
             pp,
             state=to_state,
-            content=pp.phenopacket,
+            content=content_to_snapshot,
             change_patch=patch,
             change_reason=reason,
             actor=actor,
@@ -660,16 +709,20 @@ class PhenopacketStateService:
         # I8: pp.state advances only for never-published records OR archive.
         if pp.head_published_revision_id is None or to_state == "archived":
             pp.state = to_state
+            if pp.head_published_revision_id is None:
+                pp.phenopacket = content_to_snapshot
 
         if to_state == "archived":
             # archive is terminal: clear both owner and edit pointer
             pp.draft_owner_id = None
             pp.editing_revision_id = None
+            pp.editing_revision = None
         else:
             # Update editing_revision_id to track the in-flight snapshot.
             # draft_owner_id is preserved through submit / withdraw / resubmit
             # so the curator can continue owning through the review cycle.
             pp.editing_revision_id = rev.id
+            pp.editing_revision = rev
 
         # Persist the projection after the immutable revision insert so any
         # same-transaction review-issue writer observes the active candidate.
@@ -734,6 +787,7 @@ class PhenopacketStateService:
         pp.phenopacket = published_content
         pp.head_published_revision_id = published.id
         pp.editing_revision_id = None  # cleared on publish (§6.2 step 10)
+        pp.editing_revision = None
         pp.draft_owner_id = None  # I5: cleared on publish
 
         return pp, published

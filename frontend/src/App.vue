@@ -3,7 +3,7 @@
     <a href="#main-content" class="skip-link">Skip to main content</a>
     <AppBar @toggle-drawer="drawer = !drawer" />
     <MobileDrawer v-model="drawer" />
-    <v-main id="main-content">
+    <v-main id="main-content" tabindex="-1">
       <router-view />
     </v-main>
     <FooterBar />
@@ -42,5 +42,8 @@ const drawer = ref(false);
   transform: translateY(0);
   outline: 2px solid #ffffff;
   outline-offset: 2px;
+}
+#main-content:focus {
+  outline: none;
 }
 </style>

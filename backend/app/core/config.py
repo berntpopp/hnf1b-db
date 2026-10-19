@@ -409,9 +409,11 @@ def load_yaml_config() -> YamlConfig:
 
 
 # Known insecure placeholder secrets to reject outside development
-INSECURE_JWT_PLACEHOLDERS: frozenset[str] = frozenset({
-    "dev-secret-change-in-production",
-})
+INSECURE_JWT_PLACEHOLDERS: frozenset[str] = frozenset(
+    {
+        "dev-secret-change-in-production",
+    }
+)
 
 
 class Settings(BaseSettings):
@@ -512,7 +514,11 @@ class Settings(BaseSettings):
                 "Generate with: openssl rand -hex 32"
             )
         env = (
-            (info.data.get("environment") or os.environ.get("ENVIRONMENT") or "production")
+            (
+                info.data.get("environment")
+                or os.environ.get("ENVIRONMENT")
+                or "production"
+            )
             if info and info.data
             else (os.environ.get("ENVIRONMENT") or "production")
         )

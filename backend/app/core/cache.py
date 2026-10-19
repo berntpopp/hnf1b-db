@@ -61,7 +61,7 @@ class InMemoryCache:
     Thread-safe for single-process async applications.
     """
 
-    def __init__(self, max_size: int = 1000):
+    def __init__(self, max_size: int = 1000) -> None:
         """Initialize in-memory cache.
 
         Args:
@@ -173,7 +173,7 @@ class CacheService:
     - Graceful error handling with logging
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize cache service (not connected yet)."""
         self._redis: Optional[aioredis.Redis] = None
         self._fallback = InMemoryCache()

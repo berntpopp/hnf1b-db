@@ -43,7 +43,7 @@ _API_PREFIX = "/api/v2"
 
 # Paths that exist outside the /api/v2 router space and are not part of the MCP
 # path space; exclude them from constant generation to keep the contract clean.
-_EXCLUDE_PATHS = frozenset({"/", "/health", "/livez"})
+_EXCLUDE_PATHS = frozenset({"/", "/health", "/health/live", "/health/ready", "/livez"})
 
 
 # ---------------------------------------------------------------------------
