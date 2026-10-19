@@ -560,7 +560,7 @@ async def update_phenopacket(
         )
     if phenopacket_data.revision is None:
         try:
-            expected_revision = int(if_match.strip('"'))  # type: ignore[union-attr]
+            expected_revision = int(if_match.strip('"'))
         except ValueError as exc:
             raise HTTPException(
                 status_code=428,
