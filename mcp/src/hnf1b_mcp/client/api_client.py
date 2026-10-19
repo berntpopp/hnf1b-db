@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections import OrderedDict
 from typing import Any
 
 import httpx
@@ -16,6 +17,8 @@ from ..contract import (
 )
 from ..services.errors import McpToolError
 from .allowlist import assert_allowed
+
+MAX_CACHE_ENTRIES: int = 500
 
 #: Map of upstream query-parameter names → the contract enum that constrains
 #: them. Used to surface ``allowed`` values in 422 error envelopes so a calling
@@ -111,7 +114,7 @@ class ApiClient:
             headers={"Accept": "application/json"},
         )
         self._cache_ttl = cache_ttl
-        self._cache: dict[str, tuple[float, Any]] = {}
+        self._cache: OrderedDict[str, tuple[float, Any]] = OrderedDict()
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """GET an allowlisted path and return the parsed JSON body.
@@ -133,6 +136,7 @@ class ApiClient:
         now = time.monotonic()
         hit = self._cache.get(key)
         if hit and hit[0] > now:
+            self._cache.move_to_end(key)
             return hit[1]
         try:
             resp = await self._client.get(path, params=params)
@@ -180,6 +184,9 @@ class ApiClient:
         resp.raise_for_status()
         data = resp.json()
         self._cache[key] = (now + self._cache_ttl, data)
+        self._cache.move_to_end(key)
+        if len(self._cache) > MAX_CACHE_ENTRIES:
+            self._cache.popitem(last=False)
         return data
 
     async def aclose(self) -> None:

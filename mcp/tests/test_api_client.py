@@ -151,3 +151,23 @@ async def test_get_maps_other_4xx_to_temporarily_unavailable():
         await c.get("/phenopackets/")
     await c.aclose()
     assert exc.value.code == "temporarily_unavailable"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_cache_bounded_lru_eviction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ApiClient cache enforces MAX_CACHE_ENTRIES bound with LRU eviction."""
+    import hnf1b_mcp.client.api_client as mod
+
+    monkeypatch.setattr(mod, "MAX_CACHE_ENTRIES", 3)
+    c = ApiClient(base_url=BASE, cache_ttl=300)
+    for i in range(4):
+        respx.get(f"{BASE}/phenopackets/{i}").mock(
+            return_value=httpx.Response(200, json={"id": str(i)})
+        )
+        await c.get(f"/phenopackets/{i}")
+
+    assert len(c._cache) == 3
+    assert not any("/phenopackets/0?" in k for k in c._cache)
+    assert any("/phenopackets/3?" in k for k in c._cache)
+    await c.aclose()

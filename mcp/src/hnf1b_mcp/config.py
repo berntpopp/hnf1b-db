@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     ]
     redis_url: str | None = None
     rate_limit_global_rps: float = 10.0
+    api_key: str | None = None
+    require_origin: bool = False
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
