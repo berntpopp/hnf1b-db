@@ -278,10 +278,11 @@ class OriginValidationMiddleware(BaseHTTPMiddleware):
             downstream response.
         """
         origin = request.headers.get("origin")
+        require_origin = self._require_origin and request.url.path != "/health"
         if not is_origin_allowed(
             origin,
             self._allowed_origins,
-            require_origin=self._require_origin,
+            require_origin=require_origin,
         ):
             return JSONResponse(
                 {"error": {"code": "forbidden", "message": "Origin not allowed."}},

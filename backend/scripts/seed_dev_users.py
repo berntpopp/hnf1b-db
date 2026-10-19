@@ -40,6 +40,7 @@ if str(BACKEND_ROOT) not in sys.path:
 from sqlalchemy import select  # noqa: E402
 
 from app.auth.password import get_password_hash  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.database import async_session_maker  # noqa: E402
 from app.models.user import User  # noqa: E402
 
@@ -143,11 +144,12 @@ async def _seed() -> None:
 
 def main() -> int:
     """Entry point: refuse unless dev mode, otherwise seed fixture users."""
-    env = os.environ.get("ENVIRONMENT", "development")
-    if env != "development":
+    env = os.environ.get("ENVIRONMENT") or settings.environment
+    if env != "development" or settings.environment != "development":
+        resolved = env if env != "development" else settings.environment
         print(
             "seed_dev_users refuses to run outside development "
-            f"(ENVIRONMENT={env!r})",
+            f"(ENVIRONMENT={resolved!r})",
             file=sys.stderr,
         )
         return 1

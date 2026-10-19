@@ -756,12 +756,28 @@ async def get_variant(
     # aggregate count (a silent disagreement that breaks the documented
     # carriers -> hnf1b_get_individuals workflow).
     shaped = _shape_variant(match)
-    raw_carriers: list[dict[str, Any]] = await client.get(
-        PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID.format(variant_id=shaped["variant_id"])
+    endpoint = PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID.format(
+        variant_id=shaped["variant_id"]
     )
+    raw_carriers: list[dict[str, Any]] = await client.get(endpoint) or []
+    # If the upstream response hits the default page limit (500), fetch
+    # remaining pages via offset so carrier_count and carriers are complete.
+    if len(raw_carriers) >= 500:
+        offset = len(raw_carriers)
+        while True:
+            page_rows: list[dict[str, Any]] = (
+                await client.get(
+                    endpoint, params={"limit": 500, "offset": offset}
+                )
+                or []
+            )
+            raw_carriers.extend(page_rows)
+            if len(page_rows) < 500:
+                break
+            offset += len(page_rows)
     carriers: list[str] = [
         record["phenopacket_id"]
-        for record in (raw_carriers or [])
+        for record in raw_carriers
         if "phenopacket_id" in record
     ]
 

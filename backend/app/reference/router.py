@@ -72,7 +72,7 @@ async def list_genes(
     genome_build: Optional[str] = Query(
         None, description="Genome assembly name (default: GRCh38)"
     ),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Gene]:

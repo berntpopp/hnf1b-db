@@ -146,7 +146,8 @@ async def test_update_requires_revision_or_if_match(
         headers=curator_headers,
     )
 
-    assert response.status_code in (422, 428)
+    assert response.status_code == 428
+    assert response.json()["detail"]["code"] == "precondition_required"
 
 
 @pytest.mark.asyncio

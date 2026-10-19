@@ -229,8 +229,10 @@ export const getVariantsBatch = (phenopacketIds) =>
  * @param {string} variantId - The variant ID to search for
  * @returns {Promise} Axios promise with phenopackets containing this variant
  */
-export const getPhenopacketsByVariant = (variantId) =>
-  apiClient.get(`/phenopackets/by-variant/${encodeURIComponent(variantId)}`);
+export const getPhenopacketsByVariant = (variantId, params = { limit: 1000 }) =>
+  apiClient.get(`/phenopackets/by-variant/${encodeURIComponent(variantId)}`, {
+    params,
+  });
 
 // --- Wave 7 / D.1 state machine endpoints ---
 

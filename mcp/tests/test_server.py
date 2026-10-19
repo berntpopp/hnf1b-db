@@ -93,16 +93,20 @@ def test_origin_helper_strict():
 async def test_health_strict_origin_validation():
     settings = Settings(allowed_origins=["https://claude.ai"], require_origin=True)
     app = build_http_app(settings=settings)
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://testserver"
-    ) as ac:
-        # No Origin with require_origin=True -> 403.
-        r = await ac.get("/health")
-        assert r.status_code == 403
-        # Allowed Origin -> 200.
-        r = await ac.get("/health", headers={"Origin": "https://claude.ai"})
-        assert r.status_code == 200
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as ac:
+            # Headerless /health probe still succeeds with require_origin=True.
+            r = await ac.get("/health")
+            assert r.status_code == 200
+            # MCP endpoint without Origin with require_origin=True -> 403.
+            r = await ac.post("/")
+            assert r.status_code == 403
+            # Allowed Origin on /health -> 200.
+            r = await ac.get("/health", headers={"Origin": "https://claude.ai"})
+            assert r.status_code == 200
 
 
 @pytest.mark.asyncio

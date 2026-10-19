@@ -22,7 +22,7 @@ async def get_renal_insufficiency_cases(
     include_transplant: Optional[bool] = Query(
         None, description="Include transplant cases"
     ),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
@@ -67,7 +67,7 @@ async def get_genital_abnormalities(
     sex_filter: Optional[str] = Query(
         None, enum=["FEMALE", "MALE"], description="Filter by sex"
     ),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
@@ -120,7 +120,7 @@ async def get_diabetes_cases(
     with_complications: Optional[bool] = Query(
         None, description="Only cases with complications"
     ),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
@@ -197,7 +197,7 @@ async def get_hypomagnesemia_cases(
     with_measurements: Optional[bool] = Query(
         None, description="Only cases with measurements"
     ),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
@@ -266,7 +266,7 @@ async def get_pancreatic_abnormalities(
     include_diabetes: Optional[bool] = Query(
         True, description="Include cases with diabetes"
     ),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
@@ -333,7 +333,7 @@ async def get_pancreatic_abnormalities(
 
 @router.get("/liver-abnormalities")
 async def get_liver_abnormalities(
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
@@ -401,7 +401,7 @@ async def get_kidney_morphology(
         None,
         description="Filter by morphology type (cysts, dysplasia, hypoplasia)",
     ),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
@@ -447,7 +447,7 @@ async def get_multisystem_involvement(
     min_systems: int = Query(
         2, ge=2, le=10, description="Minimum number of systems involved"
     ),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:

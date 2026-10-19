@@ -607,11 +607,12 @@ class PhenopacketUpdate(BaseModel):
     """
 
     phenopacket: Dict[str, Any]
-    revision: int = Field(
-        ...,
+    revision: Optional[int] = Field(
+        None,
         description=(
-            "Required optimistic-locking revision. Update returns 409 Conflict "
-            "when the current row revision differs."
+            "Optimistic-locking revision (required unless supplied via If-Match "
+            "header). Update returns 409 Conflict when the current row revision "
+            "differs."
         ),
     )
     change_reason: str = Field(

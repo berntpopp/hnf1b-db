@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from app.phenopackets.models import PhenopacketCreate, PhenopacketUpdate
 from app.phenopackets.repositories import PhenopacketRepository
@@ -33,17 +32,21 @@ def _minimal_packet(phenopacket_id: str = "LOCK-1") -> dict:
     }
 
 
-def test_phenopacket_update_requires_revision():
-    """PhenopacketUpdate rejects omission of revision [BUG-04]."""
-    with pytest.raises(ValidationError) as excinfo:
-        PhenopacketUpdate(
-            phenopacket=_minimal_packet(),
-            change_reason="missing revision",
-        )
-    assert any(
-        err["loc"] == ("revision",) and err["type"] == "missing"
-        for err in excinfo.value.errors()
+@pytest.mark.asyncio
+async def test_phenopacket_update_requires_revision(make_service):
+    """PhenopacketService.update rejects omission of revision [BUG-04]."""
+    service = make_service()
+    await service.create(
+        PhenopacketCreate(phenopacket=_minimal_packet("LOCK-MISSING")),
+        actor_id=None,
     )
+    missing_payload = PhenopacketUpdate(
+        phenopacket=_minimal_packet("LOCK-MISSING"),
+        change_reason="missing revision",
+    )
+    with pytest.raises(ServiceConflict) as excinfo:
+        await service.update("LOCK-MISSING", missing_payload, actor_id=None)
+    assert excinfo.value.code == "revision_mismatch"
 
 
 @pytest.mark.asyncio

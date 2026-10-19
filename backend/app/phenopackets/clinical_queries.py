@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy import (
     Integer,
+    String,
     and_,
     case,
     func,
@@ -286,7 +287,7 @@ class ClinicalQueries:
             )
         )
 
-        conditions = []
+        conditions: List[Any] = []
 
         # Check for disease IDs
         if disease_terms:
@@ -299,15 +300,16 @@ class ClinicalQueries:
                 )
                 conditions.append(id_condition)
 
-        # Check for disease labels
+        # Check for disease labels (case-insensitive substring match, parameterized)
         if disease_labels:
             for label in disease_labels:
-                label_condition = func.jsonb_path_exists(
-                    PhenopacketRevision.content_jsonb,
-                    text(
-                        "'$.diseases[*] ? (@.term.label == $label)'::jsonpath"
-                    ),
-                    func.jsonb_build_object("label", label),
+                label_condition = (
+                    func.jsonb_path_query_array(
+                        PhenopacketRevision.content_jsonb,
+                        text("'$.diseases[*].term.label'::jsonpath"),
+                    )
+                    .cast(String)
+                    .ilike(f"%{label}%")
                 )
                 conditions.append(label_condition)
 

@@ -2899,14 +2899,20 @@
             "type": "object"
           },
           "revision": {
-            "description": "Required optimistic-locking revision. Update returns 409 Conflict when the current row revision differs.",
-            "title": "Revision",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optimistic-locking revision (required unless supplied via If-Match header). Update returns 409 Conflict when the current row revision differs.",
+            "title": "Revision"
           }
         },
         "required": [
           "phenopacket",
-          "revision",
           "change_reason"
         ],
         "title": "PhenopacketUpdate",
@@ -7779,6 +7785,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -7862,6 +7869,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -7941,6 +7949,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -8020,6 +8029,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -8081,6 +8091,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -8156,6 +8167,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -8236,6 +8248,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -8333,6 +8346,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -10638,8 +10652,9 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "default": 100,
-              "maximum": 500,
+              "default": 500,
+              "maximum": 1000,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -12898,6 +12913,7 @@
             "schema": {
               "default": 100,
               "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
