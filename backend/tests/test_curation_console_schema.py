@@ -118,3 +118,45 @@ def test_does_not_accept_a_free_form_notes_bag(validator):
         with_curation(notes={"anything": "goes", "here": "too"})
     )
     assert errors
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        "UNKNOWN",
+        "PATHOGENIC",
+        "LIKELY_PATHOGENIC",
+        "UNCERTAIN_SIGNIFICANCE",
+        "LIKELY_BENIGN",
+        "BENIGN",
+        "UNKNOWN_STATUS",
+        "REJECTED",
+        "CANDIDATE",
+        "CONTRIBUTORY",
+        "CAUSATIVE",
+    ],
+)
+def test_accepts_ga4gh_and_legacy_interpretation_statuses(validator, status):
+    """SchemaValidator accepts both GA4GH ProgressStatus and legacy ACMG values [DATA-02]."""
+    doc = {
+        **MINIMAL,
+        "interpretations": [
+            {
+                "id": "interp-1",
+                "progressStatus": "COMPLETED",
+                "diagnosis": {
+                    "genomicInterpretations": [
+                        {
+                            "subjectOrBiosampleId": "940",
+                            "interpretationStatus": status,
+                            "variantInterpretation": {
+                                "variationDescriptor": {"id": "var-1"}
+                            },
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+    assert validator.validate(doc) == []
+    assert validator.validate_interpretation_status(status) is True

@@ -197,6 +197,7 @@ class TestPhenopacketServiceUpdate:
         payload = PhenopacketUpdate(
             phenopacket=_build_phenopacket(phenopacket_id="DOES-NOT-EXIST"),
             change_reason="service test",
+            revision=1,
         )
 
         with pytest.raises(ServiceNotFound):
@@ -250,6 +251,7 @@ class TestPhenopacketServiceUpdate:
         payload = PhenopacketUpdate(
             phenopacket=updated_phenopacket,
             change_reason="service test update",
+            revision=start_revision,
         )
 
         updated = await service2.update("SERVICE-TEST-INC", payload, actor_id=None)
@@ -275,7 +277,9 @@ class TestPhenopacketServiceUpdate:
         with pytest.raises(ServiceValidationError):
             await service2.update(
                 "SERVICE-TEST-BAD-UP",
-                PhenopacketUpdate(phenopacket=bad, change_reason="service test"),
+                PhenopacketUpdate(
+                    phenopacket=bad, change_reason="service test", revision=1
+                ),
                 actor_id=None,
             )
 
