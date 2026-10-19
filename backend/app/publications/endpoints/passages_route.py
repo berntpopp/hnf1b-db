@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -31,18 +32,25 @@ router = APIRouter(tags=["publications"])
 # (seconds), so we cache the single instance. ``None`` means the optional
 # embedding backend is not installed and the dense leg is disabled.
 _PROVIDER_CACHE: dict[str, Optional[EmbeddingProvider]] = {}
+_PROVIDER_LOCK: Optional[asyncio.Lock] = None
 
 
-def _shared_provider() -> Optional[EmbeddingProvider]:
+async def _shared_provider() -> Optional[EmbeddingProvider]:
     """Return the cached embedding provider, or ``None`` when unavailable."""
+    global _PROVIDER_LOCK
     if "provider" not in _PROVIDER_CACHE:
-        rag = settings.publications_rag
-        _PROVIDER_CACHE["provider"] = get_embedding_provider(
-            model_name=rag.embedding_model,
-            query_prefix=rag.embedding_query_prefix,
-            batch_size=rag.embedding_batch_size,
-            dim=rag.embedding_dim,
-        )
+        if _PROVIDER_LOCK is None:
+            _PROVIDER_LOCK = asyncio.Lock()
+        async with _PROVIDER_LOCK:
+            if "provider" not in _PROVIDER_CACHE:
+                rag = settings.publications_rag
+                _PROVIDER_CACHE["provider"] = await asyncio.to_thread(
+                    get_embedding_provider,
+                    model_name=rag.embedding_model,
+                    query_prefix=rag.embedding_query_prefix,
+                    batch_size=rag.embedding_batch_size,
+                    dim=rag.embedding_dim,
+                )
     return _PROVIDER_CACHE["provider"]
 
 
@@ -99,7 +107,7 @@ async def search_publication_passages(
     if mode not in VALID_MODES:
         raise HTTPException(400, f"invalid mode {mode!r}; expected {VALID_MODES}")
 
-    provider = _shared_provider() if rerank == "rrf" else None
+    provider = await _shared_provider() if rerank == "rrf" else None
 
     result = await search_passages(
         db,

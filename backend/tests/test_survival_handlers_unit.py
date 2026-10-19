@@ -703,3 +703,30 @@ class TestSurvivalHandlerFactoryDispatch:
             "disease_subtype",
             "protein_domain",
         }
+
+
+class TestInterpretationStatusAcmgFiltering:
+    """Test that INTERP_STATUS_PATH and DiseaseSubtypeHandler queries check ACMG pathogenicity."""
+
+    def test_interp_status_path_checks_acmg_classification(self) -> None:
+        """Verify INTERP_STATUS_PATH checks acmgPathogenicityClassification alongside interpretationStatus."""
+        from app.phenopackets.routers.aggregations.sql_fragments.paths import (
+            INTERP_STATUS_PATH,
+        )
+
+        assert "acmgPathogenicityClassification" in INTERP_STATUS_PATH
+        assert "interpretationStatus" in INTERP_STATUS_PATH
+        assert "COALESCE" in INTERP_STATUS_PATH
+
+    def test_disease_subtype_queries_include_acmg_classification(self) -> None:
+        """Verify DiseaseSubtypeHandler queries include acmgPathogenicityClassification check."""
+        handler = DiseaseSubtypeHandler()
+        assert "acmgPathogenicityClassification" in handler.build_current_age_query()
+        assert "acmgPathogenicityClassification" in handler._build_censored_query(
+            ["HP:0000001"]
+        )
+        assert "acmgPathogenicityClassification" in handler.build_standard_query(
+            ["HP:0000001"]
+        )
+
+

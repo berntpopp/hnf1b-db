@@ -23,6 +23,7 @@ Wave 7 D.1 additions:
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -53,6 +54,7 @@ from app.phenopackets.repositories import (
     public_head_query,
     resolve_curator_content,
     resolve_public_content,
+    resolve_public_contents,
 )
 from app.phenopackets.review.structural import structural_capabilities
 from app.phenopackets.routers.crud_helpers import parse_sort_parameter
@@ -218,13 +220,17 @@ async def list_phenopackets(
     # consumers that expect `item["subject"]` / `item["interpretations"]`
     # keep working. Non-curators get the state fields as null per §7.2.
     data: List[Dict[str, Any]] = []
+    public_contents: Dict[uuid.UUID, Dict[str, Any]] = {}
+    if not is_curator and rows:
+        public_contents = await resolve_public_contents(db, rows)
+
     for pp in rows:
         content: Dict[str, Any]
         if is_curator:
             content = resolve_curator_content(pp)
         else:
             # Fast-path: head pointer guaranteed non-NULL by public_filter
-            public_content = await resolve_public_content(db, pp)
+            public_content = public_contents.get(pp.id)
             if public_content is None:
                 # Should never happen (public_filter guards head IS NOT NULL),
                 # but skip defensively
@@ -320,11 +326,15 @@ async def get_phenopackets_batch(
     phenopackets_list = list(result.scalars().all())
 
     items = []
+    public_contents: Dict[uuid.UUID, Dict[str, Any]] = {}
+    if not is_curator and phenopackets_list:
+        public_contents = await resolve_public_contents(db, phenopackets_list)
+
     for pp in phenopackets_list:
         if is_curator:
             content: Dict[str, Any] = resolve_curator_content(pp)
         else:
-            public_content = await resolve_public_content(db, pp)
+            public_content = public_contents.get(pp.id)
             if public_content is None:
                 continue
             content = public_content

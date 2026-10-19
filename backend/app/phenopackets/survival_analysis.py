@@ -46,19 +46,20 @@ def parse_iso8601_age(iso8601_duration: Optional[str]) -> Optional[float]:
     if not iso8601_duration:
         return None
 
-    # Match ISO8601 duration: P[nY][nM][nD]
-    pattern = r"P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?"
+    # Match ISO8601 duration: P[nY][nM][nW][nD]
+    pattern = r"P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?"
     match = re.match(pattern, iso8601_duration)
 
-    if not match:
+    if not match or not any(match.groups()):
         return None
 
     years = int(match.group(1) or 0)
     months = int(match.group(2) or 0)
-    days = int(match.group(3) or 0)
+    weeks = int(match.group(3) or 0)
+    days = int(match.group(4) or 0)
 
     # Convert to years
-    age_years = years + (months / 12.0) + (days / 365.25)
+    age_years = years + (months / 12.0) + (weeks * 7 / 365.25) + (days / 365.25)
 
     return round(age_years, 2)
 
@@ -76,14 +77,16 @@ def parse_onset_ontology(ontology_class: dict) -> Optional[float]:
     Mapping:
         - HP:0011460 (Embryonal onset): -0.5 (prenatal)
         - HP:0011461 (Fetal onset): -0.25 (prenatal)
+        - HP:0030674 (Antenatal onset): -0.25 (prenatal)
         - HP:0003577 (Congenital onset): 0
         - HP:0003623 (Neonatal onset): 0
         - HP:0410280 (Pediatric onset): 5
-        - HP:0011462 (Infantile onset): 0.5
+        - HP:0003593 (Infantile onset): 0.5
         - HP:0011463 (Childhood onset): 5
         - HP:0003621 (Juvenile onset): 10
         - HP:0025709 (Adolescent onset): 15
         - HP:0003581 (Adult onset): 18
+        - HP:0011462 (Young adult onset): 25.0
         - HP:0003584 (Late onset): 60
     """
     if not ontology_class or "id" not in ontology_class:
@@ -92,17 +95,18 @@ def parse_onset_ontology(ontology_class: dict) -> Optional[float]:
     onset_mapping = {
         "HP:0011460": -0.5,  # Embryonal onset
         "HP:0011461": -0.25,  # Fetal onset
+        "HP:0030674": -0.25,  # Antenatal onset
         "HP:0003577": 0,  # Congenital onset
         "HP:0003623": 0,  # Neonatal onset
         "HP:0410280": 5,  # Pediatric onset
-        "HP:0011462": 0.5,  # Infantile onset
+        "HP:0003593": 0.5,  # Infantile onset
         "HP:0011463": 5,  # Childhood onset
         "HP:0003621": 10,  # Juvenile onset
         "HP:0025709": 15,  # Adolescent onset
         "HP:0003581": 18,  # Adult onset
+        "HP:0011462": 25.0,  # Young adult onset
         "HP:0003584": 60,  # Late onset
         "HP:0003596": 40,  # Middle age onset
-        "HP:0003593": 1,  # Infant onset
         "HP:0003674": 1,  # Postnatal onset (approximate)
     }
 

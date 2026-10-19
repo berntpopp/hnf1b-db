@@ -72,6 +72,8 @@ async def list_genes(
     genome_build: Optional[str] = Query(
         None, description="Genome assembly name (default: GRCh38)"
     ),
+    limit: int = Query(100, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Gene]:
     """Query genes by symbol or chromosome.
@@ -81,6 +83,8 @@ async def list_genes(
         symbol: Gene symbol to filter (e.g., "HNF1B")
         chromosome: Chromosome to filter (e.g., "17")
         genome_build: Genome assembly name (default: GRCh38)
+        limit: Maximum number of genes to return
+        offset: Number of genes to skip
         db: Database session dependency
 
     Returns:
@@ -106,7 +110,7 @@ async def list_genes(
     if chromosome:
         stmt = stmt.where(Gene.chromosome == chromosome)
 
-    stmt = stmt.order_by(Gene.symbol)
+    stmt = stmt.order_by(Gene.symbol).limit(limit).offset(offset)
 
     result = await db.execute(stmt)
     genes = result.scalars().all()

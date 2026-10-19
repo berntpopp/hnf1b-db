@@ -54,6 +54,20 @@ class TestParseISO8601Age:
         # 365 / 365.25 ≈ 1.0
         assert 0.99 <= result <= 1.0
 
+    def test_weeks_only(self):
+        """Parse duration with only weeks (e.g. P28W)."""
+        result = parse_iso8601_age("P28W")
+        assert result is not None
+        # 28 * 7 / 365.25 ≈ 0.5366 -> 0.54
+        assert result == 0.54
+
+    def test_years_weeks(self):
+        """Parse duration with years and weeks."""
+        result = parse_iso8601_age("P1Y2W")
+        assert result is not None
+        # 1 + 14 / 365.25 ≈ 1.038 -> 1.04
+        assert result == 1.04
+
     def test_none_input(self):
         """Return None for None input."""
         assert parse_iso8601_age(None) is None
@@ -101,6 +115,33 @@ class TestParseOnsetOntology:
 
         fetal = parse_onset_ontology({"id": "HP:0011461", "label": "Fetal onset"})
         assert fetal == -0.25
+
+        antenatal = parse_onset_ontology(
+            {"id": "HP:0030674", "label": "Antenatal onset"}
+        )
+        assert antenatal == -0.25
+
+    def test_young_adult_and_infantile_onset(self):
+        """Test HP:0011462 (Young adult) and HP:0003593 (Infantile) onsets."""
+        young_adult = parse_onset_ontology(
+            {"id": "HP:0011462", "label": "Young adult onset"}
+        )
+        assert young_adult == 25.0
+
+        infantile = parse_onset_ontology(
+            {"id": "HP:0003593", "label": "Infantile onset"}
+        )
+        assert infantile == 0.5
+
+    def test_age_parser_weeks(self):
+        """Test AgeParser with week string '28w' produces P28W instead of P28Y."""
+        from migration.phenopackets.age_parser import AgeParser
+
+        result = AgeParser.parse_age("28w")
+        assert result == {"iso8601duration": "P28W"}
+
+        result_weeks_days = AgeParser.parse_age("28w3d")
+        assert result_weeks_days == {"iso8601duration": "P28W3D"}
 
     def test_none_input(self):
         """Return None for None input."""
