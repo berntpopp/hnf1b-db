@@ -27,7 +27,7 @@
     "@mdi/font": "^7.4.47",
     "@tiptap/core": "3.31.4",
     "@tiptap/extension-link": "3.31.4",
-    "@tiptap/extension-mention": "3.31.4",
+    "@tiptap/extension-mention": "3.32.0",
     "@tiptap/starter-kit": "3.31.4",
     "@tiptap/vue-3": "3.31.4",
     "@unhead/vue": "^3.4.2",
