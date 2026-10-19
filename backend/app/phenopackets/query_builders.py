@@ -127,9 +127,14 @@ def build_phenopacket_response(
     """
     created_by = pp.created_by_user.username if pp.created_by_user else None
     updated_by = pp.updated_by_user.username if pp.updated_by_user else None
-    content = (
-        phenopacket_override if phenopacket_override is not None else pp.phenopacket
-    )
+    if phenopacket_override is not None:
+        content = phenopacket_override
+    elif include_state:
+        from app.phenopackets.repositories.visibility import resolve_curator_content
+
+        content = resolve_curator_content(pp)
+    else:
+        content = pp.phenopacket
 
     draft_owner_username: Optional[str] = None
     if include_state and pp.draft_owner is not None:

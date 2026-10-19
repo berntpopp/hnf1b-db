@@ -26,7 +26,15 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -490,6 +498,7 @@ async def export_phenopacket(
 @router.post("/", response_model=PhenopacketResponse)
 async def create_phenopacket(
     phenopacket_data: PhenopacketCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ):
@@ -501,7 +510,9 @@ async def create_phenopacket(
         409: Phenopacket with this ID already exists
         500: Database error
     """
-    service = PhenopacketService(PhenopacketRepository(db))
+    service = PhenopacketService(
+        PhenopacketRepository(db), background_tasks=background_tasks
+    )
     try:
         new_phenopacket = await service.create(
             phenopacket_data, actor_id=current_user.id
@@ -662,6 +673,7 @@ async def update_phenopacket(
 async def delete_phenopacket(
     phenopacket_id: str,
     delete_request: PhenopacketDelete,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ):
@@ -675,7 +687,9 @@ async def delete_phenopacket(
         404: Phenopacket not found or already deleted
         500: Database error
     """
-    service = PhenopacketService(PhenopacketRepository(db))
+    service = PhenopacketService(
+        PhenopacketRepository(db), background_tasks=background_tasks
+    )
     try:
         response = await service.soft_delete(
             phenopacket_id,

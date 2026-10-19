@@ -176,11 +176,13 @@ class Phenopacket(Base):
         BigInteger,
         ForeignKey("phenopacket_revisions.id", ondelete="SET NULL", use_alter=True),
         nullable=True,
+        index=True,
     )
     head_published_revision_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("phenopacket_revisions.id", ondelete="SET NULL", use_alter=True),
         nullable=True,
+        index=True,
     )
     draft_owner_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
@@ -338,6 +340,7 @@ class PhenopacketRevision(Base):
         BigInteger,
         ForeignKey("phenopacket_revisions.id", ondelete="RESTRICT"),
         nullable=True,
+        index=True,
     )
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
     state: Mapped[str] = mapped_column(Text, nullable=False)
@@ -348,6 +351,7 @@ class PhenopacketRevision(Base):
         BigInteger,
         ForeignKey("users.id"),
         nullable=False,
+        index=True,
     )
     import_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),

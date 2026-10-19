@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -111,6 +111,7 @@ async def _get_phenopacket_or_404(
 async def post_transition(
     phenopacket_id: str,
     body: TransitionRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_curator),
 ) -> Dict[str, Any]:
@@ -130,7 +131,7 @@ async def post_transition(
     """
     pp = await _get_phenopacket_or_404(db, phenopacket_id)
 
-    svc = PhenopacketStateService(db)
+    svc = PhenopacketStateService(db, background_tasks=background_tasks)
     try:
         pp, rev = await svc.transition(
             pp.id,

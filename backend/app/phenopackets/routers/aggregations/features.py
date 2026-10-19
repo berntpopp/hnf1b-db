@@ -11,6 +11,7 @@ from .common import (
     AsyncSession,
     Depends,
     calculate_percentages,
+    check_materialized_view_exists,
     get_db,
     logger,
     text,
@@ -32,10 +33,40 @@ async def aggregate_by_feature(
 
     The main 'count' field represents present_count for backwards compatibility.
 
-    Always reads published-head snapshots. Legacy materialized views are based
-    on mutable working copies and are therefore not public-safe.
+    Uses materialized views when available for O(1) performance,
+    falling back to published-head live queries.
     """
-    logger.debug("Reading published-head feature aggregation")
+    if await check_materialized_view_exists(db, "mv_feature_aggregation"):
+        logger.debug("Using materialized view for feature aggregation")
+        result = await db.execute(
+            text("""
+                SELECT hpo_id, label, present_count, absent_count, not_reported_count
+                FROM mv_feature_aggregation
+                ORDER BY present_count DESC
+            """)
+        )
+        rows = result.mappings().all()
+        total = sum(int(row["present_count"]) for row in rows)
+        rows_with_pct = calculate_percentages(
+            rows, total=total, count_key="present_count"
+        )
+        return [
+            AggregationResult(
+                label=row["label"] or row["hpo_id"],
+                count=int(row["present_count"]),
+                percentage=row["percentage"],
+                hpo_id=row["hpo_id"],
+                details={
+                    "hpo_id": row["hpo_id"],
+                    "present_count": int(row["present_count"]),
+                    "absent_count": int(row["absent_count"]),
+                    "not_reported_count": int(row["not_reported_count"]),
+                },
+            )
+            for row in rows_with_pct
+        ]
+
+    logger.debug("Reading published-head feature aggregation via live query")
 
     # First, get total number of published phenopackets (public filter: I3 + I7)
     total_phenopackets_result = await db.execute(

@@ -77,7 +77,7 @@ async def test_I1_state_published_does_not_imply_working_copy_equals_public_copy
     # state is still 'published'
     assert published_record.state == "published"
 
-    # but the public copy (via head pointer) differs from the working copy
+    # DATA-04: phenopackets.phenopacket retains head published content (isolated from drafts)
     head = (
         await db_session.execute(
             select(PhenopacketRevision).where(
@@ -85,7 +85,17 @@ async def test_I1_state_published_does_not_imply_working_copy_equals_public_copy
             )
         )
     ).scalar_one()
-    assert head.content_jsonb != published_record.phenopacket  # ← the invariant
+    assert head.content_jsonb == published_record.phenopacket
+
+    # while the curator working copy (editing revision) contains the draft edit
+    editing_rev = (
+        await db_session.execute(
+            select(PhenopacketRevision).where(
+                PhenopacketRevision.id == published_record.editing_revision_id
+            )
+        )
+    ).scalar_one()
+    assert head.content_jsonb != editing_rev.content_jsonb
 
 
 @pytest.mark.asyncio

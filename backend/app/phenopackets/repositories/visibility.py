@@ -167,8 +167,28 @@ async def resolve_public_contents(
 def resolve_curator_content(pp: Phenopacket) -> dict:
     """Return the curator-visible content for a phenopacket.
 
-    Curators always see the current working copy (``pp.phenopacket``),
-    regardless of state.  This is a pure, synchronous function — no DB
-    round-trip required.
+    If an in-flight editing revision exists, returns its content_jsonb.
+    Otherwise, returns the base working copy (``pp.phenopacket``).
+    This is a pure, synchronous function — no DB round-trip required.
     """
+    if pp.editing_revision_id is not None:
+        try:
+            from sqlalchemy import inspect
+            from sqlalchemy.orm.base import NO_VALUE
+
+            insp = inspect(pp, raiseerr=False)
+            if insp is not None:
+                val = insp.attrs.editing_revision.loaded_value
+                if (
+                    val is not NO_VALUE
+                    and val is not None
+                    and getattr(val, "content_jsonb", None) is not None
+                ):
+                    return val.content_jsonb
+            elif hasattr(pp, "editing_revision"):
+                val = pp.editing_revision
+                if val is not None and getattr(val, "content_jsonb", None) is not None:
+                    return val.content_jsonb
+        except Exception:
+            pass
     return pp.phenopacket
