@@ -83,6 +83,9 @@ async function mockLedger(page) {
       subject: { id: '317' },
       phenotypicFeatures: [],
       interpretations: [],
+      hnf1bCuration: {
+        observationsById: Object.fromEntries(observations.map((obs) => [obs.observationId, obs])),
+      },
     },
     observationsDigest: 'sha256:observations',
     outputDigest: 'sha256:output',

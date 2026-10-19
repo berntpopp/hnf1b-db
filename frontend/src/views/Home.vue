@@ -124,7 +124,7 @@
             <h2 class="text-h5 font-weight-medium text-high-emphasis mb-2">
               About the HNF1B Database
             </h2>
-            <p class="text-body-2 text-medium-emphasis" style="max-width: 600px; margin: 0 auto">
+            <p class="text-body-2 text-high-emphasis" style="max-width: 600px; margin: 0 auto">
               The definitive resource for MODY5 and RCAD syndrome research
             </p>
           </v-col>
@@ -140,7 +140,7 @@
                 </v-avatar>
                 <div>
                   <h3 class="text-subtitle-1 font-weight-medium mb-1">Comprehensive Data</h3>
-                  <p class="text-body-2 text-medium-emphasis mb-0">
+                  <p class="text-body-2 text-high-emphasis mb-0">
                     Clinical phenotypes using HPO terms, curated genetic variants with pathogenicity
                     classifications, and peer-reviewed publication references.
                   </p>
@@ -157,7 +157,7 @@
                 </v-avatar>
                 <div>
                   <h3 class="text-subtitle-1 font-weight-medium mb-1">GA4GH Standard</h3>
-                  <p class="text-body-2 text-medium-emphasis mb-0">
+                  <p class="text-body-2 text-high-emphasis mb-0">
                     All data follows the GA4GH Phenopackets v2 standard for seamless
                     interoperability with other genetic resources and databases.
                   </p>
@@ -174,7 +174,7 @@
                 </v-avatar>
                 <div>
                   <h3 class="text-subtitle-1 font-weight-medium mb-1">Clinical Insights</h3>
-                  <p class="text-body-2 text-medium-emphasis mb-0">
+                  <p class="text-body-2 text-high-emphasis mb-0">
                     Understand genotype-phenotype correlations for renal cysts, diabetes mellitus,
                     hypomagnesemia, and other HNF1B-related presentations.
                   </p>

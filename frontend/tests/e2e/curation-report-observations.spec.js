@@ -140,6 +140,11 @@ test('edits one report losslessly, previews, and resolves a deterministic confli
           phenotypicFeatures: [],
           interpretations: [],
           metaData: { externalReferences: [] },
+          hnf1bCuration: {
+            observationsById: Object.fromEntries(
+              observations.map((obs) => [obs.observationId, obs])
+            ),
+          },
         },
         revision,
         state: 'draft',

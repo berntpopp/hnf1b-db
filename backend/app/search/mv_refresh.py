@@ -76,7 +76,8 @@ async def refresh_global_search_index(
         refresh_sql = f"REFRESH MATERIALIZED VIEW {keyword} global_search_index"
         await db.execute(text(refresh_sql))
         try:
-            await db.execute(text("SELECT refresh_all_aggregation_views()"))
+            async with db.begin_nested():
+                await db.execute(text("SELECT refresh_all_aggregation_views()"))
         except SQLAlchemyError as err:
             logger.warning("Could not refresh aggregation materialized views: %s", err)
         await db.commit()

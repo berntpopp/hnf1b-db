@@ -31,9 +31,14 @@ function readCookieValue(setCookieHeader, name) {
  * @param {string} password
  * @returns {Promise<{accessToken: string, cookies: {name: string, value: string, url?: string, domain?: string, path?: string, httpOnly?: boolean}[]}>}
  */
+let loginRequestSeq = 0;
+
 export async function apiLogin(req, apiBase, username, password) {
+  loginRequestSeq += 1;
+  const syntheticIp = `10.254.${Math.floor(loginRequestSeq / 250) % 250}.${(loginRequestSeq % 250) + 1}`;
   const resp = await req.post(`${apiBase}/auth/login`, {
     data: { username, password },
+    headers: { 'X-Real-IP': syntheticIp },
   });
   if (!resp.ok()) {
     throw new Error(`API login failed for ${username}: ${resp.status()} ${await resp.text()}`);

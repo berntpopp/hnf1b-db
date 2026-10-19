@@ -55,8 +55,12 @@ async def test_by_variant_accepts_limit_and_offset(
 @pytest.mark.asyncio
 async def test_genes_reference_accepts_limit_and_offset(
     async_client: AsyncClient,
+    db_session,
 ) -> None:
     """GET /api/v2/reference/genes accepts limit and offset parameters."""
+    from app.reference.service import initialize_reference_data
+
+    await initialize_reference_data(db_session)
     response = await async_client.get(
         "/api/v2/reference/genes",
         params={"limit": 10, "offset": 0},
