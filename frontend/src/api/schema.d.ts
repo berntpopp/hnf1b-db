@@ -1547,8 +1547,8 @@ export interface paths {
          * Aggregate By Disease
          * @description Aggregate phenopackets by disease.
          *
-         *     Always reads published-head snapshots. Legacy materialized views are based
-         *     on mutable working copies and are therefore not public-safe.
+         *     Uses materialized views when available for O(1) performance,
+         *     falling back to published-head live queries.
          */
         get: operations["aggregate_by_disease_api_v2_phenopackets_aggregate_by_disease_get"];
         put?: never;
@@ -1577,8 +1577,8 @@ export interface paths {
          *
          *     The main 'count' field represents present_count for backwards compatibility.
          *
-         *     Always reads published-head snapshots. Legacy materialized views are based
-         *     on mutable working copies and are therefore not public-safe.
+         *     Uses materialized views when available for O(1) performance,
+         *     falling back to published-head live queries.
          */
         get: operations["aggregate_by_feature_api_v2_phenopackets_aggregate_by_feature_get"];
         put?: never;
@@ -1764,8 +1764,8 @@ export interface paths {
          * Aggregate Sex Distribution
          * @description Get sex distribution of subjects.
          *
-         *     Always reads published-head snapshots. Legacy materialized views are based
-         *     on mutable working copies and are therefore not public-safe.
+         *     Uses materialized views when available for O(1) performance,
+         *     falling back to published-head live queries.
          */
         get: operations["aggregate_sex_distribution_api_v2_phenopackets_aggregate_sex_distribution_get"];
         put?: never;
@@ -2028,6 +2028,26 @@ export interface paths {
         get: operations["compare_variant_types_api_v2_phenopackets_compare_variant_types_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/phenopackets/import-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate or commit a batch of phenopackets
+         * @description Validate candidate phenopackets (dry_run=True) or commit valid rows as draft records (dry_run=False).
+         */
+        post: operations["import_batch_api_v2_phenopackets_import_batch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2524,6 +2544,26 @@ export interface paths {
          *         reports which rerank strategy actually ran and candidate counts.
          */
         get: operations["search_publication_passages_api_v2_publications_passages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/publications/passages/suggest-phenotypes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest HPO phenotypes from publication passages or metadata
+         * @description Scan stored passages (or metadata fallback) for a PMID against curated HPO terms and negation cues.
+         */
+        get: operations["suggest_phenotypes_from_pmid_api_v2_publications_passages_suggest_phenotypes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3414,6 +3454,97 @@ export interface components {
         AutocompleteResponse: {
             /** Results */
             results?: components["schemas"]["SearchResultItem"][];
+        };
+        /**
+         * BatchImportRequest
+         * @description Request model for batch import of phenopackets.
+         */
+        BatchImportRequest: {
+            /**
+             * Phenopackets
+             * @description List of raw phenopacket objects
+             */
+            phenopackets: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * BatchImportResponse
+         * @description Response model for batch import execution or dry-run.
+         */
+        BatchImportResponse: {
+            /**
+             * Committed Rows
+             * @description Count of rows committed to database
+             */
+            committed_rows: number;
+            /**
+             * Dry Run
+             * @description Whether this execution was a dry-run
+             */
+            dry_run: boolean;
+            /**
+             * Invalid Rows
+             * @description Count of invalid rows
+             */
+            invalid_rows: number;
+            /**
+             * Results
+             * @description Per-row validation and execution details
+             */
+            results: components["schemas"]["BatchImportRowResult"][];
+            /**
+             * Total Rows
+             * @description Total rows in submitted batch
+             */
+            total_rows: number;
+            /**
+             * Valid Rows
+             * @description Count of valid rows
+             */
+            valid_rows: number;
+        };
+        /**
+         * BatchImportRowResult
+         * @description Validation and execution result for a single batch import row.
+         */
+        BatchImportRowResult: {
+            /**
+             * Already Exists
+             * @description Whether phenopacket ID already exists in DB
+             * @default false
+             */
+            already_exists: boolean;
+            /**
+             * Errors
+             * @description Validation or conflict errors
+             */
+            errors?: string[];
+            /**
+             * Phenopacket Id
+             * @description Phenopacket identifier
+             */
+            phenopacket_id: string;
+            /**
+             * Row Index
+             * @description 0-based index of row in batch
+             */
+            row_index: number;
+            /**
+             * Subject Id
+             * @description Subject identifier
+             */
+            subject_id: string;
+            /**
+             * Valid
+             * @description Whether row passed validations and does not conflict
+             */
+            valid: boolean;
+            /**
+             * Warnings
+             * @description Advisory warnings
+             */
+            warnings?: string[];
         };
         /**
          * BatchRecodeRequest
@@ -4918,6 +5049,65 @@ export interface components {
             modifiers: components["schemas"]["OntologyTerm"][];
             sourceTerm?: components["schemas"]["OntologyTerm"] | null;
             term: components["schemas"]["OntologyTerm"];
+        };
+        /**
+         * PhenotypeSuggestionItem
+         * @description A suggested phenotype extracted from publication passages or metadata.
+         */
+        PhenotypeSuggestionItem: {
+            /**
+             * Excluded
+             * @description Whether term is negated in source text
+             * @default false
+             */
+            excluded: boolean;
+            /**
+             * Hpo Id
+             * @description HPO term identifier (e.g. HP:0000107)
+             */
+            hpo_id: string;
+            /**
+             * Label
+             * @description Canonical or matched term label
+             */
+            label: string;
+            /**
+             * Passage Id
+             * @description Source passage identifier
+             */
+            passage_id?: string | null;
+            /**
+             * Score
+             * @description Match confidence score
+             * @default 1
+             */
+            score: number;
+            /**
+             * Section
+             * @description Passage section or metadata source
+             */
+            section: string;
+            /**
+             * Sentence
+             * @description Extracted source sentence
+             */
+            sentence: string;
+        };
+        /**
+         * PhenotypeSuggestionResponse
+         * @description Response containing phenotype suggestions for a PMID.
+         */
+        PhenotypeSuggestionResponse: {
+            /**
+             * Pmid
+             * @description Normalized PubMed ID
+             */
+            pmid: string;
+            /**
+             * Suggestions
+             * @description Extracted phenotype suggestions
+             */
+            suggestions?: components["schemas"]["PhenotypeSuggestionItem"][];
         };
         /**
          * ProjectionPayload
@@ -8950,6 +9140,42 @@ export interface operations {
             };
         };
     };
+    import_batch_api_v2_phenopackets_import_batch_post: {
+        parameters: {
+            query?: {
+                /** @description When true, write nothing to database */
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_review_queue_api_v2_phenopackets_review_queue_get: {
         parameters: {
             query?: {
@@ -9898,6 +10124,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PassagesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_phenotypes_from_pmid_api_v2_publications_passages_suggest_phenotypes_get: {
+        parameters: {
+            query: {
+                /** @description PubMed identifier */
+                pmid: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhenotypeSuggestionResponse"];
                 };
             };
             /** @description Validation Error */

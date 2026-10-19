@@ -267,6 +267,130 @@
         "title": "AutocompleteResponse",
         "type": "object"
       },
+      "BatchImportRequest": {
+        "description": "Request model for batch import of phenopackets.",
+        "properties": {
+          "phenopackets": {
+            "description": "List of raw phenopacket objects",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Phenopackets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "phenopackets"
+        ],
+        "title": "BatchImportRequest",
+        "type": "object"
+      },
+      "BatchImportResponse": {
+        "description": "Response model for batch import execution or dry-run.",
+        "properties": {
+          "committed_rows": {
+            "description": "Count of rows committed to database",
+            "title": "Committed Rows",
+            "type": "integer"
+          },
+          "dry_run": {
+            "description": "Whether this execution was a dry-run",
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "invalid_rows": {
+            "description": "Count of invalid rows",
+            "title": "Invalid Rows",
+            "type": "integer"
+          },
+          "results": {
+            "description": "Per-row validation and execution details",
+            "items": {
+              "$ref": "#/components/schemas/BatchImportRowResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "total_rows": {
+            "description": "Total rows in submitted batch",
+            "title": "Total Rows",
+            "type": "integer"
+          },
+          "valid_rows": {
+            "description": "Count of valid rows",
+            "title": "Valid Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "total_rows",
+          "valid_rows",
+          "invalid_rows",
+          "committed_rows",
+          "results"
+        ],
+        "title": "BatchImportResponse",
+        "type": "object"
+      },
+      "BatchImportRowResult": {
+        "description": "Validation and execution result for a single batch import row.",
+        "properties": {
+          "already_exists": {
+            "default": false,
+            "description": "Whether phenopacket ID already exists in DB",
+            "title": "Already Exists",
+            "type": "boolean"
+          },
+          "errors": {
+            "description": "Validation or conflict errors",
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "phenopacket_id": {
+            "description": "Phenopacket identifier",
+            "title": "Phenopacket Id",
+            "type": "string"
+          },
+          "row_index": {
+            "description": "0-based index of row in batch",
+            "title": "Row Index",
+            "type": "integer"
+          },
+          "subject_id": {
+            "description": "Subject identifier",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "valid": {
+            "description": "Whether row passed validations and does not conflict",
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "warnings": {
+            "description": "Advisory warnings",
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "row_index",
+          "phenopacket_id",
+          "subject_id",
+          "valid"
+        ],
+        "title": "BatchImportRowResult",
+        "type": "object"
+      },
       "BatchRecodeRequest": {
         "description": "Request body for ``POST /api/v2/variants/recode/batch``.",
         "properties": {
@@ -3166,6 +3290,86 @@
           "term"
         ],
         "title": "PhenotypeFinding",
+        "type": "object"
+      },
+      "PhenotypeSuggestionItem": {
+        "description": "A suggested phenotype extracted from publication passages or metadata.",
+        "properties": {
+          "excluded": {
+            "default": false,
+            "description": "Whether term is negated in source text",
+            "title": "Excluded",
+            "type": "boolean"
+          },
+          "hpo_id": {
+            "description": "HPO term identifier (e.g. HP:0000107)",
+            "title": "Hpo Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "Canonical or matched term label",
+            "title": "Label",
+            "type": "string"
+          },
+          "passage_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Source passage identifier",
+            "title": "Passage Id"
+          },
+          "score": {
+            "default": 1.0,
+            "description": "Match confidence score",
+            "title": "Score",
+            "type": "number"
+          },
+          "section": {
+            "description": "Passage section or metadata source",
+            "title": "Section",
+            "type": "string"
+          },
+          "sentence": {
+            "description": "Extracted source sentence",
+            "title": "Sentence",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hpo_id",
+          "label",
+          "section",
+          "sentence"
+        ],
+        "title": "PhenotypeSuggestionItem",
+        "type": "object"
+      },
+      "PhenotypeSuggestionResponse": {
+        "description": "Response containing phenotype suggestions for a PMID.",
+        "properties": {
+          "pmid": {
+            "description": "Normalized PubMed ID",
+            "title": "Pmid",
+            "type": "string"
+          },
+          "suggestions": {
+            "description": "Extracted phenotype suggestions",
+            "items": {
+              "$ref": "#/components/schemas/PhenotypeSuggestionItem"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pmid"
+        ],
+        "title": "PhenotypeSuggestionResponse",
         "type": "object"
       },
       "ProjectionPayload": {
@@ -10810,6 +11014,67 @@
         ]
       }
     },
+    "/api/v2/phenopackets/import-batch": {
+      "post": {
+        "description": "Validate candidate phenopackets (dry_run=True) or commit valid rows as draft records (dry_run=False).",
+        "operationId": "import_batch_api_v2_phenopackets_import_batch_post",
+        "parameters": [
+          {
+            "description": "When true, write nothing to database",
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "When true, write nothing to database",
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchImportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Validate or commit a batch of phenopackets",
+        "tags": [
+          "phenopackets-crud"
+        ]
+      }
+    },
     "/api/v2/phenopackets/review-queue": {
       "get": {
         "description": "Return a fully SQL-filtered queue with actor-specific capabilities.",
@@ -12733,6 +12998,53 @@
           }
         },
         "summary": "Hybrid passage retrieval over publication full text (RAG)",
+        "tags": [
+          "publications",
+          "publications"
+        ]
+      }
+    },
+    "/api/v2/publications/passages/suggest-phenotypes": {
+      "get": {
+        "description": "Scan stored passages (or metadata fallback) for a PMID against curated HPO terms and negation cues.",
+        "operationId": "suggest_phenotypes_from_pmid_api_v2_publications_passages_suggest_phenotypes_get",
+        "parameters": [
+          {
+            "description": "PubMed identifier",
+            "in": "query",
+            "name": "pmid",
+            "required": true,
+            "schema": {
+              "description": "PubMed identifier",
+              "minLength": 1,
+              "title": "Pmid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhenotypeSuggestionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggest HPO phenotypes from publication passages or metadata",
         "tags": [
           "publications",
           "publications"
