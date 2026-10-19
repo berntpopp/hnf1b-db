@@ -140,4 +140,71 @@ describe('clinicalDiff utility', () => {
     expect(subjCat.items[0].text).toBe('Subject sex: UNKNOWN_SEX -> FEMALE');
     expect(subjCat.items[1].text).toContain('Disease onset: RCAD');
   });
+
+  it('resolves removed items from baseline, nested genomicInterpretation index, and nested field edits', () => {
+    const baseline = {
+      content: {
+        phenotypicFeatures: [
+          { type: { id: 'HP:0000107', label: 'Renal cyst' } },
+          { type: { id: 'HP:0000819', label: 'Diabetes mellitus' } },
+        ],
+      },
+    };
+    const candidate = {
+      content: {
+        phenotypicFeatures: [{ type: { id: 'HP:0000819', label: 'Diabetes mellitus' } }],
+        interpretations: [
+          {
+            diagnosis: {
+              genomicInterpretations: [
+                {
+                  variantInterpretation: {
+                    variationDescriptor: { label: 'c.100G>A', geneContext: { value: 'HNF1B' } },
+                  },
+                },
+                {
+                  variantInterpretation: {
+                    variationDescriptor: { label: 'c.544+1G>A', geneContext: { value: 'HNF1B' } },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    };
+    const changes = [
+      {
+        section: 'Phenotypes',
+        operation: 'removed',
+        path: '/phenotypicFeatures/0',
+        before: null,
+        after: null,
+      },
+      {
+        section: 'Phenotypes',
+        operation: 'added',
+        path: '/phenotypicFeatures/0/onset',
+        before: null,
+        after: { age: { iso8601duration: 'P10Y' } },
+      },
+      {
+        section: 'Variants/Interpretations',
+        operation: 'changed',
+        path: '/interpretations/0/diagnosis/genomicInterpretations/1/variantInterpretation/acmgPathogenicityClassification',
+        before: 'LIKELY_PATHOGENIC',
+        after: 'PATHOGENIC',
+      },
+    ];
+
+    const summaries = resolveClinicalSummaries(changes, baseline, candidate);
+    const phenoCat = summaries.find((c) => c.id === 'phenotypes');
+    const varCat = summaries.find((c) => c.id === 'variants');
+
+    expect(phenoCat.items[0].text).toBe('Removed: Renal cyst (HP:0000107)');
+    expect(phenoCat.items[1].text).toBe(
+      'HP:0000819 — Diabetes mellitus: onset changed (None -> P10Y)'
+    );
+    expect(varCat.items[0].text).toContain('HNF1B c.544+1G>A — ACMG classification');
+  });
 });

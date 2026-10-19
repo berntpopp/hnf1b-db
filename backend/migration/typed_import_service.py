@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -377,6 +377,22 @@ async def run_batch_import(
     sanitizer = PhenopacketSanitizer()
     validator = PhenopacketValidator()
 
+    candidate_ids = {
+        str(doc.get("id")).strip()
+        for doc in phenopackets
+        if isinstance(doc, dict)
+        and doc.get("id") is not None
+        and str(doc.get("id")).strip()
+    }
+    existing_ids: set[str] = set()
+    if candidate_ids:
+        existing_rows = await db.scalars(
+            select(Phenopacket.phenopacket_id).where(
+                Phenopacket.phenopacket_id.in_(candidate_ids)
+            )
+        )
+        existing_ids = set(existing_rows.all())
+
     for idx, doc in enumerate(phenopackets):
         errors: list[str] = []
         warnings: list[str] = []
@@ -404,12 +420,7 @@ async def run_batch_import(
             else:
                 seen_batch_ids.add(phenopacket_id)
 
-            existing_count = await db.scalar(
-                select(func.count())
-                .select_from(Phenopacket)
-                .where(Phenopacket.phenopacket_id == phenopacket_id)
-            )
-            if (existing_count or 0) > 0:
+            if phenopacket_id in existing_ids:
                 already_exists = True
                 errors.append(
                     f"Phenopacket with ID '{phenopacket_id}' already exists in database"
@@ -445,16 +456,27 @@ async def run_batch_import(
     committed_rows = 0
     if not dry_run:
         service = PhenopacketService(PhenopacketRepository(db))
+        pending_rows: list[BatchImportRowResult] = []
         for row_result in results:
             if row_result.valid and not row_result.already_exists:
                 doc = phenopackets[row_result.row_index]
                 try:
-                    await service.create(
-                        PhenopacketCreate(phenopacket=doc),
-                        actor_id=actor.id,
-                    )
-                    committed_rows += 1
+                    async with db.begin_nested():
+                        await service.create(
+                            PhenopacketCreate(phenopacket=doc),
+                            actor_id=actor.id,
+                        )
+                    pending_rows.append(row_result)
                 except Exception as exc:
+                    row_result.valid = False
+                    row_result.errors.append(f"Commit failed: {exc}")
+        if pending_rows:
+            try:
+                await db.commit()
+                committed_rows = len(pending_rows)
+            except Exception as exc:
+                await db.rollback()
+                for row_result in pending_rows:
                     row_result.valid = False
                     row_result.errors.append(f"Commit failed: {exc}")
     else:

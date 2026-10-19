@@ -176,10 +176,40 @@ async def search_publication_passages(
     )
 
 
-_NEGATION_REGEX = re.compile(
-    r"\b(no|without|absent|normal|negative for|excluded)\b",
+_CLAUSE_BREAK_REGEX = re.compile(
+    r"[,;:]|\b(?:but|however|whereas|while|although|except)\b",
     re.IGNORECASE,
 )
+_PRE_NEGATION_REGEX = re.compile(
+    r"\b(?:no|not|without|absent|absence of|normal|negative for|excluded|ruled out|lack of|free of)\b",
+    re.IGNORECASE,
+)
+_POST_NEGATION_REGEX = re.compile(
+    r"^\s*(?:was|were|is|are)?\s*(?:not\s+\w+|absent|excluded|negative|normal|ruled out)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_match_negated(sentence: str, start: int, end: int) -> bool:
+    """Return whether a phenotype match at [start, end) is negated in its local clause."""
+    clause_start = 0
+    for m in _CLAUSE_BREAK_REGEX.finditer(sentence, 0, start):
+        clause_start = m.end()
+
+    clause_end = len(sentence)
+    m_after = _CLAUSE_BREAK_REGEX.search(sentence, end)
+    if m_after is not None:
+        clause_end = m_after.start()
+
+    prefix = sentence[max(clause_start, start - 65) : start]
+    if _PRE_NEGATION_REGEX.search(prefix):
+        return True
+
+    suffix = sentence[end : min(clause_end, end + 40)]
+    if _POST_NEGATION_REGEX.search(suffix):
+        return True
+
+    return False
 
 
 @lru_cache(maxsize=1)
@@ -290,14 +320,15 @@ async def suggest_phenotypes_from_pmid(
             s_clean = sentence.strip()
             if not s_clean:
                 continue
-            is_negated = bool(_NEGATION_REGEX.search(s_clean))
             matched_in_sentence: set[str] = set()
 
             for pattern, term_id, canonical_name in hpo_candidates:
                 if term_id in matched_in_sentence:
                     continue
-                if pattern.search(s_clean):
+                match = pattern.search(s_clean)
+                if match:
                     matched_in_sentence.add(term_id)
+                    is_negated = _is_match_negated(s_clean, match.start(), match.end())
                     dedup_key = (term_id, is_negated)
                     if dedup_key not in seen_keys:
                         seen_keys.add(dedup_key)

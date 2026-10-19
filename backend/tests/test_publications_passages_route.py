@@ -183,7 +183,7 @@ async def test_suggest_phenotypes_from_passages(async_client, db_session):
 
 @pytest.mark.asyncio
 async def test_suggest_phenotypes_with_negation(async_client, db_session):
-    """Verify negation cues correctly set excluded=True."""
+    """Verify negation cues are scoped to the local clause around each phenotype."""
     negated_pmid = "PMID:99"
     await persistence.ensure_metadata_row(
         db_session, negated_pmid, title="Negation test"
@@ -194,9 +194,10 @@ async def test_suggest_phenotypes_with_negation(async_client, db_session):
             "PMID:99:results:0",
             "results",
             0,
-            "The patient had no hypomagnesemia and renal insufficiency was absent.",
-            70,
-            10,
+            "The patient had no hypomagnesemia and renal insufficiency was absent. "
+            "The patient had renal cysts but no diabetes mellitus.",
+            125,
+            20,
             "pubtator_full_bioc",
         )
     ]
@@ -214,6 +215,10 @@ async def test_suggest_phenotypes_with_negation(async_client, db_session):
     assert hpo_map["HP:0002917"]["excluded"] is True
     assert "HP:0000083" in hpo_map  # Renal insufficiency
     assert hpo_map["HP:0000083"]["excluded"] is True
+    assert "HP:0000107" in hpo_map  # Renal cyst (positive in first clause)
+    assert hpo_map["HP:0000107"]["excluded"] is False
+    assert "HP:0000819" in hpo_map  # Diabetes mellitus (negated in second clause)
+    assert hpo_map["HP:0000819"]["excluded"] is True
 
 
 @pytest.mark.asyncio

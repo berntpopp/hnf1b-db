@@ -158,13 +158,11 @@ describe('Saved cohort filters view integration', () => {
         q: 'Subject_A',
         sex: 'FEMALE',
         has_variants: true,
-        classification: 'PATHOGENIC',
       });
 
       expect(wrapper.vm.searchQuery).toBe('Subject_A');
       expect(wrapper.vm.sexFilter).toBe('FEMALE');
       expect(wrapper.vm.hasVariantsFilter).toBe(true);
-      expect(wrapper.vm.classificationFilter).toBe('PATHOGENIC');
     });
   });
 

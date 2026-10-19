@@ -1142,6 +1142,14 @@ describe('Clone Cohort / Sibling Template pre-fill (#551)', () => {
     expect(ctx.phenopacket.measurements).toEqual([]);
     expect(ctx.phenopacket.diseases).toEqual([]);
     expect(ctx.loading).toBe(false);
+
+    // Entering a new subject ID rebinds genomicInterpretations on submission
+    ctx.phenopacket.subject.id = 'NEW-SUBJ-002';
+    ctx.mergedExternalReferences = PhenopacketCreateEdit.methods.mergedExternalReferences.bind(ctx);
+    const submitted = PhenopacketCreateEdit.methods.buildSubmissionPhenopacket.call(ctx);
+    expect(
+      submitted.interpretations[0].diagnosis.genomicInterpretations[0].subjectOrBiosampleId
+    ).toBe('NEW-SUBJ-002');
   });
 
   it('calls loadCloneTemplate on mount in create mode when cloneFrom query param is present', async () => {

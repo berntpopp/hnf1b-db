@@ -69,13 +69,9 @@
           <!-- Report preview -->
           <div v-if="report" class="mt-4" data-testid="batch-report-table">
             <div class="d-flex align-center justify-space-between mb-3">
-              <h3 class="text-subtitle-1 font-weight-bold">
-                Dry-Run Validation Report
-              </h3>
+              <h3 class="text-subtitle-1 font-weight-bold">Dry-Run Validation Report</h3>
               <div class="d-flex ga-2">
-                <v-chip size="small" variant="outlined">
-                  Total: {{ report.total_rows }}
-                </v-chip>
+                <v-chip size="small" variant="outlined"> Total: {{ report.total_rows }} </v-chip>
                 <v-chip size="small" color="success" variant="flat">
                   Valid: {{ report.valid_rows }}
                 </v-chip>
@@ -160,14 +156,13 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { apiClient } from '@/api';
 
 const emit = defineEmits(['import-complete']);
 
 const isOpen = ref(false);
-const placeholderText =
-  '[ { "id": "SAMPLE-01", "subject": { "id": "SUBJ-01", "sex": "MALE" } } ]';
+const placeholderText = '[ { "id": "SAMPLE-01", "subject": { "id": "SUBJ-01", "sex": "MALE" } } ]';
 const jsonInput = ref('');
 const validating = ref(false);
 const committing = ref(false);
@@ -175,23 +170,44 @@ const parseError = ref(null);
 const apiError = ref(null);
 const successMessage = ref(null);
 const report = ref(null);
+const previewedInput = ref(null);
+const previewedPayload = ref(null);
 
-const canCommit = computed(() => {
-  return report.value && report.value.valid_rows > 0 && !committing.value;
+watch(jsonInput, (newVal) => {
+  if (newVal !== previewedInput.value) {
+    report.value = null;
+    previewedInput.value = null;
+    previewedPayload.value = null;
+    parseError.value = null;
+    apiError.value = null;
+    successMessage.value = null;
+  }
 });
 
-function validatePayload() {
+const canCommit = computed(() => {
+  return Boolean(
+    report.value &&
+    report.value.valid_rows > 0 &&
+    !validating.value &&
+    !committing.value &&
+    previewedInput.value !== null &&
+    jsonInput.value === previewedInput.value &&
+    Array.isArray(previewedPayload.value)
+  );
+});
+
+function validatePayload(rawText = jsonInput.value) {
   parseError.value = null;
   apiError.value = null;
   successMessage.value = null;
 
-  if (!jsonInput.value.trim()) {
+  if (!rawText.trim()) {
     parseError.value = 'Please paste a JSON array of phenopackets.';
     return null;
   }
 
   try {
-    const parsed = JSON.parse(jsonInput.value.trim());
+    const parsed = JSON.parse(rawText.trim());
     const phenopackets = Array.isArray(parsed) ? parsed : parsed.phenopackets;
     if (!Array.isArray(phenopackets) || phenopackets.length === 0) {
       parseError.value =
@@ -206,12 +222,15 @@ function validatePayload() {
 }
 
 async function runDryRun() {
-  const phenopackets = validatePayload();
+  const inputSnapshot = jsonInput.value;
+  const phenopackets = validatePayload(inputSnapshot);
   if (!phenopackets) return;
 
   validating.value = true;
   apiError.value = null;
   report.value = null;
+  previewedInput.value = null;
+  previewedPayload.value = null;
 
   try {
     const response = await apiClient.post(
@@ -219,10 +238,17 @@ async function runDryRun() {
       { phenopackets },
       { params: { dry_run: true } }
     );
+    if (jsonInput.value !== inputSnapshot) {
+      return;
+    }
     report.value = response.data;
+    previewedInput.value = inputSnapshot;
+    previewedPayload.value = phenopackets;
   } catch (err) {
-    apiError.value =
-      err.response?.data?.detail || err.message || 'Dry-run execution failed';
+    if (jsonInput.value !== inputSnapshot) {
+      return;
+    }
+    apiError.value = err.response?.data?.detail || err.message || 'Dry-run execution failed';
     if (window.logService?.error) {
       window.logService.error('Bulk import dry-run failed', { error: err });
     }
@@ -232,7 +258,8 @@ async function runDryRun() {
 }
 
 async function commitBatch() {
-  const phenopackets = validatePayload();
+  if (!canCommit.value) return;
+  const phenopackets = previewedPayload.value;
   if (!phenopackets) return;
 
   committing.value = true;
@@ -246,14 +273,15 @@ async function commitBatch() {
       { params: { dry_run: false } }
     );
     report.value = response.data;
+    previewedInput.value = null;
+    previewedPayload.value = null;
     const committed = response.data?.committed_rows || 0;
     successMessage.value = `Successfully committed ${committed} phenopacket${
       committed === 1 ? '' : 's'
     } as drafts.`;
     emit('import-complete', response.data);
   } catch (err) {
-    apiError.value =
-      err.response?.data?.detail || err.message || 'Batch commit failed';
+    apiError.value = err.response?.data?.detail || err.message || 'Batch commit failed';
     if (window.logService?.error) {
       window.logService.error('Bulk import commit failed', { error: err });
     }

@@ -209,8 +209,6 @@ export default {
       filters: {
         sex: null,
         has_variants: null,
-        classification: null,
-        pathogenicity: null,
       },
     });
 
@@ -273,29 +271,11 @@ export default {
     },
     hasVariantsFilter: {
       get() {
-        return (
-          this.urlState?.filters?.has_variants?.value ??
-          this.urlState?.filters?.has_variant?.value ??
-          null
-        );
+        return this.urlState?.filters?.has_variants?.value ?? null;
       },
       set(value) {
         if (this.urlState?.filters?.has_variants) {
           this.urlState.filters.has_variants.value = value;
-        }
-      },
-    },
-    classificationFilter: {
-      get() {
-        return (
-          this.urlState?.filters?.classification?.value ??
-          this.urlState?.filters?.pathogenicity?.value ??
-          null
-        );
-      },
-      set(value) {
-        if (this.urlState?.filters?.classification) {
-          this.urlState.filters.classification.value = value;
         }
       },
     },
@@ -311,9 +291,6 @@ export default {
       ) {
         state.has_variants = this.hasVariantsFilter;
       }
-      if (this.classificationFilter) {
-        state.classification = this.classificationFilter;
-      }
       return state;
     },
     // Keep filterValues for compatibility but read-only
@@ -321,7 +298,6 @@ export default {
       return {
         sex: this.urlState?.filters?.sex?.value ?? null,
         has_variants: this.hasVariantsFilter,
-        classification: this.classificationFilter,
       };
     },
     // Table headers — state column shown only to curator/admin (Wave 7/D.1 §9.2).
@@ -413,12 +389,6 @@ export default {
         this.fetchPhenopackets();
       },
     },
-    'urlState.filters.classification.value': {
-      handler() {
-        this.urlState.resetPage();
-        this.fetchPhenopackets();
-      },
-    },
   },
   mounted() {
     // Initial fetch with URL state
@@ -479,12 +449,7 @@ export default {
 
         // Get filters from URL state
         const sexFilter = this.urlState?.filters?.sex?.value;
-        const hasVariants =
-          this.urlState?.filters?.has_variants?.value ??
-          this.urlState?.filters?.has_variant?.value;
-        const classification =
-          this.urlState?.filters?.classification?.value ??
-          this.urlState?.filters?.pathogenicity?.value;
+        const hasVariants = this.urlState?.filters?.has_variants?.value;
 
         const response = await getPhenopackets({
           ...paginationParams,
@@ -493,7 +458,6 @@ export default {
           ...(hasVariants !== null &&
             hasVariants !== undefined &&
             hasVariants !== '' && { 'filter[has_variants]': hasVariants }),
-          ...(classification && { 'filter[classification]': classification }),
         });
 
         const jsonApiData = response.data || {};
@@ -706,8 +670,6 @@ export default {
       } else {
         this.hasVariantsFilter = null;
       }
-      this.classificationFilter =
-        presetFilters.classification || presetFilters.pathogenicity || null;
       this.urlState?.resetPage?.();
       this.fetchPhenopackets();
     },

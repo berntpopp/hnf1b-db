@@ -225,7 +225,6 @@ export default {
       defaultSort: '-simple_id',
       filters: {
         type: null,
-        variant_type: null,
         classification: null,
         consequence: null,
         domain: null,
@@ -326,19 +325,12 @@ export default {
         }
       },
     },
-    // Direct computed for type filter - v-model compatible (aliases variant_type / type)
+    // Direct computed for type filter - v-model compatible
     typeFilter: {
       get() {
-        return (
-          this.urlState?.filters?.variant_type?.value ??
-          this.urlState?.filters?.type?.value ??
-          null
-        );
+        return this.urlState?.filters?.type?.value ?? null;
       },
       set(value) {
-        if (this.urlState?.filters?.variant_type) {
-          this.urlState.filters.variant_type.value = value;
-        }
         if (this.urlState?.filters?.type) {
           this.urlState.filters.type.value = value;
         }
@@ -405,14 +397,6 @@ export default {
   watch: {
     // Watch URL filter changes
     'urlState.filters.type.value': {
-      handler() {
-        if (this.loadingInitialized) {
-          this.urlState.resetPage();
-          this.fetchVariants();
-        }
-      },
-    },
-    'urlState.filters.variant_type.value': {
       handler() {
         if (this.loadingInitialized) {
           this.urlState.resetPage();
@@ -587,8 +571,7 @@ export default {
 
     onApplyPreset(presetFilters) {
       if (!presetFilters || typeof presetFilters !== 'object') return;
-      this.searchQuery =
-        presetFilters.q || presetFilters.query || presetFilters.search || '';
+      this.searchQuery = presetFilters.q || presetFilters.query || presetFilters.search || '';
       this.typeFilter = presetFilters.variant_type || presetFilters.type || null;
       this.classificationFilter = presetFilters.classification || null;
       this.consequenceFilter = presetFilters.consequence || null;

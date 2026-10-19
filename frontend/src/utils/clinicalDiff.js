@@ -27,6 +27,27 @@ function extractIndexFromPath(path, prefix) {
   return match ? parseInt(match[1], 10) : null;
 }
 
+function isWholeItemPath(path, pattern) {
+  return pattern.test(path);
+}
+
+function findVariantInfoFromObject(obj) {
+  if (!obj || typeof obj !== 'object') return { gene: 'HNF1B', label: '' };
+  const gInterp =
+    obj.diagnosis?.genomicInterpretations?.[0] || obj.genomicInterpretations?.[0] || obj;
+  const desc =
+    gInterp?.variantInterpretation?.variationDescriptor ||
+    gInterp?.variationDescriptor ||
+    obj.variationDescriptor;
+  const gene =
+    desc?.geneContext?.value ||
+    desc?.geneContext?.symbol ||
+    gInterp?.variantInterpretation?.geneContext?.value ||
+    'HNF1B';
+  const label = desc?.label || desc?.id || '';
+  return { gene, label };
+}
+
 function findVariantInfo(content, path) {
   const index = extractIndexFromPath(path, '/(?:interpretations|variantInterpretations|variants)');
   if (index === null) return { gene: 'HNF1B', label: '' };
@@ -38,8 +59,13 @@ function findVariantInfo(content, path) {
 
   if (!interp) return { gene: 'HNF1B', label: '' };
 
+  const giMatch = path.match(/\/genomicInterpretations\/(\d+)/);
+  const giIndex = giMatch ? parseInt(giMatch[1], 10) : 0;
+
   const gInterp =
-    interp.diagnosis?.genomicInterpretations?.[0] || interp.genomicInterpretations?.[0] || interp;
+    interp.diagnosis?.genomicInterpretations?.[giIndex] ||
+    interp.genomicInterpretations?.[giIndex] ||
+    interp;
 
   const desc =
     gInterp?.variantInterpretation?.variationDescriptor ||
@@ -54,6 +80,23 @@ function findVariantInfo(content, path) {
 
   const label = desc?.label || desc?.id || '';
   return { gene, label };
+}
+
+function resolveArrayItem(operation, index, key, baselineContent, candidateContent, before, after) {
+  if (operation === 'removed') {
+    return (
+      (typeof before === 'object' && before !== null ? before : null) ||
+      (index !== null ? baselineContent[key]?.[index] || candidateContent[key]?.[index] : null) ||
+      (typeof after === 'object' && after !== null ? after : null) ||
+      {}
+    );
+  }
+  return (
+    (index !== null ? candidateContent[key]?.[index] || baselineContent[key]?.[index] : null) ||
+    (typeof after === 'object' && after !== null ? after : null) ||
+    (typeof before === 'object' && before !== null ? before : null) ||
+    {}
+  );
 }
 
 /**
@@ -85,14 +128,28 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
       path.startsWith('/phenotypic_features')
     ) {
       const index = extractIndexFromPath(path, '/(?:phenotypicFeatures|phenotypic_features)');
-      const feature =
-        (index !== null
-          ? candidateContent.phenotypicFeatures?.[index] ||
-            baselineContent.phenotypicFeatures?.[index]
-          : null) ||
-        (typeof after === 'object' && after !== null ? after : null) ||
-        (typeof before === 'object' && before !== null ? before : null) ||
-        {};
+      const featureKey = path.startsWith('/phenotypic_features')
+        ? 'phenotypic_features'
+        : 'phenotypicFeatures';
+      const isWholeFeature = isWholeItemPath(
+        path,
+        /^\/(?:phenotypicFeatures|phenotypic_features)\/\d+$/
+      );
+      const feature = isWholeFeature
+        ? resolveArrayItem(
+            operation,
+            index,
+            featureKey,
+            baselineContent,
+            candidateContent,
+            before,
+            after
+          )
+        : (index !== null
+            ? operation === 'removed'
+              ? baselineContent[featureKey]?.[index] || candidateContent[featureKey]?.[index]
+              : candidateContent[featureKey]?.[index] || baselineContent[featureKey]?.[index]
+            : null) || {};
 
       const termId = feature.type?.id || feature.id || '';
       const termLabel = feature.type?.label || feature.label || '';
@@ -115,11 +172,11 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
           operation,
           change,
         });
-      } else if (operation === 'added') {
+      } else if (isWholeFeature && operation === 'added') {
         const isExcluded = feature.excluded === true;
         const text = isExcluded ? `Excluded: ${termWithParen}` : `Added: ${termWithParen}`;
         phenotypes.push({ text, operation, change });
-      } else if (operation === 'removed') {
+      } else if (isWholeFeature && operation === 'removed') {
         phenotypes.push({
           text: `Removed: ${termWithParen}`,
           operation,
@@ -141,9 +198,20 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
       path.startsWith('/variants') ||
       path.startsWith('/variantInterpretations')
     ) {
-      const vInfo = findVariantInfo(candidateContent, path).label
-        ? findVariantInfo(candidateContent, path)
-        : findVariantInfo(baselineContent, path);
+      const isWholeVariant = isWholeItemPath(
+        path,
+        /^\/(?:interpretations|variantInterpretations|variants)\/\d+(?:\/(?:diagnosis\/)?genomicInterpretations\/\d+)?$/
+      );
+      const primarySide = operation === 'removed' ? baselineContent : candidateContent;
+      const fallbackSide = operation === 'removed' ? candidateContent : baselineContent;
+      const primaryInfo = findVariantInfo(primarySide, path);
+      const fallbackInfo = findVariantInfo(fallbackSide, path);
+      const payloadInfo = findVariantInfoFromObject(operation === 'removed' ? before : after);
+      const vInfo = primaryInfo.label
+        ? primaryInfo
+        : payloadInfo.label
+          ? payloadInfo
+          : fallbackInfo;
 
       const varPrefix = vInfo.label ? `${vInfo.gene} ${vInfo.label}` : vInfo.gene;
 
@@ -171,13 +239,13 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
           operation,
           change,
         });
-      } else if (operation === 'added') {
+      } else if (isWholeVariant && operation === 'added') {
         variants.push({
           text: `Added variant: ${varPrefix} (${formatValueBrief(after)})`,
           operation,
           change,
         });
-      } else if (operation === 'removed') {
+      } else if (isWholeVariant && operation === 'removed') {
         variants.push({
           text: `Removed variant: ${varPrefix} (${formatValueBrief(before)})`,
           operation,
@@ -219,13 +287,22 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
         });
       } else if (path.startsWith('/diseases')) {
         const index = extractIndexFromPath(path, '/diseases');
-        const disease =
-          (index !== null
-            ? candidateContent.diseases?.[index] || baselineContent.diseases?.[index]
-            : null) ||
-          (typeof after === 'object' && after !== null ? after : null) ||
-          (typeof before === 'object' && before !== null ? before : null) ||
-          {};
+        const isWholeDisease = isWholeItemPath(path, /^\/diseases\/\d+$/);
+        const disease = isWholeDisease
+          ? resolveArrayItem(
+              operation,
+              index,
+              'diseases',
+              baselineContent,
+              candidateContent,
+              before,
+              after
+            )
+          : (index !== null
+              ? operation === 'removed'
+                ? baselineContent.diseases?.[index] || candidateContent.diseases?.[index]
+                : candidateContent.diseases?.[index] || baselineContent.diseases?.[index]
+              : null) || {};
 
         const diseaseName = disease.term?.label || disease.term?.id || disease.id || 'Disease';
 
@@ -235,13 +312,13 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
             operation,
             change,
           });
-        } else if (operation === 'added') {
+        } else if (isWholeDisease && operation === 'added') {
           subject.push({
             text: `Added disease: ${diseaseName}`,
             operation,
             change,
           });
-        } else if (operation === 'removed') {
+        } else if (isWholeDisease && operation === 'removed') {
           subject.push({
             text: `Removed disease: ${diseaseName}`,
             operation,
@@ -268,13 +345,22 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
     else {
       if (path.startsWith('/measurements')) {
         const index = extractIndexFromPath(path, '/measurements');
-        const meas =
-          (index !== null
-            ? candidateContent.measurements?.[index] || baselineContent.measurements?.[index]
-            : null) ||
-          (typeof after === 'object' && after !== null ? after : null) ||
-          (typeof before === 'object' && before !== null ? before : null) ||
-          {};
+        const isWholeMeasurement = isWholeItemPath(path, /^\/measurements\/\d+$/);
+        const meas = isWholeMeasurement
+          ? resolveArrayItem(
+              operation,
+              index,
+              'measurements',
+              baselineContent,
+              candidateContent,
+              before,
+              after
+            )
+          : (index !== null
+              ? operation === 'removed'
+                ? baselineContent.measurements?.[index] || candidateContent.measurements?.[index]
+                : candidateContent.measurements?.[index] || baselineContent.measurements?.[index]
+              : null) || {};
 
         const assayName = meas.assay?.label || meas.assay?.id || meas.id || 'Measurement';
 
@@ -284,13 +370,13 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
             operation,
             change,
           });
-        } else if (operation === 'added') {
+        } else if (isWholeMeasurement && operation === 'added') {
           other.push({
             text: `Added measurement: ${assayName}`,
             operation,
             change,
           });
-        } else if (operation === 'removed') {
+        } else if (isWholeMeasurement && operation === 'removed') {
           other.push({
             text: `Removed measurement: ${assayName}`,
             operation,

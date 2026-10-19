@@ -204,6 +204,51 @@ const props = defineProps({
 
 const compareMode = ref('both');
 
+function escapeJsonPointerToken(token) {
+  return String(token).replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
+function serializeWithPaths(value, path = '', indent = 0, keyPrefix = '', comma = '') {
+  const pad = '  '.repeat(indent);
+  const out = [];
+
+  if (value === null || typeof value !== 'object') {
+    out.push({ text: `${pad}${keyPrefix}${JSON.stringify(value)}${comma}`, path });
+    return out;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      out.push({ text: `${pad}${keyPrefix}[]${comma}`, path });
+      return out;
+    }
+    out.push({ text: `${pad}${keyPrefix}[`, path });
+    for (let i = 0; i < value.length; i += 1) {
+      const childComma = i < value.length - 1 ? ',' : '';
+      const childPath = `${path}/${i}`;
+      out.push(...serializeWithPaths(value[i], childPath, indent + 1, '', childComma));
+    }
+    out.push({ text: `${pad}]${comma}`, path });
+    return out;
+  }
+
+  const keys = Object.keys(value).filter((k) => value[k] !== undefined);
+  if (keys.length === 0) {
+    out.push({ text: `${pad}${keyPrefix}{}${comma}`, path });
+    return out;
+  }
+  out.push({ text: `${pad}${keyPrefix}{`, path });
+  for (let i = 0; i < keys.length; i += 1) {
+    const k = keys[i];
+    const childComma = i < keys.length - 1 ? ',' : '';
+    const childPath = `${path}/${escapeJsonPointerToken(k)}`;
+    const childPrefix = `${JSON.stringify(k)}: `;
+    out.push(...serializeWithPaths(value[k], childPath, indent + 1, childPrefix, childComma));
+  }
+  out.push({ text: `${pad}}${comma}`, path });
+  return out;
+}
+
 function computeHighlightedLines(obj, changes, isCandidate) {
   if (!obj) return [];
   const content = obj.content || obj;
@@ -211,47 +256,26 @@ function computeHighlightedLines(obj, changes, isCandidate) {
     return [];
   }
 
-  const jsonStr = JSON.stringify(content, null, 2);
-  const lines = jsonStr.split('\n');
+  const rawLines = serializeWithPaths(content);
+  const activePaths = (changes || [])
+    .filter((c) => {
+      if (!c?.path) return false;
+      if (isCandidate && c.operation === 'removed') return false;
+      if (!isCandidate && c.operation === 'added') return false;
+      return true;
+    })
+    .map((c) => c.path);
 
-  const changedKeyTokens = new Set();
-  const changedValues = new Set();
-
-  for (const c of changes) {
-    const parts = (c.path || '').split('/').filter(Boolean);
-    if (parts.length > 0) {
-      changedKeyTokens.add(parts[parts.length - 1]);
-    }
-    const val = isCandidate ? c.after : c.before;
-    if (val !== null && val !== undefined) {
-      if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
-        changedValues.add(String(val));
-      }
-    }
-  }
-
-  return lines.map((line, index) => {
-    let isChanged = false;
-
-    for (const key of changedKeyTokens) {
-      if (line.includes(`"${key}":`)) {
-        isChanged = true;
-        break;
-      }
-    }
-
-    if (!isChanged) {
-      for (const val of changedValues) {
-        if (line.includes(`"${val}"`) || line.includes(`: ${val}`) || line.includes(`: "${val}"`)) {
-          isChanged = true;
-          break;
-        }
-      }
-    }
+  return rawLines.map((entry, index) => {
+    const isChanged =
+      Boolean(entry.path) &&
+      activePaths.some(
+        (changePath) => entry.path === changePath || entry.path.startsWith(`${changePath}/`)
+      );
 
     return {
       lineNumber: index + 1,
-      text: line,
+      text: entry.text,
       isChanged,
       operation: isChanged ? (isCandidate ? 'added' : 'removed') : null,
     };

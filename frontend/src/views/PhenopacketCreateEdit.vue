@@ -750,9 +750,20 @@ export default {
             pmid: ref.id.replace('PMID:', ''),
           }));
 
-        this.phenopacket.interpretations = JSON.parse(
-          JSON.stringify(src.interpretations || [])
-        );
+        const clonedInterpretations = JSON.parse(JSON.stringify(src.interpretations || []));
+        for (const interp of clonedInterpretations) {
+          for (const gi of interp.diagnosis?.genomicInterpretations || []) {
+            if ('subjectOrBiosampleId' in gi) {
+              gi.subjectOrBiosampleId = '';
+            }
+          }
+          for (const gi of interp.genomicInterpretations || []) {
+            if ('subjectOrBiosampleId' in gi) {
+              gi.subjectOrBiosampleId = '';
+            }
+          }
+        }
+        this.phenopacket.interpretations = clonedInterpretations;
 
         const srcCuration = src.hnf1bCuration || {};
         this.phenopacket.hnf1bCuration = this.phenopacket.hnf1bCuration || {};
@@ -826,9 +837,31 @@ export default {
       // v2 field, and records saved before this fix may carry it in the loaded
       // document. `this.publications` (component state) is the source of truth.
       const { publications: _legacyPublications, ...phenopacket } = this.phenopacket;
+      const subjectId = `${phenopacket.subject?.id || ''}`.trim();
+      const interpretations = Array.isArray(phenopacket.interpretations)
+        ? phenopacket.interpretations.map((interp) => {
+            if (!subjectId || !interp || typeof interp !== 'object') return interp;
+            const nextInterp = { ...interp };
+            if (Array.isArray(nextInterp.diagnosis?.genomicInterpretations)) {
+              nextInterp.diagnosis = {
+                ...nextInterp.diagnosis,
+                genomicInterpretations: nextInterp.diagnosis.genomicInterpretations.map((gi) =>
+                  gi && !gi.subjectOrBiosampleId ? { ...gi, subjectOrBiosampleId: subjectId } : gi
+                ),
+              };
+            }
+            if (Array.isArray(nextInterp.genomicInterpretations)) {
+              nextInterp.genomicInterpretations = nextInterp.genomicInterpretations.map((gi) =>
+                gi && !gi.subjectOrBiosampleId ? { ...gi, subjectOrBiosampleId: subjectId } : gi
+              );
+            }
+            return nextInterp;
+          })
+        : phenopacket.interpretations;
 
       return {
         ...phenopacket,
+        ...(interpretations !== undefined && { interpretations }),
         metaData: {
           ...(phenopacket.metaData || {}),
           externalReferences: this.mergedExternalReferences(),

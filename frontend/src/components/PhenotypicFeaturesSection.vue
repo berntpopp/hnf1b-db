@@ -15,22 +15,14 @@
             <v-icon size="small" color="primary" class="mr-1">mdi-lightning-bolt</v-icon>
             Quick-Add Phenotype
           </div>
-          <v-chip size="x-small" variant="tonal" color="primary">
-            Cmd+K or / to focus
-          </v-chip>
-          <v-chip size="x-small" variant="tonal" color="success">
-            Enter = Present
-          </v-chip>
-          <v-chip size="x-small" variant="tonal" color="error">
-            Shift+Enter = Excluded
-          </v-chip>
-          <v-chip size="x-small" variant="tonal" color="grey">
-            Alt+B/U/R/L = Laterality
-          </v-chip>
+          <v-chip size="x-small" variant="tonal" color="primary"> Cmd+K or / to focus </v-chip>
+          <v-chip size="x-small" variant="tonal" color="success"> Enter = Present </v-chip>
+          <v-chip size="x-small" variant="tonal" color="error"> Shift+Enter = Excluded </v-chip>
+          <v-chip size="x-small" variant="tonal" color="grey"> Alt+B/U/R/L = Laterality </v-chip>
         </div>
 
         <div class="d-flex flex-wrap align-center gap-2">
-          <div class="flex-grow-1" style="min-width: 260px; position: relative;">
+          <div class="flex-grow-1" style="min-width: 260px; position: relative">
             <v-text-field
               ref="quickAddInputRef"
               v-model="searchQuery"
@@ -118,7 +110,7 @@
             variant="outlined"
             clearable
             hide-details
-            style="max-width: 170px;"
+            style="max-width: 170px"
           />
 
           <!-- Quick Onset Input -->
@@ -132,7 +124,7 @@
             variant="outlined"
             clearable
             hide-details
-            style="max-width: 140px;"
+            style="max-width: 140px"
             @keydown="handleInputKeydown"
           />
         </div>
@@ -723,8 +715,11 @@ const handleGlobalKeydown = (event) => {
 let currentSearchQuery = '';
 
 const onSearchInput = async (val) => {
-  const q = (typeof val === 'string' ? val : searchQuery.value || '').trim();
-  searchQuery.value = q;
+  const raw = typeof val === 'string' ? val : searchQuery.value || '';
+  if (typeof val === 'string' && searchQuery.value !== val) {
+    searchQuery.value = val;
+  }
+  const q = raw.trim();
   currentSearchQuery = q;
   if (q.length < 2) {
     suggestions.value = [];
