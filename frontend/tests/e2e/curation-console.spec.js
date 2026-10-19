@@ -122,11 +122,16 @@ async function fillText(locator, value) {
 
 /** Open a v-select/-combobox control and pick the option whose accessible name matches EXACTLY. */
 async function selectExact(page, controlLocator, optionText) {
-  await controlLocator.click();
-  await page
-    .locator('.v-overlay--active')
-    .getByRole('option', { name: optionText, exact: true })
-    .click();
+  await expect(async () => {
+    const listbox = page.locator('.v-overlay--active [role="listbox"]');
+    if ((await listbox.count()) === 0) {
+      await controlLocator.scrollIntoViewIfNeeded();
+      await controlLocator.click();
+    }
+    await listbox.getByRole('option', { name: optionText, exact: true }).click();
+    await expect(listbox).toHaveCount(0, { timeout: 2_000 });
+    await expect(controlLocator).toContainText(optionText, { timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
 }
 
 /**
@@ -135,12 +140,17 @@ async function selectExact(page, controlLocator, optionText) {
  * accessible name is NOT just the label text.
  */
 async function selectContains(page, controlLocator, optionSubstring) {
-  await controlLocator.click();
   const escaped = optionSubstring.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  await page
-    .locator('.v-overlay--active')
-    .getByRole('option', { name: new RegExp(escaped) })
-    .click();
+  await expect(async () => {
+    const listbox = page.locator('.v-overlay--active [role="listbox"]');
+    if ((await listbox.count()) === 0) {
+      await controlLocator.scrollIntoViewIfNeeded();
+      await controlLocator.click();
+    }
+    await listbox.getByRole('option', { name: new RegExp(escaped) }).click();
+    await expect(listbox).toHaveCount(0, { timeout: 2_000 });
+    await expect(controlLocator).toContainText(optionSubstring, { timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
 }
 
 async function addChip(locator, value) {
