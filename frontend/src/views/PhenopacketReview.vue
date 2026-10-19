@@ -71,6 +71,9 @@
           <v-tabs v-model="activeView" class="content-tabs mb-4" show-arrows>
             <v-tab class="touch-target" value="changes">Changes</v-tab>
             <v-tab class="touch-target" value="candidate">Candidate</v-tab>
+            <v-tab class="touch-target" value="compare" data-testid="side-by-side-compare">
+              Side-by-Side Compare
+            </v-tab>
             <v-tab class="touch-target" value="json">Raw JSON</v-tab>
             <v-tab class="touch-target" value="history">History</v-tab>
           </v-tabs>
@@ -80,10 +83,17 @@
               v-if="activeView === 'changes'"
               :changes="review.context.value.semantic_changes"
               :baseline="review.context.value.baseline"
+              :candidate="review.context.value.candidate"
             />
             <CandidateSnapshot
               v-else-if="activeView === 'candidate'"
               :candidate="review.context.value.candidate"
+            />
+            <RevisionCompare
+              v-else-if="activeView === 'compare'"
+              :baseline="review.context.value.baseline"
+              :candidate="review.context.value.candidate"
+              :changes="review.context.value.semantic_changes"
             />
             <section v-else-if="activeView === 'json'" aria-labelledby="candidate-json-title">
               <h2 id="candidate-json-title" class="text-h6 mb-3">Complete candidate JSON</h2>
@@ -169,6 +179,7 @@ import CandidateSnapshot from '@/components/review/CandidateSnapshot.vue';
 import ReviewActionPanel from '@/components/review/ReviewActionPanel.vue';
 import ReviewHeader from '@/components/review/ReviewHeader.vue';
 import ReviewIssuesPanel from '@/components/review/ReviewIssuesPanel.vue';
+import RevisionCompare from '@/components/review/RevisionCompare.vue';
 import SemanticDiff from '@/components/review/SemanticDiff.vue';
 import { usePhenopacketState } from '@/composables/usePhenopacketState';
 import { useReviewContext } from '@/composables/useReviewContext';

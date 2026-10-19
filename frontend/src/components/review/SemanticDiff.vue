@@ -17,29 +17,47 @@
         </v-chip>
       </div>
 
-      <!-- Section filter chips -->
-      <div v-if="availableSections.length > 1" class="d-flex flex-wrap ga-2 mt-2">
-        <v-chip
-          filter
+      <!-- Controls row: section filters and RFC-6902 path toggle -->
+      <div class="d-flex align-center justify-space-between flex-wrap ga-2 mt-2">
+        <!-- Section filter chips -->
+        <div v-if="availableSections.length > 1" class="d-flex flex-wrap ga-2">
+          <v-chip
+            filter
+            size="small"
+            :variant="selectedSection === 'all' ? 'flat' : 'outlined'"
+            :color="selectedSection === 'all' ? 'primary' : undefined"
+            @click="selectedSection = 'all'"
+          >
+            All ({{ changes.length }})
+          </v-chip>
+          <v-chip
+            v-for="sec in availableSections"
+            :key="sec.name"
+            filter
+            size="small"
+            :variant="selectedSection === sec.name ? 'flat' : 'outlined'"
+            :color="selectedSection === sec.name ? 'primary' : undefined"
+            @click="selectedSection = sec.name"
+          >
+            <v-icon start size="x-small">{{ sectionIcon(sec.name) }}</v-icon>
+            {{ sec.name }} ({{ sec.count }})
+          </v-chip>
+        </div>
+
+        <v-btn
+          v-if="changes.length > 0"
+          data-testid="toggle-raw-diff"
           size="small"
-          :variant="selectedSection === 'all' ? 'flat' : 'outlined'"
-          :color="selectedSection === 'all' ? 'primary' : undefined"
-          @click="selectedSection = 'all'"
+          variant="outlined"
+          color="primary"
+          class="touch-target ml-auto"
+          @click="showRawDiff = !showRawDiff"
         >
-          All ({{ changes.length }})
-        </v-chip>
-        <v-chip
-          v-for="sec in availableSections"
-          :key="sec.name"
-          filter
-          size="small"
-          :variant="selectedSection === sec.name ? 'flat' : 'outlined'"
-          :color="selectedSection === sec.name ? 'primary' : undefined"
-          @click="selectedSection = sec.name"
-        >
-          <v-icon start size="x-small">{{ sectionIcon(sec.name) }}</v-icon>
-          {{ sec.name }} ({{ sec.count }})
-        </v-chip>
+          <v-icon start size="small">
+            {{ showRawDiff ? 'mdi-eye-off-outline' : 'mdi-code-json' }}
+          </v-icon>
+          {{ showRawDiff ? 'Hide RFC-6902 paths' : 'Show RFC-6902 paths' }}
+        </v-btn>
       </div>
     </div>
 
@@ -47,69 +65,132 @@
       No semantic changes reported.
     </p>
 
-    <div v-else class="semantic-diff__sections">
-      <div v-for="group in filteredGroups" :key="group.section" class="section-group mb-5">
-        <div class="section-group__header d-flex align-center ga-2 mb-2 pb-1 border-bottom">
-          <v-icon size="small" color="primary">{{ sectionIcon(group.section) }}</v-icon>
-          <h3 class="text-subtitle-1 font-weight-bold mb-0">{{ group.section }}</h3>
-          <v-chip size="x-small" variant="tonal" color="primary">
-            {{ group.items.length }} change{{ group.items.length === 1 ? '' : 's' }}
-          </v-chip>
-        </div>
+    <template v-else>
+      <!-- Semantic Clinical Summary Cards -->
+      <section
+        v-if="clinicalSummaries.length > 0"
+        data-testid="clinical-summary"
+        class="clinical-summary mb-5"
+        aria-labelledby="clinical-summary-heading"
+      >
+        <h3
+          id="clinical-summary-heading"
+          class="text-subtitle-1 font-weight-bold mb-3 d-flex align-center ga-2"
+        >
+          <v-icon size="small" color="primary">mdi-clipboard-pulse-outline</v-icon>
+          Clinical Change Summary
+        </h3>
 
-        <ul class="semantic-diff__list">
-          <li
-            v-for="(change, index) in group.items"
-            :key="`${change.path}-${change.operation}-${index}`"
-            class="semantic-change"
-            :data-operation="change.operation"
-            :aria-label="changeAriaLabel(change)"
+        <div class="clinical-summary__cards">
+          <v-card
+            v-for="cat in clinicalSummaries"
+            :key="cat.id"
+            variant="outlined"
+            class="clinical-summary__card"
+            :data-testid="`clinical-summary-${cat.id}`"
           >
-            <div class="semantic-change__header">
-              <v-chip
-                size="small"
-                variant="tonal"
-                :color="operationColor(change.operation)"
-                class="operation-chip"
-              >
-                <v-icon start size="x-small" class="operation-icon" aria-hidden="true">
-                  {{ operationIcon(change.operation) }}
-                </v-icon>
-                <strong>{{ operationLabel(change.operation) }}</strong>
-              </v-chip>
-              <span class="change-section-tag text-caption text-medium-emphasis">{{
-                change.section
-              }}</span>
-              <code class="semantic-change__path">{{ change.path }}</code>
-            </div>
+            <v-card-item class="py-2 px-3 border-bottom bg-surface-variant-subtle">
+              <template #prepend>
+                <v-icon size="small" :color="cat.color">{{ cat.icon }}</v-icon>
+              </template>
+              <v-card-title class="text-subtitle-2 font-weight-bold">
+                {{ cat.title }}
+              </v-card-title>
+              <template #append>
+                <v-chip size="x-small" :color="cat.color" variant="tonal">
+                  {{ cat.items.length }}
+                </v-chip>
+              </template>
+            </v-card-item>
 
-            <div class="semantic-change__values">
-              <div class="value-block value-block--before">
-                <span class="value-label text-caption">Before</span>
-                <pre class="value-content">{{ formatValue(change.before) }}</pre>
+            <v-card-text class="pa-3">
+              <ul class="clinical-summary__list">
+                <li
+                  v-for="(item, idx) in cat.items"
+                  :key="idx"
+                  class="clinical-summary__item d-flex align-center ga-2 py-1"
+                >
+                  <v-icon size="x-small" :color="operationColor(item.operation)">
+                    {{ operationIcon(item.operation) }}
+                  </v-icon>
+                  <span class="clinical-summary__item-text text-body-2">
+                    {{ item.text }}
+                  </span>
+                </li>
+              </ul>
+            </v-card-text>
+          </v-card>
+        </div>
+      </section>
+
+      <!-- Raw RFC-6902 path blocks (toggleable with showRawDiff, kept in DOM for accessibility) -->
+      <div v-show="showRawDiff" class="semantic-diff__sections">
+        <div v-for="group in filteredGroups" :key="group.section" class="section-group mb-5">
+          <div class="section-group__header d-flex align-center ga-2 mb-2 pb-1 border-bottom">
+            <v-icon size="small" color="primary">{{ sectionIcon(group.section) }}</v-icon>
+            <h3 class="text-subtitle-1 font-weight-bold mb-0">{{ group.section }}</h3>
+            <v-chip size="x-small" variant="tonal" color="primary">
+              {{ group.items.length }} change{{ group.items.length === 1 ? '' : 's' }}
+            </v-chip>
+          </div>
+
+          <ul class="semantic-diff__list">
+            <li
+              v-for="(change, index) in group.items"
+              :key="`${change.path}-${change.operation}-${index}`"
+              class="semantic-change"
+              :data-operation="change.operation"
+              :aria-label="changeAriaLabel(change)"
+            >
+              <div class="semantic-change__header">
+                <v-chip
+                  size="small"
+                  variant="tonal"
+                  :color="operationColor(change.operation)"
+                  class="operation-chip"
+                >
+                  <v-icon start size="x-small" class="operation-icon" aria-hidden="true">
+                    {{ operationIcon(change.operation) }}
+                  </v-icon>
+                  <strong>{{ operationLabel(change.operation) }}</strong>
+                </v-chip>
+                <span class="change-section-tag text-caption text-medium-emphasis">{{
+                  change.section
+                }}</span>
+                <code class="semantic-change__path">{{ change.path }}</code>
               </div>
-              <div class="value-block value-block--after">
-                <span class="value-label text-caption">After</span>
-                <pre class="value-content">{{ formatValue(change.after) }}</pre>
+
+              <div class="semantic-change__values">
+                <div class="value-block value-block--before">
+                  <span class="value-label text-caption">Before</span>
+                  <pre class="value-content">{{ formatValue(change.before) }}</pre>
+                </div>
+                <div class="value-block value-block--after">
+                  <span class="value-label text-caption">After</span>
+                  <pre class="value-content">{{ formatValue(change.after) }}</pre>
+                </div>
               </div>
-            </div>
-          </li>
-        </ul>
+            </li>
+          </ul>
+        </div>
       </div>
-    </div>
+    </template>
   </section>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
+import { resolveClinicalSummaries } from '@/utils/clinicalDiff';
 import { sanitize } from '@/utils/sanitize';
 
 const props = defineProps({
   changes: { type: Array, default: () => [] },
   baseline: { type: Object, default: null },
+  candidate: { type: Object, default: null },
 });
 
 const selectedSection = ref('all');
+const showRawDiff = ref(true);
 
 const OPERATIONS = {
   added: { label: 'Added', icon: 'mdi-plus-circle-outline', color: 'success' },
@@ -133,6 +214,10 @@ const sectionIcon = (section) => SECTION_ICONS[section] || 'mdi-tag-outline';
 
 const changeAriaLabel = (change) =>
   `${operationLabel(change.operation)} at JSON pointer ${change.path}, section ${change.section}`;
+
+const clinicalSummaries = computed(() =>
+  resolveClinicalSummaries(props.changes, props.baseline, props.candidate)
+);
 
 const groupedChanges = computed(() => {
   const groups = {};
@@ -180,6 +265,32 @@ function formatValue(value) {
   flex-direction: column;
 }
 
+.clinical-summary__cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.clinical-summary__card {
+  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border-radius: 6px;
+  background-color: rgb(var(--v-theme-surface));
+}
+
+.clinical-summary__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.clinical-summary__item {
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.08);
+}
+
+.clinical-summary__item:last-child {
+  border-bottom: none;
+}
+
 .semantic-diff__list {
   list-style: none;
   margin: 0.5rem 0 0;
@@ -212,7 +323,7 @@ function formatValue(value) {
 
 .semantic-change__header {
   display: flex;
-  align-items: center;
+  align-center: center;
   flex-wrap: wrap;
   gap: 0.5rem;
 }

@@ -61,4 +61,90 @@ describe('SemanticDiff', () => {
     expect(wrapper.text()).toContain('Measurements');
     expect(wrapper.findAll('.section-group').length).toBe(3);
   });
+
+  it('renders clinical change summary cards resolving human-friendly terms and deltas', () => {
+    const richChanges = [
+      {
+        section: 'Phenotypes',
+        operation: 'changed',
+        path: '/phenotypicFeatures/0/excluded',
+        before: false,
+        after: true,
+      },
+      {
+        section: 'Variants/Interpretations',
+        operation: 'changed',
+        path: '/interpretations/0/diagnosis/genomicInterpretations/0/variantInterpretation/acmgPathogenicityClassification',
+        before: 'VUS',
+        after: 'PATHOGENIC',
+      },
+      {
+        section: 'Subject',
+        operation: 'changed',
+        path: '/subject/sex',
+        before: 'MALE',
+        after: 'FEMALE',
+      },
+    ];
+
+    const candidate = {
+      content: {
+        phenotypicFeatures: [{ type: { id: 'HP:0000107', label: 'Renal cyst' } }],
+        interpretations: [
+          {
+            diagnosis: {
+              genomicInterpretations: [
+                {
+                  variantInterpretation: {
+                    variationDescriptor: {
+                      id: 'var-1',
+                      label: 'c.827G>A',
+                      geneContext: { value: 'HNF1B' },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    };
+
+    const wrapper = mount(SemanticDiff, {
+      props: { changes: richChanges, baseline: { id: 8 }, candidate },
+    });
+
+    const summary = wrapper.find('[data-testid="clinical-summary"]');
+    expect(summary.exists()).toBe(true);
+    expect(summary.text()).toContain('Phenotypes Added / Removed / Excluded');
+    expect(summary.text()).toContain('HP:0000107 — Renal cyst (Present -> Excluded)');
+    expect(summary.text()).toContain('Variant / ACMG Classification Changes');
+    expect(summary.text()).toContain('HNF1B c.827G>A — ACMG classification: VUS -> PATHOGENIC');
+    expect(summary.text()).toContain('Subject / Onset Deltas');
+    expect(summary.text()).toContain('Subject sex: MALE -> FEMALE');
+  });
+
+  it('toggles raw RFC-6902 path visibility with data-testid="toggle-raw-diff" while keeping elements accessible in DOM', async () => {
+    const wrapper = mount(SemanticDiff, { props: { changes, baseline: { id: 8 } } });
+
+    const toggleBtn = wrapper.find('[data-testid="toggle-raw-diff"]');
+    expect(toggleBtn.exists()).toBe(true);
+    expect(toggleBtn.text()).toContain('Hide RFC-6902 paths');
+
+    const sectionsEl = wrapper.find('.semantic-diff__sections');
+    expect(sectionsEl.isVisible()).toBe(true);
+    expect(wrapper.findAll('.semantic-change').length).toBe(3);
+
+    await toggleBtn.trigger('click');
+    expect(toggleBtn.text()).toContain('Show RFC-6902 paths');
+    expect(wrapper.find('.semantic-diff__sections').attributes('style')).toContain('display: none');
+    // Elements remain in DOM for accessibility and tests
+    expect(wrapper.findAll('.semantic-change').length).toBe(3);
+
+    await toggleBtn.trigger('click');
+    expect(toggleBtn.text()).toContain('Hide RFC-6902 paths');
+    expect(wrapper.find('.semantic-diff__sections').attributes('style') || '').not.toContain(
+      'display: none'
+    );
+  });
 });
