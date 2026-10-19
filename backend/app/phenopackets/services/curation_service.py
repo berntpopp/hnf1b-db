@@ -34,6 +34,7 @@ from app.phenopackets.curation.projection import project_individual
 from app.phenopackets.models import Phenopacket
 from app.phenopackets.services.state_service import PhenopacketStateService
 from app.phenopackets.validation.domain import DomainValidator
+from app.phenopackets.validator import PhenopacketValidator
 
 
 class CurationServiceError(Exception):
@@ -298,6 +299,19 @@ class CurationService:
                         path=("hnf1bCuration",),
                     ),
                 ) from exc
+        schema_errors = PhenopacketValidator().validate(document)
+        if schema_errors:
+            raise CurationServiceError(
+                "invalid_schema",
+                "curation document violates phenopacket schema constraints",
+                *(
+                    CurationIssue(
+                        code="invalid_schema",
+                        message=message,
+                    )
+                    for message in schema_errors
+                ),
+            )
         errors = await DomainValidator(self.db).validate(domain_document)
         if errors:
             raise CurationServiceError(

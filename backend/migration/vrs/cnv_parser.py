@@ -10,11 +10,8 @@ logger = logging.getLogger(__name__)
 class CNVParser:
     """Parser for converting CNV data to GA4GH compliant format."""
 
-    # Known dbVar IDs for HNF1B CNVs
-    DBVAR_MAPPINGS = {
-        "deletion": "dbVar:nssv1184554",  # Common HNF1B deletion
-        "duplication": "dbVar:nssv1184555",  # Common HNF1B duplication
-    }
+    # Known dbVar IDs for HNF1B CNVs (empty: removed hardcoded fabricated mappings)
+    DBVAR_MAPPINGS: Dict[str, str] = {}
 
     @staticmethod
     def parse_hg38_coordinates(
@@ -99,11 +96,12 @@ class CNVParser:
         Returns:
             ISCN notation string or None
         """
-        # Simplified ISCN notation for common CNVs
-        if variant_type == "DEL":
-            return f"del({chromosome})(q12)"  # HNF1B is at 17q12
-        elif variant_type == "DUP":
-            return f"dup({chromosome})(q12)"
+        # Simplified ISCN notation for common CNVs at 17q12
+        if chromosome == "17" and 36_000_000 <= start and end <= 40_000_000:
+            if variant_type == "DEL":
+                return f"del({chromosome})(q12)"
+            elif variant_type == "DUP":
+                return f"dup({chromosome})(q12)"
         return None
 
     @staticmethod
@@ -116,10 +114,6 @@ class CNVParser:
         Returns:
             dbVar ID string or None
         """
-        if variant_type == "DEL":
-            return CNVParser.DBVAR_MAPPINGS.get("deletion")
-        elif variant_type == "DUP":
-            return CNVParser.DBVAR_MAPPINGS.get("duplication")
         return None
 
     @classmethod

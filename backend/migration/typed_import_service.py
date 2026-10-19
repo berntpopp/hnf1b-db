@@ -20,6 +20,7 @@ from app.phenopackets.curation.models import (
 from app.phenopackets.curation.projection import project_individual
 from app.phenopackets.models import Phenopacket
 from app.phenopackets.services.state_service import PhenopacketStateService
+from app.phenopackets.validator import PhenopacketValidator
 from migration.reimport_merge import ReimportConflict, classify_reimport
 from migration.source_manifest import SourceManifest
 
@@ -147,7 +148,13 @@ class TypedObservationImportService:
             raise TypedImportApplyError("source projection has unresolved conflicts")
         document: dict[str, Any] = dict(projection.phenopacket)
         document["hnf1bCuration"] = profile.model_dump(by_alias=True, mode="json")
-        return canonicalize_curation_document(document)
+        canonical = canonicalize_curation_document(document)
+        validation_errors = PhenopacketValidator().validate(canonical)
+        if validation_errors:
+            raise TypedImportApplyError(
+                f"projected phenopacket violates schema constraints: {validation_errors}"
+            )
+        return canonical
 
     @staticmethod
     def _has_correction_for_observation(
