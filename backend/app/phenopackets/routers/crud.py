@@ -44,6 +44,8 @@ from app.database import get_db
 from app.models.json_api import JsonApiResponse
 from app.models.user import User
 from app.phenopackets.models import (
+    BatchImportRequest,
+    BatchImportResponse,
     Phenopacket,
     PhenopacketCreate,
     PhenopacketDelete,
@@ -83,6 +85,7 @@ from app.phenopackets.services.state_service import PhenopacketStateService
 from app.phenopackets.validation.domain import DomainValidator
 from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from app.utils.pagination import build_offset_response
+from migration.typed_import_service import run_batch_import
 
 router = APIRouter(tags=["phenopackets-crud"])
 logger = logging.getLogger(__name__)
@@ -540,6 +543,30 @@ async def create_phenopacket(
     except ServiceDatabaseError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return build_phenopacket_response(new_phenopacket, include_state=True)
+
+
+@router.post(
+    "/import-batch",
+    response_model=BatchImportResponse,
+    summary="Validate or commit a batch of phenopackets",
+    description=(
+        "Validate candidate phenopackets (dry_run=True) or commit valid rows "
+        "as draft records (dry_run=False)."
+    ),
+)
+async def import_batch(
+    request: BatchImportRequest,
+    dry_run: bool = Query(True, description="When true, write nothing to database"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_curator),
+) -> BatchImportResponse:
+    """Validate or commit a batch of phenopacket JSON records."""
+    return await run_batch_import(
+        db,
+        request.phenopackets,
+        dry_run=dry_run,
+        actor=current_user,
+    )
 
 
 @router.put("/{phenopacket_id}", response_model=PhenopacketResponse)

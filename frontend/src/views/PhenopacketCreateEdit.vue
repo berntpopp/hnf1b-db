@@ -2,12 +2,15 @@
 <template>
   <v-container>
     <v-card>
-      <h1 class="v-card-title text-h4">
-        <v-icon left color="primary" size="large">
-          {{ isEditing ? 'mdi-pencil' : 'mdi-plus' }}
-        </v-icon>
-        {{ isEditing ? 'Edit Phenopacket' : 'Create New Phenopacket' }}
-      </h1>
+      <div class="d-flex justify-space-between align-center px-4 pt-4">
+        <h1 class="v-card-title text-h4 pa-0">
+          <v-icon left color="primary" size="large">
+            {{ isEditing ? 'mdi-pencil' : 'mdi-plus' }}
+          </v-icon>
+          {{ isEditing ? 'Edit Phenopacket' : 'Create New Phenopacket' }}
+        </h1>
+        <BulkImportWorkbenchDialog v-if="!isEditing" />
+      </div>
 
       <v-card-text>
         <!-- Fatal: the form could not be built at all (vocabularies or the
@@ -223,6 +226,13 @@
                 :filled="phenotypesCompleteness.filled"
                 :total="phenotypesCompleteness.total"
               >
+                <div class="mb-3 d-flex justify-end">
+                  <PhenotypeSuggestionDrawer
+                    v-model="phenopacket.phenotypicFeatures"
+                    :pmid="publications[0]?.pmid || ''"
+                    :evidence-code-items="vocabularies.evidenceCode.value"
+                  />
+                </div>
                 <PhenotypicFeaturesSection
                   v-model="phenopacket.phenotypicFeatures"
                   :form-submitted="formSubmitted"
@@ -370,6 +380,8 @@ import ClassificationSection from '@/components/curation/ClassificationSection.v
 import AgeSection from '@/components/curation/AgeSection.vue';
 import ProvenanceSection from '@/components/curation/ProvenanceSection.vue';
 import ReportObservationWorkspace from '@/components/curation/reports/ReportObservationWorkspace.vue';
+import PhenotypeSuggestionDrawer from '@/components/curation/PhenotypeSuggestionDrawer.vue';
+import BulkImportWorkbenchDialog from '@/components/curation/BulkImportWorkbenchDialog.vue';
 import { computeSectionCompleteness } from '@/utils/curationFields';
 import { formatApiError } from '@/utils/apiError';
 
@@ -384,6 +396,8 @@ export default {
     AgeSection,
     ProvenanceSection,
     ReportObservationWorkspace,
+    PhenotypeSuggestionDrawer,
+    BulkImportWorkbenchDialog,
   },
   // Vue Router 4-style in-component guard (works with the Options API used
   // throughout this file). Prompts on navigate-away only when the live form

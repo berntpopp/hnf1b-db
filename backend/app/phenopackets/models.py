@@ -875,3 +875,44 @@ class RevisionResponse(BaseModel):
         """Label only immutable role snapshots as recorded decision evidence."""
         self.actor_role_at_decision_recorded = self.actor_role is not None
         return self
+
+
+class BatchImportRequest(BaseModel):
+    """Request model for batch import of phenopackets."""
+
+    phenopackets: list[dict[str, Any]] = Field(
+        ..., min_length=1, max_length=200, description="List of raw phenopacket objects"
+    )
+
+
+class BatchImportRowResult(BaseModel):
+    """Validation and execution result for a single batch import row."""
+
+    row_index: int = Field(..., description="0-based index of row in batch")
+    phenopacket_id: str = Field(..., description="Phenopacket identifier")
+    subject_id: str = Field(..., description="Subject identifier")
+    valid: bool = Field(
+        ..., description="Whether row passed validations and does not conflict"
+    )
+    errors: list[str] = Field(
+        default_factory=list, description="Validation or conflict errors"
+    )
+    warnings: list[str] = Field(
+        default_factory=list, description="Advisory warnings"
+    )
+    already_exists: bool = Field(
+        False, description="Whether phenopacket ID already exists in DB"
+    )
+
+
+class BatchImportResponse(BaseModel):
+    """Response model for batch import execution or dry-run."""
+
+    dry_run: bool = Field(..., description="Whether this execution was a dry-run")
+    total_rows: int = Field(..., description="Total rows in submitted batch")
+    valid_rows: int = Field(..., description="Count of valid rows")
+    invalid_rows: int = Field(..., description="Count of invalid rows")
+    committed_rows: int = Field(..., description="Count of rows committed to database")
+    results: list[BatchImportRowResult] = Field(
+        ..., description="Per-row validation and execution details"
+    )
