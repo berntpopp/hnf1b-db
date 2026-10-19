@@ -191,6 +191,7 @@
                         :color="item.pending === 0 ? 'success' : 'primary'"
                         height="8"
                         rounded
+                        :aria-label="`${item.name} sync progress`"
                       />
                       <span class="text-caption">{{ getProgressPercent(item).toFixed(0) }}%</span>
                     </td>
@@ -220,6 +221,7 @@
                                 color="primary"
                                 variant="tonal"
                                 icon
+                                aria-label="More publication sync options"
                               >
                                 <v-icon size="small">mdi-chevron-down</v-icon>
                               </v-btn>
@@ -257,6 +259,7 @@
                                 color="purple"
                                 variant="tonal"
                                 icon
+                                aria-label="More variant sync options"
                               >
                                 <v-icon size="small">mdi-chevron-down</v-icon>
                               </v-btn>
@@ -303,7 +306,14 @@
                           </v-btn>
                           <v-menu>
                             <template #activator="{ props }">
-                              <v-btn v-bind="props" size="small" color="teal" variant="tonal" icon>
+                              <v-btn
+                                v-bind="props"
+                                size="small"
+                                color="teal"
+                                variant="tonal"
+                                icon
+                                aria-label="More gene sync options"
+                              >
                                 <v-icon size="small">mdi-chevron-down</v-icon>
                               </v-btn>
                             </template>
@@ -344,6 +354,7 @@
                     :color="getSyncStatusColor(pubSyncTask.status)"
                     height="12"
                     rounded
+                    aria-label="Publication sync progress"
                   />
                   <div class="d-flex justify-space-between mt-2 text-caption">
                     <span>{{ pubSyncTask.processed }} / {{ pubSyncTask.total }} processed</span>
@@ -371,6 +382,7 @@
                     color="purple"
                     height="12"
                     rounded
+                    aria-label="VEP annotation sync progress"
                   />
                   <div class="d-flex justify-space-between mt-2 text-caption">
                     <span>{{ varSyncTask.processed }} / {{ varSyncTask.total }} processed</span>
@@ -398,6 +410,7 @@
                     color="teal"
                     height="12"
                     rounded
+                    aria-label="chr17q12 genes sync progress"
                   />
                   <div class="d-flex justify-space-between mt-2 text-caption">
                     <span>{{ genesSyncTask.processed }} / {{ genesSyncTask.total }} processed</span>

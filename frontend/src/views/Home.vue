@@ -121,10 +121,10 @@
       <v-container>
         <v-row justify="center" class="mb-6">
           <v-col cols="12" md="10" lg="8" class="text-center">
-            <h2 class="text-h5 font-weight-medium text-grey-darken-3 mb-2">
+            <h2 class="text-h5 font-weight-medium text-high-emphasis mb-2">
               About the HNF1B Database
             </h2>
-            <p class="text-body-2 text-grey-darken-2" style="max-width: 600px; margin: 0 auto">
+            <p class="text-body-2 text-medium-emphasis" style="max-width: 600px; margin: 0 auto">
               The definitive resource for MODY5 and RCAD syndrome research
             </p>
           </v-col>
@@ -140,7 +140,7 @@
                 </v-avatar>
                 <div>
                   <h3 class="text-subtitle-1 font-weight-medium mb-1">Comprehensive Data</h3>
-                  <p class="text-body-2 text-grey-darken-1 mb-0">
+                  <p class="text-body-2 text-medium-emphasis mb-0">
                     Clinical phenotypes using HPO terms, curated genetic variants with pathogenicity
                     classifications, and peer-reviewed publication references.
                   </p>
@@ -157,7 +157,7 @@
                 </v-avatar>
                 <div>
                   <h3 class="text-subtitle-1 font-weight-medium mb-1">GA4GH Standard</h3>
-                  <p class="text-body-2 text-grey-darken-1 mb-0">
+                  <p class="text-body-2 text-medium-emphasis mb-0">
                     All data follows the GA4GH Phenopackets v2 standard for seamless
                     interoperability with other genetic resources and databases.
                   </p>
@@ -174,7 +174,7 @@
                 </v-avatar>
                 <div>
                   <h3 class="text-subtitle-1 font-weight-medium mb-1">Clinical Insights</h3>
-                  <p class="text-body-2 text-grey-darken-1 mb-0">
+                  <p class="text-body-2 text-medium-emphasis mb-0">
                     Understand genotype-phenotype correlations for renal cysts, diabetes mellitus,
                     hypomagnesemia, and other HNF1B-related presentations.
                   </p>
@@ -190,7 +190,7 @@
     <v-container class="pb-12">
       <v-row justify="center">
         <v-col cols="12" xl="10">
-          <h2 class="text-h5 font-weight-medium text-grey-darken-3 mb-4">
+          <h2 class="text-h5 font-weight-medium text-high-emphasis mb-4">
             Gene &amp; Protein Visualization
           </h2>
           <v-card variant="outlined" class="border-opacity-12" rounded="lg">

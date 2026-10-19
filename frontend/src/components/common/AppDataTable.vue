@@ -11,12 +11,7 @@
   - Slot passthrough to v-data-table
 -->
 <template>
-  <v-card
-    class="table-wrapper rounded-lg"
-    elevation="2"
-    variant="outlined"
-    style="border-color: rgba(0, 0, 0, 0.05); background: white"
-  >
+  <v-card class="table-wrapper rounded-lg" elevation="2" variant="outlined">
     <!-- Optional Title Bar -->
     <div
       v-if="title || $slots['title-actions']"
@@ -25,7 +20,7 @@
       <component
         :is="titleTag"
         v-if="title"
-        class="text-subtitle-1 font-weight-bold text-teal-darken-2 ma-0"
+        class="text-subtitle-1 font-weight-bold text-primary ma-0"
       >
         {{ title }}
       </component>
@@ -40,7 +35,7 @@
     </div>
 
     <!-- Legacy Filters Slot (deprecated, use toolbar instead) -->
-    <div v-if="$slots.filters" class="px-4 py-2 bg-grey-lighten-5 border-bottom">
+    <div v-if="$slots.filters" class="px-4 py-2 table-filters border-bottom">
       <slot name="filters" />
     </div>
 
@@ -162,6 +157,11 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
 </script>
 
 <style scoped>
+.table-wrapper {
+  background: rgb(var(--v-theme-surface));
+  border-color: rgba(var(--v-border-color), var(--v-border-opacity, 0.12));
+}
+
 .table-responsive {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -169,7 +169,7 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
 }
 
 .table-title-bar {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity, 0.08));
   min-height: 44px;
 }
 
@@ -177,14 +177,18 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
   /* Container for the toolbar - styling handled by AppTableToolbar */
 }
 
+.table-filters {
+  background: rgba(var(--v-theme-on-surface), 0.02);
+}
+
 .border-bottom {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity, 0.08));
 }
 
 /* Dense header styling */
 :deep(.v-data-table-header__content) {
   font-weight: 600 !important;
-  color: #37474f;
+  color: rgb(var(--v-theme-on-surface));
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 0.03em;
@@ -252,7 +256,7 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
   text-overflow: ellipsis;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #37474f;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 :deep(.sort-icon-inactive) {
@@ -289,9 +293,9 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
 .mobile-skeleton-card {
   margin: 8px;
   padding: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity, 0.1));
   border-radius: 12px;
-  background: white;
+  background: rgb(var(--v-theme-surface));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   overflow: hidden;
 }
@@ -307,9 +311,9 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
   display: block;
   margin: 8px;
   padding: 4px 4px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity, 0.1));
   border-radius: 12px;
-  background: white;
+  background: rgb(var(--v-theme-surface));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
@@ -347,7 +351,7 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
 }
 
 .is-mobile-cards :deep(.v-data-table__td--mobile:not(:last-child)) {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity, 0.05)) !important;
 }
 
 .is-mobile-cards :deep(.v-data-table__td-title) {
@@ -355,7 +359,7 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity, 0.7));
   flex: 0 0 auto;
 }
 

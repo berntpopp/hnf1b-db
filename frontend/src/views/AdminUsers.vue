@@ -3,7 +3,7 @@
     <v-row class="mb-4">
       <v-col cols="12">
         <div class="d-flex align-center">
-          <v-btn icon variant="text" class="mr-2" to="/admin">
+          <v-btn icon variant="text" class="mr-2" to="/admin" aria-label="Back to admin dashboard">
             <v-icon>mdi-arrow-left</v-icon>
           </v-btn>
           <v-icon size="32" color="red" class="mr-3">mdi-account-group</v-icon>

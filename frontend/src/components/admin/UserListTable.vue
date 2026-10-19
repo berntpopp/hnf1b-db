@@ -59,7 +59,13 @@
           <span v-else class="text-caption text-grey">--</span>
         </template>
         <template #item.actions="{ item }">
-          <v-btn icon size="x-small" variant="text" @click="$emit('edit', item)">
+          <v-btn
+            icon
+            size="x-small"
+            variant="text"
+            :aria-label="`Edit user ${item.username}`"
+            @click="$emit('edit', item)"
+          >
             <v-icon size="small">mdi-pencil</v-icon>
             <v-tooltip activator="parent" location="top">Edit</v-tooltip>
           </v-btn>
@@ -69,12 +75,20 @@
             size="x-small"
             variant="text"
             color="warning"
+            :aria-label="`Unlock user ${item.username}`"
             @click="$emit('unlock', item)"
           >
             <v-icon size="small">mdi-lock-open</v-icon>
             <v-tooltip activator="parent" location="top">Unlock</v-tooltip>
           </v-btn>
-          <v-btn icon size="x-small" variant="text" color="error" @click="$emit('delete', item)">
+          <v-btn
+            icon
+            size="x-small"
+            variant="text"
+            color="error"
+            :aria-label="`Delete user ${item.username}`"
+            @click="$emit('delete', item)"
+          >
             <v-icon size="small">mdi-delete</v-icon>
             <v-tooltip activator="parent" location="top">Delete</v-tooltip>
           </v-btn>
