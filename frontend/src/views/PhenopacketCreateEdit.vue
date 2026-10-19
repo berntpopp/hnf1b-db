@@ -567,6 +567,8 @@ export default {
 
     if (this.isEditing) {
       await this.loadPhenopacket();
+    } else if (this.$route?.query?.cloneFrom) {
+      await this.loadCloneTemplate(this.$route.query.cloneFrom);
     } else {
       // Create mode - hide loader and show empty form
       this.loading = false;
@@ -713,6 +715,63 @@ export default {
       } catch (err) {
         this.loadError = 'Failed to load phenopacket: ' + err.message;
         window.logService.error('Failed to load phenopacket for editing', {
+          error: err.message,
+        });
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async loadCloneTemplate(cloneFromId) {
+      this.loading = true;
+      this.loadError = null;
+
+      try {
+        const response = await getPhenopacket(cloneFromId);
+        const src = response.data?.phenopacket || response.data || {};
+
+        this.publications = (src.metaData?.externalReferences || [])
+          .filter((ref) => ref.id?.startsWith('PMID:'))
+          .map((ref) => ({
+            pmid: ref.id.replace('PMID:', ''),
+          }));
+
+        this.phenopacket.interpretations = JSON.parse(
+          JSON.stringify(src.interpretations || [])
+        );
+
+        const srcCuration = src.hnf1bCuration || {};
+        this.phenopacket.hnf1bCuration = this.phenopacket.hnf1bCuration || {};
+        const sharedFields = [
+          'cohort',
+          'publicationType',
+          'familyHistory',
+          'detectionMethod',
+          'classificationSystem',
+          'classificationDate',
+          'classificationComment',
+        ];
+        for (const field of sharedFields) {
+          if (srcCuration[field] !== undefined) {
+            this.phenopacket.hnf1bCuration[field] = srcCuration[field];
+          }
+        }
+
+        this.phenopacket.id = '';
+        this.phenopacket.subject = { id: '', sex: 'UNKNOWN_SEX', alternateIds: [] };
+        this.phenopacket.phenotypicFeatures = [];
+        this.phenopacket.measurements = [];
+        this.phenopacket.diseases = [];
+
+        window.logService.info('Loaded clone template for phenopacket', {
+          cloneFromId,
+          publicationsCount: this.publications.length,
+          interpretationsCount: this.phenopacket.interpretations.length,
+        });
+      } catch (err) {
+        this.loadError = 'Failed to load clone template: ' + err.message;
+        window.logService.error('Failed to load clone template', {
+          cloneFromId,
           error: err.message,
         });
       } finally {

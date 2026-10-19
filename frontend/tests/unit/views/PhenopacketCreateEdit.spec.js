@@ -425,7 +425,7 @@ function mockVocabularyApi() {
   });
 }
 
-async function mountCreateForm() {
+async function mountCreateForm(route = '/phenopackets/create') {
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const router = createRouter({
     history: createWebHistory(),
@@ -434,7 +434,7 @@ async function mountCreateForm() {
       { path: '/phenopackets', name: 'Phenopackets', component: { template: '<div />' } },
     ],
   });
-  await router.push('/phenopackets/create');
+  await router.push(route);
   await router.isReady();
 
   return mount(PhenopacketCreateEdit, {
@@ -1048,5 +1048,129 @@ describe('No email / no reviewer-input-control (Task 8 non-negotiable)', () => {
       'update:problematic',
       'update:duplicateCheck',
     ]);
+  });
+});
+
+describe('Clone Cohort / Sibling Template pre-fill (#551)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockVocabularyApi();
+    mockAuthenticatedCurator();
+    window.logService = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+  });
+
+  it('loadCloneTemplate pre-fills PMIDs, interpretations, shared cohort metadata and clears individual fields', async () => {
+    const sourcePhenopacket = {
+      id: 'PP-SOURCE',
+      subject: {
+        id: 'SUB-SOURCE',
+        sex: 'MALE',
+        alternateIds: ['ALT-1'],
+      },
+      phenotypicFeatures: [{ type: { id: 'HP:0000107', label: 'Renal cyst' }, excluded: false }],
+      measurements: [{ assay: { id: 'LOINC:1234' } }],
+      diseases: [{ term: { id: 'OMIM:137920' } }],
+      interpretations: [
+        {
+          id: 'INTERP-1',
+          diagnosis: {
+            genomicInterpretations: [
+              {
+                variantInterpretation: {
+                  acmgPathogenicityClassification: 'PATHOGENIC',
+                },
+              },
+            ],
+          },
+        },
+      ],
+      metaData: {
+        externalReferences: [
+          { id: 'PMID:33221100' },
+          { id: 'DOI:10.1000/xyz' },
+          { id: 'PMID:99887766' },
+        ],
+      },
+      hnf1bCuration: {
+        cohort: 'born',
+        publicationType: 'case_report',
+        familyHistory: 'positive',
+        detectionMethod: 'sequencing',
+        classificationSystem: 'acmg_2015',
+        classificationDate: '2026-01-15',
+        classificationComment: 'Inherited mutation',
+        curatedBy: 'Old Curator',
+      },
+    };
+
+    getPhenopacket.mockResolvedValueOnce({
+      data: { phenopacket: sourcePhenopacket },
+    });
+
+    const ctx = createContext({
+      $route: { params: {}, query: { cloneFrom: 'PP-SOURCE' } },
+      isEditing: false,
+    });
+
+    await PhenopacketCreateEdit.methods.loadCloneTemplate.call(ctx, 'PP-SOURCE');
+
+    // Pre-filled PMIDs
+    expect(ctx.publications).toEqual([{ pmid: '33221100' }, { pmid: '99887766' }]);
+
+    // Pre-filled interpretations (deep copy)
+    expect(ctx.phenopacket.interpretations).toEqual(sourcePhenopacket.interpretations);
+    expect(ctx.phenopacket.interpretations).not.toBe(sourcePhenopacket.interpretations);
+
+    // Pre-filled shared cohort metadata
+    expect(ctx.phenopacket.hnf1bCuration.cohort).toBe('born');
+    expect(ctx.phenopacket.hnf1bCuration.publicationType).toBe('case_report');
+    expect(ctx.phenopacket.hnf1bCuration.familyHistory).toBe('positive');
+    expect(ctx.phenopacket.hnf1bCuration.detectionMethod).toBe('sequencing');
+    expect(ctx.phenopacket.hnf1bCuration.classificationSystem).toBe('acmg_2015');
+    expect(ctx.phenopacket.hnf1bCuration.classificationDate).toBe('2026-01-15');
+    expect(ctx.phenopacket.hnf1bCuration.classificationComment).toBe('Inherited mutation');
+
+    // Cleared individual-specific fields
+    expect(ctx.phenopacket.id).toBe('');
+    expect(ctx.phenopacket.subject).toEqual({ id: '', sex: 'UNKNOWN_SEX', alternateIds: [] });
+    expect(ctx.phenopacket.phenotypicFeatures).toEqual([]);
+    expect(ctx.phenopacket.measurements).toEqual([]);
+    expect(ctx.phenopacket.diseases).toEqual([]);
+    expect(ctx.loading).toBe(false);
+  });
+
+  it('calls loadCloneTemplate on mount in create mode when cloneFrom query param is present', async () => {
+    const sourcePhenopacket = {
+      id: 'PP-SOURCE',
+      subject: { id: 'SUB-SOURCE', sex: 'FEMALE' },
+      phenotypicFeatures: [],
+      measurements: [],
+      diseases: [],
+      interpretations: [{ id: 'CLONED-INTERP' }],
+      metaData: {
+        externalReferences: [{ id: 'PMID:11223344' }],
+      },
+      hnf1bCuration: {
+        cohort: 'fetus',
+      },
+    };
+
+    getPhenopacket.mockResolvedValueOnce({
+      data: { phenopacket: sourcePhenopacket },
+    });
+
+    const wrapper = await mountCreateForm('/phenopackets/create?cloneFrom=PP-SOURCE');
+    await flushPromises();
+
+    expect(getPhenopacket).toHaveBeenCalledWith('PP-SOURCE');
+    expect(wrapper.vm.publications).toEqual([{ pmid: '11223344' }]);
+    expect(wrapper.vm.phenopacket.hnf1bCuration.cohort).toBe('fetus');
+    expect(wrapper.vm.phenopacket.id).toBe('');
+    expect(wrapper.vm.phenopacket.subject.id).toBe('');
   });
 });

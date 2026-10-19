@@ -160,6 +160,19 @@
                 Edit
               </v-btn>
               <v-btn
+                v-if="canEdit"
+                data-testid="clone-cohort-btn"
+                color="teal-darken-2"
+                prepend-icon="mdi-content-copy"
+                variant="tonal"
+                size="small"
+                class="mr-2"
+                aria-label="Clone this phenopacket as sibling or cohort template"
+                @click="navigateToClone"
+              >
+                Clone Cohort / Sibling Template
+              </v-btn>
+              <v-btn
                 v-if="canDelete"
                 color="error"
                 prepend-icon="mdi-delete"
@@ -876,6 +889,14 @@ export default {
         phenopacketId: this.phenopacket.id,
       });
       this.$router.push(`/phenopackets/${this.phenopacket.id}/edit`);
+    },
+
+    navigateToClone() {
+      if (!this.phenopacket) return;
+      window.logService.info('Navigating to clone phenopacket as cohort template', {
+        phenopacketId: this.phenopacket.id,
+      });
+      this.$router.push(`/phenopackets/create?cloneFrom=${this.phenopacket.id}`);
     },
 
     confirmDelete() {
