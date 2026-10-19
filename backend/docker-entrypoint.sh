@@ -197,8 +197,18 @@ main() {
     # Wait for database
     wait_for_db || exit 1
 
-    # Run migrations
-    run_migrations || exit 1
+    # If the command is alembic, execute it directly after waiting for DB
+    if [ "$1" = "alembic" ]; then
+        log_info "Executing alembic command..."
+        exec "$@"
+    fi
+
+    # Run migrations if explicitly enabled (decoupled by default to dedicated migrate service)
+    if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+        run_migrations || exit 1
+    else
+        log_info "Automatic migrations skipped on container startup (handled by dedicated migrate service or set RUN_MIGRATIONS=true)"
+    fi
 
     # Ensure essential reference data (GRCh38 + HNF1B transcript / exons / protein
     # domains + cross-references). Idempotent and self-healing, so it runs on

@@ -64,3 +64,75 @@ async def test_health_reports_not_ready_when_a_dependency_fails(
         "backend": "redis",
         "error": None,
     }
+
+
+@pytest.mark.asyncio
+async def test_health_live_reports_process_alive(async_client):
+    """The /health/live endpoint should report process liveness with 200."""
+    response = await async_client.get("/health/live")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "alive"
+    assert data["version"] == APP_VERSION
+    assert data["phenopackets_schema"] == PHENOPACKET_SCHEMA_VERSION
+
+
+@pytest.mark.asyncio
+async def test_health_ready_reports_ready_when_healthy(async_client, monkeypatch):
+    """The /health/ready endpoint should return 200 when all dependencies pass."""
+    monkeypatch.setattr("app.main._database_ready", lambda: _resolved((True, None)))
+    monkeypatch.setattr("app.main._cache_ready", lambda: _resolved((True, None)))
+
+    response = await async_client.get("/health/ready")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert data["ready"] is True
+    assert data["dependencies"]["database"]["ready"] is True
+    assert data["dependencies"]["cache"]["ready"] is True
+
+
+@pytest.mark.asyncio
+async def test_health_ready_reports_503_on_redis_failure(async_client, monkeypatch):
+    """The /health/ready endpoint should return 503 when Redis check fails."""
+    monkeypatch.setattr("app.main._database_ready", lambda: _resolved((True, None)))
+    monkeypatch.setattr(
+        "app.main._cache_ready", lambda: _resolved((False, "Redis connection refused"))
+    )
+
+    response = await async_client.get("/health/ready")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "degraded"
+    assert data["ready"] is False
+    assert data["dependencies"]["cache"]["ready"] is False
+    assert data["dependencies"]["cache"]["error"] == "Redis connection refused"
+
+
+@pytest.mark.asyncio
+async def test_cache_ready_checks_redis_ping(monkeypatch):
+    """_cache_ready should invoke redis ping when connected."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.core.cache import cache
+    from app.main import _cache_ready
+
+    mock_redis = MagicMock()
+    mock_redis.ping = AsyncMock(return_value=True)
+
+    monkeypatch.setattr(cache, "_connected", True)
+    monkeypatch.setattr(cache, "_redis", mock_redis)
+
+    ready, error = await _cache_ready()
+    assert ready is True
+    assert error is None
+    mock_redis.ping.assert_awaited_once()
+
+    # When ping raises
+    mock_redis.ping = AsyncMock(side_effect=ConnectionError("Connection lost"))
+    ready, error = await _cache_ready()
+    assert ready is False
+    assert "Connection lost" in str(error)

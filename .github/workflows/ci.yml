@@ -115,6 +115,15 @@ jobs:
         working-directory: backend
         run: uv run alembic upgrade head
 
+      - name: Check for schema drift (alembic check)
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: postgresql+asyncpg://hnf1b_user:hnf1b_pass@localhost:5432/hnf1b_test
+          JWT_SECRET: test-secret-key-for-ci
+          ADMIN_PASSWORD: test-admin-password-ci-2026
+        working-directory: backend
+        run: uv run alembic check
+
       - name: Run linting (ruff check)
         working-directory: backend
         run: uv run ruff check .
@@ -182,9 +191,9 @@ jobs:
         working-directory: frontend
         run: npm run check:dependencies
 
-      - name: Run tests (vitest)
+      - name: Run tests with coverage (vitest)
         working-directory: frontend
-        run: npm test
+        run: npm run test:coverage
 
       - name: Run linting (eslint)
         working-directory: frontend

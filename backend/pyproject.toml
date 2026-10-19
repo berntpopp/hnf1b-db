@@ -76,7 +76,7 @@ module = ["pandas.*", "scipy.*", "jsonpatch.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["ga4gh.*", "bioutils.*"]
+module = ["ga4gh.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -85,10 +85,24 @@ ignore_missing_imports = true
 # not fail typecheck.
 module = ["sentence_transformers.*", "transformers.*"]
 ignore_missing_imports = true
-# NOTE: ga4gh.vrs and bioutils libraries do not include type annotations (no py.typed marker)
-# and have no published type stubs on PyPI (verified 2025-01-06).
+# NOTE: ga4gh.vrs library does not include type annotations (no py.typed marker)
+# and has no published type stubs on PyPI (verified 2025-01-06).
 # These libraries are tested and functional; suppressing tool limitation only.
 # TODO: Remove when upstream adds py.typed marker or type stubs become available.
+
+[[tool.mypy.overrides]]
+module = [
+    "app.core.cache",
+    "app.auth.*",
+    "app.comments.*",
+    "app.models.*",
+    "app.reference.*",
+    "app.repositories.*",
+    "app.schemas.*",
+    "app.seo.*",
+    "app.users.*",
+]
+disallow_untyped_defs = true
 
 [tool.ruff]
 line-length = 88
