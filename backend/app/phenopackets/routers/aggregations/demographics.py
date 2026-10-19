@@ -12,6 +12,7 @@ from .common import (
     AsyncSession,
     Depends,
     calculate_percentages,
+    check_materialized_view_exists,
     get_db,
     logger,
     text,
@@ -26,10 +27,31 @@ async def aggregate_sex_distribution(
 ):
     """Get sex distribution of subjects.
 
-    Always reads published-head snapshots. Legacy materialized views are based
-    on mutable working copies and are therefore not public-safe.
+    Uses materialized views when available for O(1) performance,
+    falling back to published-head live queries.
     """
-    logger.debug("Reading published-head sex distribution")
+    if await check_materialized_view_exists(db, "mv_sex_distribution"):
+        logger.debug("Using materialized view for sex distribution")
+        result = await db.execute(
+            text("""
+                SELECT sex, count
+                FROM mv_sex_distribution
+                ORDER BY count DESC
+            """)
+        )
+        rows = result.mappings().all()
+        total = sum(int(row["count"]) for row in rows)
+        rows_with_pct = calculate_percentages(rows, total=total)
+        return [
+            AggregationResult(
+                label=row["sex"],
+                count=int(row["count"]),
+                percentage=row["percentage"],
+            )
+            for row in rows_with_pct
+        ]
+
+    logger.debug("Reading published-head sex distribution via live query")
     query = """
     SELECT
         COALESCE(r.content_jsonb->'subject'->>'sex', 'Unknown') as sex,

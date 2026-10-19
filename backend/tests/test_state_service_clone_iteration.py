@@ -34,6 +34,13 @@ async def test_second_put_after_clone_is_inplace(
     )
     # A second save is a distinct immutable observation in the ledger.
     assert pp.editing_revision_id != first_editing_id
-    assert pp.phenopacket["subject"]["id"] == "second-edit"
+    # DATA-04: phenopackets.phenopacket retains published head content
+    assert pp.phenopacket["subject"]["id"] == "published-subject"
+    # while editing_revision stores the updated draft
+    from app.phenopackets.models import PhenopacketRevision
+
+    editing_rev = await db_session.get(PhenopacketRevision, pp.editing_revision_id)
+    assert editing_rev is not None
+    assert editing_rev.content_jsonb["subject"]["id"] == "second-edit"
     # pp.state still 'published' (I8)
     assert pp.state == "published"

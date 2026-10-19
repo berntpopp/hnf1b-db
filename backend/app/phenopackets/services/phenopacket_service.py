@@ -141,9 +141,14 @@ def stamp_curated_at(sanitized: Dict[str, Any]) -> None:
 class PhenopacketService:
     """Business-logic layer for phenopacket create / update / delete."""
 
-    def __init__(self, repo: PhenopacketRepository) -> None:
+    def __init__(
+        self,
+        repo: PhenopacketRepository,
+        background_tasks: Any | None = None,
+    ) -> None:
         """Wire the service to a repository (which owns the db session)."""
         self._repo = repo
+        self.background_tasks = background_tasks
         self._validator = PhenopacketValidator()
         self._sanitizer = PhenopacketSanitizer()
 
@@ -354,7 +359,16 @@ class PhenopacketService:
         # Re-fetch via the repository so the actor FK relationships are
         # eager-loaded for the response renderer.
         reloaded = await self._repo.get_by_id(sanitized["id"])
-        return reloaded if reloaded is not None else phenopacket
+        result_record = reloaded if reloaded is not None else phenopacket
+
+        if self.background_tasks is not None and hasattr(
+            self.background_tasks, "add_task"
+        ):
+            from app.search.mv_refresh import schedule_refresh_if_stale
+
+            self.background_tasks.add_task(schedule_refresh_if_stale)
+
+        return result_record
 
     async def update(
         self,
@@ -519,6 +533,13 @@ class PhenopacketService:
             await self._repo.rollback()
             logger.error("Failed to delete phenopacket %s: %s", phenopacket_id, exc)
             raise ServiceDatabaseError(f"Database error: {exc}") from exc
+
+        if self.background_tasks is not None and hasattr(
+            self.background_tasks, "add_task"
+        ):
+            from app.search.mv_refresh import schedule_refresh_if_stale
+
+            self.background_tasks.add_task(schedule_refresh_if_stale)
 
         return {
             "message": f"Phenopacket {phenopacket_id} deleted successfully",

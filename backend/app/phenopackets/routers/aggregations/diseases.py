@@ -12,6 +12,7 @@ from .common import (
     AsyncSession,
     Depends,
     calculate_percentages,
+    check_materialized_view_exists,
     get_db,
     logger,
     settings,
@@ -27,10 +28,32 @@ async def aggregate_by_disease(
 ):
     """Aggregate phenopackets by disease.
 
-    Always reads published-head snapshots. Legacy materialized views are based
-    on mutable working copies and are therefore not public-safe.
+    Uses materialized views when available for O(1) performance,
+    falling back to published-head live queries.
     """
-    logger.debug("Reading published-head disease aggregation")
+    if await check_materialized_view_exists(db, "mv_disease_aggregation"):
+        logger.debug("Using materialized view for disease aggregation")
+        result = await db.execute(
+            text("""
+                SELECT disease_id, label, count
+                FROM mv_disease_aggregation
+                ORDER BY count DESC
+            """)
+        )
+        rows = result.mappings().all()
+        total = sum(int(row["count"]) for row in rows)
+        rows_with_pct = calculate_percentages(rows, total=total)
+        return [
+            AggregationResult(
+                label=row["label"] or row["disease_id"],
+                count=int(row["count"]),
+                percentage=row["percentage"],
+                details={"disease_id": row["disease_id"]},
+            )
+            for row in rows_with_pct
+        ]
+
+    logger.debug("Reading published-head disease aggregation via live query")
     query = """
     SELECT
         disease->'term'->>'id' as disease_id,
