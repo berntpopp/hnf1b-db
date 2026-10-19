@@ -2885,7 +2885,7 @@
         "type": "object"
       },
       "PhenopacketUpdate": {
-        "description": "Request model for updating a phenopacket.\n\nIncludes optional optimistic locking support via revision field and\naudit trail support via change_reason field. ``updated_by`` is no\nlonger accepted \u2014 the authenticated actor is always used.",
+        "description": "Request model for updating a phenopacket.\n\nIncludes optimistic locking support via revision field and audit trail\nsupport via change_reason field. ``updated_by`` is no longer accepted \u2014\nthe authenticated actor is always used.",
         "properties": {
           "change_reason": {
             "description": "Reason for the change (audit trail)",
@@ -2899,20 +2899,14 @@
             "type": "object"
           },
           "revision": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional revision for optimistic locking (disabled if not provided)",
-            "title": "Revision"
+            "description": "Required optimistic-locking revision. Update returns 409 Conflict when the current row revision differs.",
+            "title": "Revision",
+            "type": "integer"
           }
         },
         "required": [
           "phenopacket",
+          "revision",
           "change_reason"
         ],
         "title": "PhenopacketUpdate",
@@ -7777,6 +7771,28 @@
               "description": "Only cases with complications",
               "title": "With Complications"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -7838,6 +7854,28 @@
               ],
               "title": "Sex Filter"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -7894,6 +7932,28 @@
               ],
               "description": "Only cases with measurements",
               "title": "With Measurements"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -7952,6 +8012,28 @@
               "description": "Filter by morphology type (cysts, dysplasia, hypoplasia)",
               "title": "Morphology Type"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -7991,6 +8073,30 @@
       "get": {
         "description": "Get all cases with liver abnormalities.",
         "operationId": "get_liver_abnormalities_api_v2_clinical_liver_abnormalities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -8006,6 +8112,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Get Liver Abnormalities",
@@ -8030,6 +8146,28 @@
               "maximum": 10,
               "minimum": 2,
               "title": "Min Systems",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
               "type": "integer"
             }
           }
@@ -8089,6 +8227,28 @@
               "default": true,
               "description": "Include cases with diabetes",
               "title": "Include Diabetes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -8164,6 +8324,28 @@
               ],
               "description": "Include transplant cases",
               "title": "Include Transplant"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -10450,6 +10632,28 @@
               "title": "Variant Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -12630,7 +12834,7 @@
     },
     "/api/v2/reference/genes": {
       "get": {
-        "description": "Query genes by symbol or chromosome.\n\nArgs:\n    response: FastAPI response object for setting cache headers\n    symbol: Gene symbol to filter (e.g., \"HNF1B\")\n    chromosome: Chromosome to filter (e.g., \"17\")\n    genome_build: Genome assembly name (default: GRCh38)\n    db: Database session dependency\n\nReturns:\n    List of genes matching the criteria.\n\nExample:\n    GET /api/v2/reference/genes?symbol=HNF1B&genome_build=GRCh38",
+        "description": "Query genes by symbol or chromosome.\n\nArgs:\n    response: FastAPI response object for setting cache headers\n    symbol: Gene symbol to filter (e.g., \"HNF1B\")\n    chromosome: Chromosome to filter (e.g., \"17\")\n    genome_build: Genome assembly name (default: GRCh38)\n    limit: Maximum number of genes to return\n    offset: Number of genes to skip\n    db: Database session dependency\n\nReturns:\n    List of genes matching the criteria.\n\nExample:\n    GET /api/v2/reference/genes?symbol=HNF1B&genome_build=GRCh38",
         "operationId": "list_genes_api_v2_reference_genes_get",
         "parameters": [
           {
@@ -12685,6 +12889,28 @@
               ],
               "description": "Genome assembly name (default: GRCh38)",
               "title": "Genome Build"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
