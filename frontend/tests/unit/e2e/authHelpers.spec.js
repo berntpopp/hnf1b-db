@@ -66,12 +66,16 @@ describe('e2e auth helpers', () => {
 
     await authHelpers[`loginAsCurator${actor}`](req, 'http://localhost:8000/api/v2');
 
-    expect(req.post).toHaveBeenCalledWith('http://localhost:8000/api/v2/auth/login', {
-      data: {
-        username: `explicit-curator-${actor.toLowerCase()}`,
-        password: `Explicit${actor}!Password2026`,
-      },
-    });
+    expect(req.post).toHaveBeenCalledWith(
+      'http://localhost:8000/api/v2/auth/login',
+      expect.objectContaining({
+        data: {
+          username: `explicit-curator-${actor.toLowerCase()}`,
+          password: `Explicit${actor}!Password2026`,
+        },
+        headers: { 'X-Real-IP': expect.any(String) },
+      })
+    );
   });
 
   it('keeps loginAsReviewer as a direct alias for the curator B fallback', async () => {
@@ -92,9 +96,13 @@ describe('e2e auth helpers', () => {
 
     await authHelpers.loginAsReviewer(req, 'http://localhost:8000/api/v2');
 
-    expect(req.post).toHaveBeenCalledWith('http://localhost:8000/api/v2/auth/login', {
-      data: { username: 'dev-curator-b', password: 'DevCuratorB!2026' },
-    });
+    expect(req.post).toHaveBeenCalledWith(
+      'http://localhost:8000/api/v2/auth/login',
+      expect.objectContaining({
+        data: { username: 'dev-curator-b', password: 'DevCuratorB!2026' },
+        headers: { 'X-Real-IP': expect.any(String) },
+      })
+    );
   });
 
   it('honors a complete legacy reviewer credential override', async () => {
@@ -113,12 +121,16 @@ describe('e2e auth helpers', () => {
 
     await authHelpers.loginAsReviewer(req, 'http://localhost:8000/api/v2');
 
-    expect(req.post).toHaveBeenCalledWith('http://localhost:8000/api/v2/auth/login', {
-      data: {
-        username: 'legacy-independent-reviewer',
-        password: 'LegacyReviewer!2026',
-      },
-    });
+    expect(req.post).toHaveBeenCalledWith(
+      'http://localhost:8000/api/v2/auth/login',
+      expect.objectContaining({
+        data: {
+          username: 'legacy-independent-reviewer',
+          password: 'LegacyReviewer!2026',
+        },
+        headers: { 'X-Real-IP': expect.any(String) },
+      })
+    );
   });
 
   it.each([
