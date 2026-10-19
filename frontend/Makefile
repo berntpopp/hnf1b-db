@@ -41,6 +41,9 @@ format:  ## Format code with Prettier
 format-check:  ## Check code formatting (no auto-fix)
 	npm run format:check
 
+openapi-types:  ## Generate TypeScript types from OpenAPI schema
+	npx --yes openapi-typescript ../mcp/contract/openapi.snapshot.json -o src/api/schema.d.ts
+
 check:  ## Run all quality checks (test + lint + format)
 	@echo "Running all quality checks..."
 	@echo "📋 Step 1/3: Running tests..."

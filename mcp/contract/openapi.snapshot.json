@@ -13937,6 +13937,44 @@
         "summary": "Health Check"
       }
     },
+    "/health/live": {
+      "get": {
+        "description": "Lightweight liveness endpoint for process-level health checks.",
+        "operationId": "liveness_check_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Liveness Check Health Live Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness Check"
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "Dependency-aware readiness endpoint.",
+        "operationId": "health_check_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Check"
+      }
+    },
     "/livez": {
       "get": {
         "description": "Lightweight liveness endpoint for process-level health checks.",
@@ -13945,7 +13983,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Liveness Check Livez Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"

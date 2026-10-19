@@ -1,6 +1,7 @@
 """HNF1B Phenopackets API v2 - Complete replacement with GA4GH Phenopackets."""
 
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -171,13 +172,18 @@ async def _database_ready() -> tuple[bool, str | None]:
 
 async def _cache_ready() -> tuple[bool, str | None]:
     """Check whether the cache dependency is reachable."""
-    if cache.is_connected:
+    if not cache.is_connected or cache._redis is None:
+        return False, "Redis cache is not connected"
+    try:
+        await cache._redis.ping()
         return True, None
-    return False, "Redis cache is not connected"
+    except Exception as exc:  # pragma: no cover - exercised via route tests
+        return False, str(exc)
 
 
+@app.get("/health/live")
 @app.get("/livez")
-async def liveness_check():
+async def liveness_check() -> dict[str, Any]:
     """Lightweight liveness endpoint for process-level health checks."""
     return {
         "status": "alive",
@@ -186,8 +192,9 @@ async def liveness_check():
     }
 
 
+@app.get("/health/ready")
 @app.get("/health")
-async def health_check():
+async def health_check() -> JSONResponse:
     """Dependency-aware readiness endpoint."""
     db_ready, db_error = await _database_ready()
     cache_ready, cache_error = await _cache_ready()
