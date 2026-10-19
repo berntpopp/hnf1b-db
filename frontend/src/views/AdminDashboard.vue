@@ -564,6 +564,7 @@ import { ref, computed, onMounted } from 'vue';
 import * as API from '@/api';
 import { useSyncTask } from '@/composables/useSyncTask';
 import AdminUsersCard from '@/components/admin/AdminUsersCard.vue';
+import { formatApiError } from '@/utils/apiError';
 
 // State
 const loading = ref(true);
@@ -646,7 +647,7 @@ const fetchStatus = async () => {
     error.value = null;
   } catch (err) {
     window.logService.error('Failed to fetch admin status', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to fetch system status';
+    error.value = formatApiError(err, 'Failed to fetch system status');
   }
 };
 
@@ -731,7 +732,7 @@ const startReferenceInit = async () => {
     }
   } catch (err) {
     window.logService.error('Failed to initialize reference data', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to initialize reference data';
+    error.value = formatApiError(err, 'Failed to initialize reference data');
   } finally {
     refInitInProgress.value = false;
   }

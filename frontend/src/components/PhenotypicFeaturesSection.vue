@@ -227,6 +227,7 @@ const LATERALITY_MODIFIER_LABELS = {
   'HP:0012834': 'Right',
   'HP:0012835': 'Left',
 };
+const LATERALITY_IDS = new Set(Object.keys(LATERALITY_MODIFIER_LABELS));
 
 // Curation console Task 7 (design spec §3.4, curation spec §7): default
 // evidence code attached to features the console creates. Picks the
@@ -356,7 +357,8 @@ const lateralityOptionsFor = (hpoId) =>
 
 const getModifierValue = (hpoId) => {
   const feature = props.modelValue.find((f) => f.type?.id === hpoId);
-  return feature?.modifiers?.[0]?.id ?? null;
+  const lateralityMod = feature?.modifiers?.find((m) => LATERALITY_IDS.has(m.id));
+  return lateralityMod?.id ?? null;
 };
 
 // Laterality is mutually exclusive per term (Unilateral vs Left vs Right vs
@@ -364,14 +366,22 @@ const getModifierValue = (hpoId) => {
 // `modifiers` to either `[]` (cleared) or exactly one `{id,label}`
 // ontologyClass -- never a multi-select. Never mutates props.modelValue --
 // same immutability discipline as cycleState/selectCKDStage.
+// Preserves non-laterality modifiers (e.g. severity).
 const setModifier = (term, modifierId) => {
   const index = props.modelValue.findIndex((f) => f.type?.id === term.hpo_id);
   if (index === -1) return;
 
-  const updated = [...props.modelValue];
+  const existingModifiers = (props.modelValue[index].modifiers || []).filter(
+    (m) => !LATERALITY_IDS.has(m.id)
+  );
   const modifiers = modifierId
-    ? [{ id: modifierId, label: LATERALITY_MODIFIER_LABELS[modifierId] || modifierId }]
-    : [];
+    ? [
+        ...existingModifiers,
+        { id: modifierId, label: LATERALITY_MODIFIER_LABELS[modifierId] || modifierId },
+      ]
+    : existingModifiers;
+
+  const updated = [...props.modelValue];
   updated[index] = { ...updated[index], modifiers };
 
   emit('update:modelValue', updated);

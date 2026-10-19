@@ -16,6 +16,10 @@ describe('onsetClassToAge', () => {
     expect(onsetClassToAge('HP:0034199')).toBeNull();
   });
 
+  it('maps HP:0030674 (Antenatal onset) to -0.25 [DATA-07]', () => {
+    expect(onsetClassToAge('HP:0030674')).toBe(-0.25);
+  });
+
   it('maps HP:0003577 (Congenital onset) to birth, age 0', () => {
     expect(onsetClassToAge('HP:0003577')).toBe(0);
   });
@@ -126,6 +130,14 @@ describe('getOrganSystem', () => {
 describe('parseAge', () => {
   it('parses a full ISO8601 duration', () => {
     expect(parseAge('P5Y6M')).toBeCloseTo(5.5, 2);
+  });
+
+  it('parses ISO8601 week durations like P28W [DATA-07]', () => {
+    expect(parseAge('P28W')).toBeCloseTo((28 * 7) / 365.25, 4);
+  });
+
+  it('parses compound durations including weeks', () => {
+    expect(parseAge('P1Y2M3W4D')).toBeCloseTo(1 + 2 / 12 + (3 * 7) / 365.25 + 4 / 365, 4);
   });
 
   it('returns null for a falsy input', () => {

@@ -216,4 +216,16 @@ describe('ReportObservationWorkspace', () => {
     await flushPromises();
     expect(wrapper.emitted('unavailable')).toEqual([[]]);
   });
+
+  it('skips GET /curation probe when phenopacket prop lacks observationsById [BUG-05]', async () => {
+    const wrapper = mountWorkspace({
+      props: {
+        phenopacketId: 'PP-legacy',
+        phenopacket: { id: 'PP-legacy', metaData: { ext: {} } },
+      },
+    });
+    await flushPromises();
+    expect(getLedger).not.toHaveBeenCalled();
+    expect(wrapper.emitted('unavailable')).toEqual([[]]);
+  });
 });

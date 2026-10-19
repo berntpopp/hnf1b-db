@@ -1,6 +1,6 @@
 <template>
   <a
-    :href="href"
+    :href="safeHref"
     target="_blank"
     rel="noopener noreferrer"
     :aria-label="ariaLabel"
@@ -21,10 +21,17 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue';
+
+const props = defineProps({
   href: { type: String, required: true },
   ariaLabel: { type: String, default: undefined },
   showIcon: { type: Boolean, default: true },
+});
+
+const safeHref = computed(() => {
+  const url = (props.href || '').trim();
+  return /^https?:\/\//i.test(url) ? url : '#';
 });
 </script>
 

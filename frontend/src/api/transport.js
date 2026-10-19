@@ -4,6 +4,7 @@
 
 import axios from 'axios';
 import { clearTokens, getAccessToken, getCsrfToken } from './session';
+import { formatApiError } from '@/utils/apiError';
 
 export const apiClient = axios.create({
   // Use Vite proxy in development (avoids CORS), direct URL in production
@@ -120,6 +121,7 @@ apiClient.interceptors.response.use(
       errorCode: responseData?.error_code ?? null,
       requestId: responseData?.request_id ?? headerRequestId,
     };
+    error.userMessage = formatApiError(error);
 
     // Log normalized error (logService redacts sensitive fields automatically)
     if (window.logService && error.response) {
