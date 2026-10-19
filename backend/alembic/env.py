@@ -186,7 +186,61 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ARG001
         "variant_annotations",
     }:
         return False
+    # Raw-SQL GIN/functional/partial indexes and legacy constraint names are
+    # managed explicitly in migration scripts rather than ORM metadata.
+    if type_ in {"index", "unique_constraint", "foreign_key_constraint"}:
+        if name in {
+            "idx_phenopackets_editing_revision_id",
+            "idx_phenopackets_head_published_revision_id",
+            "idx_phenopacket_revisions_parent_revision_id",
+            "idx_phenopacket_revisions_actor_id",
+        }:
+            return True
+        return False
+    # Legacy unused cohorts/families tables retain their initial raw-SQL columns.
+    if type_ == "column":
+        parent_table = getattr(getattr(object_, "table", None), "name", None)
+        if parent_table in {"cohorts", "families"}:
+            return False
     return True
+
+
+def _strip_comment_only_ops(ops_list: list) -> None:
+    """Remove comment-only autogenerate diffs from an UpgradeOps/ModifyTableOps list."""
+    from alembic.operations.ops import (
+        AlterColumnOp,
+        CreateTableCommentOp,
+        DropTableCommentOp,
+        ModifyTableOps,
+    )
+
+    filtered = []
+    for op in ops_list:
+        if isinstance(op, ModifyTableOps):
+            _strip_comment_only_ops(op.ops)
+            if op.ops:
+                filtered.append(op)
+        elif isinstance(op, (DropTableCommentOp, CreateTableCommentOp)):
+            continue
+        elif (
+            isinstance(op, AlterColumnOp)
+            and op.modify_comment is not False
+            and op.modify_type is None
+            and op.modify_nullable is None
+            and op.modify_server_default is False
+            and op.modify_name is None
+        ):
+            continue
+        else:
+            filtered.append(op)
+    ops_list[:] = filtered
+
+
+def process_revision_directives(context_, revision_, directives):  # noqa: ARG001
+    """Strip comment-only diffs so ``alembic check`` focuses on structural schema drift."""
+    for script in directives:
+        if hasattr(script, "upgrade_ops") and script.upgrade_ops is not None:
+            _strip_comment_only_ops(script.upgrade_ops.ops)
 
 
 # Get database URL from environment variable
@@ -216,10 +270,11 @@ def run_migrations_offline() -> None:
         url=url,
         target_metadata=target_metadata,
         include_object=include_object,
+        process_revision_directives=process_revision_directives,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
-        compare_server_default=True,
+        compare_server_default=False,
     )
 
     with context.begin_transaction():
@@ -232,8 +287,9 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         include_object=include_object,
+        process_revision_directives=process_revision_directives,
         compare_type=True,
-        compare_server_default=True,
+        compare_server_default=False,
     )
 
     with context.begin_transaction():

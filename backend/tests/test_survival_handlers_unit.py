@@ -728,5 +728,3 @@ class TestInterpretationStatusAcmgFiltering:
         assert "acmgPathogenicityClassification" in handler.build_standard_query(
             ["HP:0000001"]
         )
-
-

@@ -26,6 +26,7 @@ _PUBLIC_REVISION_FILTER = """
     AND p.state = 'published'
     AND p.head_published_revision_id IS NOT NULL
     AND r.state = 'published'
+    AND p.phenopacket_id NOT LIKE 'e2e-%'
 """
 
 _LEGACY_PUBLIC_FILTER = """
@@ -132,6 +133,7 @@ def upgrade() -> None:
             WHERE p.deleted_at IS NULL
               AND p.state = 'published'
               AND p.head_published_revision_id IS NOT NULL
+              AND p.phenopacket_id NOT LIKE 'e2e-%'
         ),
         feature_counts AS (
             SELECT
@@ -477,6 +479,7 @@ def downgrade() -> None:
     # ------------------------------------------------------------------
     # 2. Drop new indexes
     # ------------------------------------------------------------------
+    op.execute("DROP INDEX IF EXISTS idx_publication_fulltext_embeddings_hnsw;")
     op.execute(
         "DROP INDEX IF EXISTS idx_publication_fulltext_embeddings_model_pmid_passage;"
     )

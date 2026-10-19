@@ -32,6 +32,7 @@ from app.phenopackets.curation.api_models import (
 from app.phenopackets.curation.models import Hnf1bCurationProfile
 from app.phenopackets.curation.projection import project_individual
 from app.phenopackets.models import Phenopacket
+from app.phenopackets.repositories.visibility import resolve_curator_content
 from app.phenopackets.services.state_service import PhenopacketStateService
 from app.phenopackets.validation.domain import DomainValidator
 from app.phenopackets.validator import PhenopacketValidator
@@ -354,7 +355,8 @@ class CurationService:
 
     def read(self, record: Phenopacket) -> dict[str, Any]:
         """Build a complete curator DTO without exposing persistence internals."""
-        profile = self._profile(record.phenopacket)
+        current_doc = resolve_curator_content(record)
+        profile = self._profile(current_doc)
         result = self._projection(profile)
         return {
             "phenopacketId": record.phenopacket_id,
@@ -389,7 +391,8 @@ class CurationService:
         self, record: Phenopacket, request: ProjectionPreviewRequest
     ) -> dict[str, Any]:
         """Return the projection for an unsaved one-observation replacement."""
-        profile = self._profile(record.phenopacket)
+        current_doc = resolve_curator_content(record)
+        profile = self._profile(current_doc)
         if request.observation.observation_id not in profile.observations_by_id:
             raise CurationServiceError(
                 "observation_not_found", "observation is not part of this phenopacket"
@@ -410,7 +413,7 @@ class CurationService:
             request.observation.model_dump(by_alias=True, mode="json")
         )
         candidate = self._candidate_profile(profiles)
-        document = self._document_with_profile(record.phenopacket, candidate)
+        document = self._document_with_profile(current_doc, candidate)
         await self._validate_domain(document)
         result = self._projection(candidate)
         return {
@@ -434,7 +437,8 @@ class CurationService:
         expected_revision: int,
     ) -> Phenopacket:
         """Replace one existing report and append an immutable revision."""
-        profile = self._profile(record.phenopacket)
+        current_doc = resolve_curator_content(record)
+        profile = self._profile(current_doc)
         observation_id = request.observation.observation_id
         existing = profile.observations_by_id.get(observation_id)
         if existing is None:
@@ -456,7 +460,7 @@ class CurationService:
             by_alias=True, mode="json"
         )
         document = self._document_with_profile(
-            record.phenopacket, self._candidate_profile(candidate)
+            current_doc, self._candidate_profile(candidate)
         )
         await self._validate_domain(document)
         return await self._state.edit_record(
@@ -475,7 +479,8 @@ class CurationService:
         expected_revision: int,
     ) -> Phenopacket:
         """Append an immutable correction with server-controlled actor and time."""
-        profile = self._profile(record.phenopacket)
+        current_doc = resolve_curator_content(record)
+        profile = self._profile(current_doc)
         observation_id = self._correction_observation_id(request.json_pointer)
         observation = profile.observations_by_id.get(observation_id)
         if observation is None:
@@ -537,7 +542,7 @@ class CurationService:
             )
         target["correctionIds"] = [*target.get("correctionIds", []), correction_id]
         document = self._document_with_profile(
-            record.phenopacket, self._candidate_profile(candidate)
+            current_doc, self._candidate_profile(candidate)
         )
         await self._validate_domain(document)
         return await self._state.edit_record(
@@ -556,7 +561,8 @@ class CurationService:
         expected_revision: int,
     ) -> Phenopacket:
         """Append a resolution only for the currently computed conflict set."""
-        profile = self._profile(record.phenopacket)
+        current_doc = resolve_curator_content(record)
+        profile = self._profile(current_doc)
         conflict = next(
             (
                 item
@@ -589,7 +595,7 @@ class CurationService:
             by_alias=True, mode="json"
         )
         document = self._document_with_profile(
-            record.phenopacket, self._candidate_profile(candidate)
+            current_doc, self._candidate_profile(candidate)
         )
         await self._validate_domain(document)
         return await self._state.edit_record(

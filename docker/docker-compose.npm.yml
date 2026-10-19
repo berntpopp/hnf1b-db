@@ -80,6 +80,42 @@ services:
       - no-new-privileges:true
 
   # ============================================
+  # Database Migration (Production One-shot)
+  # ============================================
+  hnf1b_migrate:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.prod
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+
+    env_file:
+      - ../.env.docker
+
+    container_name: hnf1b_migrate_npm
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,size=100M,mode=1777
+
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@hnf1b_db:5432/${POSTGRES_DB:-hnf1b_phenopackets}
+      REDIS_URL: redis://hnf1b_cache:6379/0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      DEBUG: "false"
+      LOG_LEVEL: ${LOG_LEVEL_API:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://hnf1b.org,https://www.hnf1b.org}
+
+    networks:
+      - hnf1b_internal
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # ============================================
   # FastAPI Backend (Production)
   # ============================================
   hnf1b_api:

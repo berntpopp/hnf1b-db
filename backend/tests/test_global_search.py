@@ -1173,4 +1173,3 @@ async def test_punctuation_only_search_query_does_not_500(async_client):
         data = resp.json()
         assert data["results"] == []
         assert data["total"] == 0
-

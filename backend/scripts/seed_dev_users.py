@@ -26,8 +26,7 @@ if (
 ):
     env = os.environ.get("ENVIRONMENT", "development")
     print(
-        "seed_dev_users refuses to run outside development "
-        f"(ENVIRONMENT={env!r})",
+        f"seed_dev_users refuses to run outside development (ENVIRONMENT={env!r})",
         file=sys.stderr,
     )
     sys.exit(1)
