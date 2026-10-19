@@ -58,6 +58,7 @@
             :variant="item.visible ? 'tonal' : 'outlined'"
             class="filter-chip"
             :class="{ 'filter-chip--hidden': !item.visible }"
+            role="button"
             :aria-pressed="item.visible"
             :data-testid="`filter-chip-${row.dim}-${item.key}`"
             @click="onToggle(row.dim, item.key)"
