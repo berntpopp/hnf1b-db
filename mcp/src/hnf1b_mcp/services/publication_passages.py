@@ -66,6 +66,7 @@ def _shape_passage(
         "pmid": pmid,
         "section": passage.get("section"),
         "recommended_citation": citation.get("recommended_citation"),
+        "_untrusted_source": True,
     }
     text = passage.get("text")
     snippet = passage.get("snippet")
@@ -154,6 +155,7 @@ async def get_publication_passages(
         "query": query,
         "passages": passages,
         "total": len(passages),
+        "_untrusted_source": True,
     }
     # keep_min=1: the backend guarantees a non-empty result when a match exists,
     # so never let client-side budget trimming pop the sole top-ranked passage to

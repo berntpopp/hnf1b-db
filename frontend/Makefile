@@ -8,8 +8,8 @@ help:  ## Show frontend commands
 install:  ## Install dependencies
 	npm install
 
-dev:  ## Start development server (http://localhost:3000)
-	npm run dev -- --port 3000 --strictPort
+dev:  ## Start development server (http://localhost:5173)
+	npm run dev -- --port 5173 --strictPort
 
 build:  ## Build for production
 	npm run build

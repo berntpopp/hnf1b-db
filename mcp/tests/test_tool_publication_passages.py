@@ -127,8 +127,10 @@ async def test_passage_has_citation_and_snippet() -> None:
     )
     await client.aclose()
     sc = r.structured_content
+    assert sc["_untrusted_source"] is True
     assert sc["passages"]
     p = sc["passages"][0]
+    assert p["_untrusted_source"] is True
     assert p["passage_id"] == "PMID:1001:results:0"
     assert "Smith J, Jones B" in p["recommended_citation"]
     assert "2022" in p["recommended_citation"]
