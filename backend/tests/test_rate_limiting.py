@@ -28,13 +28,18 @@ class MockRequest:
     """Mock FastAPI Request for testing."""
 
     def __init__(
-        self, client_host: str = "127.0.0.1", forwarded_for: Optional[str] = None
+        self,
+        client_host: str = "127.0.0.1",
+        forwarded_for: Optional[str] = None,
+        real_ip: Optional[str] = None,
     ):
         """Initialize mock request with client host and optional forwarded headers."""
         self.client = type("obj", (object,), {"host": client_host})
         self.headers = {}
         if forwarded_for:
             self.headers["X-Forwarded-For"] = forwarded_for
+        if real_ip:
+            self.headers["X-Real-IP"] = real_ip
 
 
 class TestGetClientIP:
@@ -45,18 +50,27 @@ class TestGetClientIP:
         request = MockRequest(client_host="192.168.1.100")
         assert get_client_ip(request) == "192.168.1.100"
 
+    def test_real_ip_precedence(self):
+        """Test X-Real-IP takes precedence over X-Forwarded-For and client host."""
+        request = MockRequest(
+            client_host="127.0.0.1",
+            forwarded_for="203.0.113.42, 198.51.100.17",
+            real_ip="198.51.100.99",
+        )
+        assert get_client_ip(request) == "198.51.100.99"
+
     def test_forwarded_for_single_ip(self):
         """Test X-Forwarded-For with single IP."""
         request = MockRequest(client_host="127.0.0.1", forwarded_for="203.0.113.42")
         assert get_client_ip(request) == "203.0.113.42"
 
     def test_forwarded_for_multiple_ips(self):
-        """Test X-Forwarded-For with multiple IPs (takes first)."""
+        """Test X-Forwarded-For with multiple IPs (takes last to avoid spoofing)."""
         request = MockRequest(
             client_host="127.0.0.1",
             forwarded_for="203.0.113.42, 198.51.100.17, 192.0.2.1",
         )
-        assert get_client_ip(request) == "203.0.113.42"
+        assert get_client_ip(request) == "192.0.2.1"
 
     def test_no_client_info(self):
         """Test fallback when no client info available."""

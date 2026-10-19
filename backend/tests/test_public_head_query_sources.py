@@ -37,3 +37,20 @@ def test_public_sex_filters_facets_related_and_sorts_read_head_content():
     assert "SELECT p.subject_sex AS value" not in search
     assert '" AND p.subject_sex = :sex"' not in related
     assert "parse_sort_parameter(sort, content=public_json_column)" in crud
+
+
+def test_disease_cases_query_uses_parameterized_jsonb_build_object():
+    """Disease case queries must parameterize terms and labels via jsonb_build_object."""
+    sql = str(ClinicalQueries.get_disease_cases(["MONDO:0005147"], ["diabetes"]))
+    assert "jsonb_build_object" in sql
+    assert "MONDO:0005147" not in sql
+    assert "diabetes" not in sql
+
+
+def test_measurement_cases_query_uses_parameterized_jsonb_build_object():
+    """Measurement queries must parameterize LOINC codes and interpretations."""
+    sql = str(ClinicalQueries.get_measurement_cases(["1234-5"], "HP:0000107"))
+    assert "jsonb_build_object" in sql
+    assert "1234-5" not in sql
+    assert "HP:0000107" not in sql
+

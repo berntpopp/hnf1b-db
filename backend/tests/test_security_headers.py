@@ -60,6 +60,33 @@ def test_csp_allows_swagger_cdn(client):
     assert csp.count("https://cdn.jsdelivr.net") >= 2
 
 
+def test_csp_drops_unsafe_eval(client):
+    """CSP must not include unsafe-eval."""
+    response = client.get("/ping")
+    csp = response.headers["content-security-policy"]
+    assert "unsafe-eval" not in csp
+
+
+def test_hsts_header_in_production(client, monkeypatch):
+    """HSTS header should be present in production/staging environments."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "environment", "production")
+    response = client.get("/ping")
+    assert response.headers.get("strict-transport-security") == (
+        "max-age=31536000; includeSubDomains"
+    )
+
+
+def test_hsts_header_omitted_in_development(client, monkeypatch):
+    """HSTS header should be omitted in development environment."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "environment", "development")
+    response = client.get("/ping")
+    assert "strict-transport-security" not in response.headers
+
+
 def test_regular_paths_are_not_no_store(client):
     """Non-docs responses should not be forced to no-store."""
     response = client.get("/ping")

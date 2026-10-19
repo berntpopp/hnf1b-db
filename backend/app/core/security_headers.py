@@ -8,6 +8,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.config import settings
+
 # CSP is intentionally permissive for now because the frontend uses
 # inline scripts and connects to multiple origins. Tighten this in a
 # future hardening pass (out of Wave 2 scope).
@@ -19,7 +21,7 @@ from starlette.responses import Response
 # https://fastapi.tiangolo.com and is already covered by img-src https:.
 DEFAULT_CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
     "img-src 'self' data: https:; "
     "connect-src 'self' https://rest.ensembl.org https://eutils.ncbi.nlm.nih.gov "
@@ -51,6 +53,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = (
             "geolocation=(), microphone=(), camera=(), payment=()"
         )
+        if settings.environment != "development":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
         if request.url.path in NO_STORE_PATHS:
             response.headers["Cache-Control"] = "no-store"
         return response

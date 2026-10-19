@@ -252,7 +252,12 @@ users_router = APIRouter(
 )
 
 
-@router.post("/login", response_model=Token, response_model_exclude_none=True)
+@router.post(
+    "/login",
+    response_model=Token,
+    response_model_exclude_none=True,
+    dependencies=[Depends(RateLimiter("login", 10, 60))],
+)
 async def login(
     credentials: UserLogin,
     response: Response,

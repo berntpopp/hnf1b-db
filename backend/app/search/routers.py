@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_admin
 from app.database import get_db
 from app.search.schemas import AutocompleteResponse, GlobalSearchResponse
 from app.search.services import GlobalSearchService, PaginationParams
@@ -88,7 +89,11 @@ async def global_search(
     return await service.search(q, pagination, type)
 
 
-@router.post("/search/refresh", include_in_schema=False)
+@router.post(
+    "/search/refresh",
+    include_in_schema=False,
+    dependencies=[Depends(require_admin)],
+)
 async def refresh_search_index(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
