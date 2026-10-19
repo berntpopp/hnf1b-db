@@ -18,9 +18,17 @@ from app.phenopackets.curation.models import (
     ReportObservation,
 )
 from app.phenopackets.curation.projection import project_individual
-from app.phenopackets.models import Phenopacket
+from app.phenopackets.models import (
+    BatchImportResponse,
+    BatchImportRowResult,
+    Phenopacket,
+    PhenopacketCreate,
+)
+from app.phenopackets.repositories import PhenopacketRepository
+from app.phenopackets.services.phenopacket_service import PhenopacketService
 from app.phenopackets.services.state_service import PhenopacketStateService
-from app.phenopackets.validator import PhenopacketValidator
+from app.phenopackets.validation.domain import DomainValidator
+from app.phenopackets.validator import PhenopacketSanitizer, PhenopacketValidator
 from migration.reimport_merge import ReimportConflict, classify_reimport
 from migration.source_manifest import SourceManifest
 
@@ -348,3 +356,142 @@ class TypedObservationImportService:
             records=len(observations_by_subject),
             observations=len(observations),
         )
+
+
+async def run_batch_import(
+    db: AsyncSession,
+    phenopackets: list[dict[str, Any]],
+    *,
+    dry_run: bool,
+    actor: User,
+) -> BatchImportResponse:
+    """Validate and optionally commit a batch of phenopackets.
+
+    In dry-run mode, all rows are checked against schema, variant formats,
+    ontology conformance, and DB duplicate keys, but no rows are written.
+    In live mode (dry_run=False), valid rows that do not already exist are
+    committed as draft phenopackets via PhenopacketService.create.
+    """
+    results: list[BatchImportRowResult] = []
+    seen_batch_ids: set[str] = set()
+    sanitizer = PhenopacketSanitizer()
+    validator = PhenopacketValidator()
+
+    candidate_ids = {
+        str(doc.get("id")).strip()
+        for doc in phenopackets
+        if isinstance(doc, dict)
+        and doc.get("id") is not None
+        and str(doc.get("id")).strip()
+    }
+    existing_ids: set[str] = set()
+    if candidate_ids:
+        existing_rows = await db.scalars(
+            select(Phenopacket.phenopacket_id).where(
+                Phenopacket.phenopacket_id.in_(candidate_ids)
+            )
+        )
+        existing_ids = set(existing_rows.all())
+
+    for idx, doc in enumerate(phenopackets):
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        raw_id = doc.get("id") if isinstance(doc, dict) else None
+        phenopacket_id = str(raw_id).strip() if raw_id is not None else ""
+
+        subject_id = ""
+        if isinstance(doc, dict) and isinstance(doc.get("subject"), dict):
+            raw_subj = doc["subject"].get("id")
+            if raw_subj is not None:
+                subject_id = str(raw_subj).strip()
+
+        if not phenopacket_id:
+            errors.append("Missing required field: id")
+        if not subject_id:
+            errors.append("Missing required field: subject.id")
+
+        already_exists = False
+        if phenopacket_id:
+            if phenopacket_id in seen_batch_ids:
+                errors.append(
+                    f"Duplicate phenopacket ID '{phenopacket_id}' within batch"
+                )
+            else:
+                seen_batch_ids.add(phenopacket_id)
+
+            if phenopacket_id in existing_ids:
+                already_exists = True
+                errors.append(
+                    f"Phenopacket with ID '{phenopacket_id}' already exists in database"
+                )
+
+        sanitized_doc: dict[str, Any] = doc if isinstance(doc, dict) else {}
+        if isinstance(doc, dict):
+            try:
+                sanitized_doc = sanitizer.sanitize_phenopacket(doc)
+                schema_errors = validator.validate(sanitized_doc)
+                if schema_errors:
+                    errors.extend(schema_errors)
+
+                domain_errors = await DomainValidator(db).validate(sanitized_doc)
+                if domain_errors:
+                    errors.extend(domain_errors)
+            except Exception as exc:
+                errors.append(f"Validation error: {exc}")
+
+        is_valid = len(errors) == 0 and not already_exists
+        results.append(
+            BatchImportRowResult(
+                row_index=idx,
+                phenopacket_id=phenopacket_id,
+                subject_id=subject_id,
+                valid=is_valid,
+                errors=errors,
+                warnings=warnings,
+                already_exists=already_exists,
+            )
+        )
+
+    committed_rows = 0
+    if not dry_run:
+        service = PhenopacketService(PhenopacketRepository(db))
+        pending_rows: list[BatchImportRowResult] = []
+        for row_result in results:
+            if row_result.valid and not row_result.already_exists:
+                doc = phenopackets[row_result.row_index]
+                try:
+                    async with db.begin_nested():
+                        await service.create(
+                            PhenopacketCreate(phenopacket=doc),
+                            actor_id=actor.id,
+                        )
+                    pending_rows.append(row_result)
+                except Exception as exc:
+                    row_result.valid = False
+                    row_result.errors.append(f"Commit failed: {exc}")
+        if pending_rows:
+            try:
+                await db.commit()
+                committed_rows = len(pending_rows)
+            except Exception as exc:
+                await db.rollback()
+                for row_result in pending_rows:
+                    row_result.valid = False
+                    row_result.errors.append(f"Commit failed: {exc}")
+    else:
+        # Guarantee dry-run writes nothing
+        await db.rollback()
+
+    total_rows = len(phenopackets)
+    valid_rows = sum(1 for r in results if r.valid)
+    invalid_rows = total_rows - valid_rows
+
+    return BatchImportResponse(
+        dry_run=dry_run,
+        total_rows=total_rows,
+        valid_rows=valid_rows,
+        invalid_rows=invalid_rows,
+        committed_rows=committed_rows,
+        results=results,
+    )

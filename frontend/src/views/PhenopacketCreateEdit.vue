@@ -2,12 +2,15 @@
 <template>
   <v-container>
     <v-card>
-      <h1 class="v-card-title text-h4">
-        <v-icon left color="primary" size="large">
-          {{ isEditing ? 'mdi-pencil' : 'mdi-plus' }}
-        </v-icon>
-        {{ isEditing ? 'Edit Phenopacket' : 'Create New Phenopacket' }}
-      </h1>
+      <div class="d-flex justify-space-between align-center px-4 pt-4">
+        <h1 class="v-card-title text-h4 pa-0">
+          <v-icon left color="primary" size="large">
+            {{ isEditing ? 'mdi-pencil' : 'mdi-plus' }}
+          </v-icon>
+          {{ isEditing ? 'Edit Phenopacket' : 'Create New Phenopacket' }}
+        </h1>
+        <BulkImportWorkbenchDialog v-if="!isEditing" />
+      </div>
 
       <v-card-text>
         <!-- Fatal: the form could not be built at all (vocabularies or the
@@ -223,6 +226,13 @@
                 :filled="phenotypesCompleteness.filled"
                 :total="phenotypesCompleteness.total"
               >
+                <div class="mb-3 d-flex justify-end">
+                  <PhenotypeSuggestionDrawer
+                    v-model="phenopacket.phenotypicFeatures"
+                    :pmid="publications[0]?.pmid || ''"
+                    :evidence-code-items="vocabularies.evidenceCode.value"
+                  />
+                </div>
                 <PhenotypicFeaturesSection
                   v-model="phenopacket.phenotypicFeatures"
                   :form-submitted="formSubmitted"
@@ -370,6 +380,8 @@ import ClassificationSection from '@/components/curation/ClassificationSection.v
 import AgeSection from '@/components/curation/AgeSection.vue';
 import ProvenanceSection from '@/components/curation/ProvenanceSection.vue';
 import ReportObservationWorkspace from '@/components/curation/reports/ReportObservationWorkspace.vue';
+import PhenotypeSuggestionDrawer from '@/components/curation/PhenotypeSuggestionDrawer.vue';
+import BulkImportWorkbenchDialog from '@/components/curation/BulkImportWorkbenchDialog.vue';
 import { computeSectionCompleteness } from '@/utils/curationFields';
 import { formatApiError } from '@/utils/apiError';
 
@@ -384,6 +396,8 @@ export default {
     AgeSection,
     ProvenanceSection,
     ReportObservationWorkspace,
+    PhenotypeSuggestionDrawer,
+    BulkImportWorkbenchDialog,
   },
   // Vue Router 4-style in-component guard (works with the Options API used
   // throughout this file). Prompts on navigate-away only when the live form
@@ -567,6 +581,8 @@ export default {
 
     if (this.isEditing) {
       await this.loadPhenopacket();
+    } else if (this.$route?.query?.cloneFrom) {
+      await this.loadCloneTemplate(this.$route.query.cloneFrom);
     } else {
       // Create mode - hide loader and show empty form
       this.loading = false;
@@ -720,6 +736,74 @@ export default {
       }
     },
 
+    async loadCloneTemplate(cloneFromId) {
+      this.loading = true;
+      this.loadError = null;
+
+      try {
+        const response = await getPhenopacket(cloneFromId);
+        const src = response.data?.phenopacket || response.data || {};
+
+        this.publications = (src.metaData?.externalReferences || [])
+          .filter((ref) => ref.id?.startsWith('PMID:'))
+          .map((ref) => ({
+            pmid: ref.id.replace('PMID:', ''),
+          }));
+
+        const clonedInterpretations = JSON.parse(JSON.stringify(src.interpretations || []));
+        for (const interp of clonedInterpretations) {
+          for (const gi of interp.diagnosis?.genomicInterpretations || []) {
+            if ('subjectOrBiosampleId' in gi) {
+              gi.subjectOrBiosampleId = '';
+            }
+          }
+          for (const gi of interp.genomicInterpretations || []) {
+            if ('subjectOrBiosampleId' in gi) {
+              gi.subjectOrBiosampleId = '';
+            }
+          }
+        }
+        this.phenopacket.interpretations = clonedInterpretations;
+
+        const srcCuration = src.hnf1bCuration || {};
+        this.phenopacket.hnf1bCuration = this.phenopacket.hnf1bCuration || {};
+        const sharedFields = [
+          'cohort',
+          'publicationType',
+          'familyHistory',
+          'detectionMethod',
+          'classificationSystem',
+          'classificationDate',
+          'classificationComment',
+        ];
+        for (const field of sharedFields) {
+          if (srcCuration[field] !== undefined) {
+            this.phenopacket.hnf1bCuration[field] = srcCuration[field];
+          }
+        }
+
+        this.phenopacket.id = '';
+        this.phenopacket.subject = { id: '', sex: 'UNKNOWN_SEX', alternateIds: [] };
+        this.phenopacket.phenotypicFeatures = [];
+        this.phenopacket.measurements = [];
+        this.phenopacket.diseases = [];
+
+        window.logService.info('Loaded clone template for phenopacket', {
+          cloneFromId,
+          publicationsCount: this.publications.length,
+          interpretationsCount: this.phenopacket.interpretations.length,
+        });
+      } catch (err) {
+        this.loadError = 'Failed to load clone template: ' + err.message;
+        window.logService.error('Failed to load clone template', {
+          cloneFromId,
+          error: err.message,
+        });
+      } finally {
+        this.loading = false;
+      }
+    },
+
     addPublication() {
       this.publications.push({ pmid: '' });
     },
@@ -753,9 +837,31 @@ export default {
       // v2 field, and records saved before this fix may carry it in the loaded
       // document. `this.publications` (component state) is the source of truth.
       const { publications: _legacyPublications, ...phenopacket } = this.phenopacket;
+      const subjectId = `${phenopacket.subject?.id || ''}`.trim();
+      const interpretations = Array.isArray(phenopacket.interpretations)
+        ? phenopacket.interpretations.map((interp) => {
+            if (!subjectId || !interp || typeof interp !== 'object') return interp;
+            const nextInterp = { ...interp };
+            if (Array.isArray(nextInterp.diagnosis?.genomicInterpretations)) {
+              nextInterp.diagnosis = {
+                ...nextInterp.diagnosis,
+                genomicInterpretations: nextInterp.diagnosis.genomicInterpretations.map((gi) =>
+                  gi && !gi.subjectOrBiosampleId ? { ...gi, subjectOrBiosampleId: subjectId } : gi
+                ),
+              };
+            }
+            if (Array.isArray(nextInterp.genomicInterpretations)) {
+              nextInterp.genomicInterpretations = nextInterp.genomicInterpretations.map((gi) =>
+                gi && !gi.subjectOrBiosampleId ? { ...gi, subjectOrBiosampleId: subjectId } : gi
+              );
+            }
+            return nextInterp;
+          })
+        : phenopacket.interpretations;
 
       return {
         ...phenopacket,
+        ...(interpretations !== undefined && { interpretations }),
         metaData: {
           ...(phenopacket.metaData || {}),
           externalReferences: this.mergedExternalReferences(),

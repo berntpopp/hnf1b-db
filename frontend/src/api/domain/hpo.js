@@ -18,5 +18,5 @@ export const getHPOAutocomplete = (query, limit = 10) => {
  * @param {string} query - Search query
  * @returns {Promise} Axios promise with HPO term suggestions
  */
-export const searchHPOTerms = (query) =>
-  apiClient.get('/hpo/autocomplete', { params: { q: query } });
+export const searchHPOTerms = (query, limit = 10) =>
+  apiClient.get('/ontology/hpo/autocomplete', { params: { q: query, limit } });

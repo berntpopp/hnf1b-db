@@ -171,3 +171,24 @@ class SyncResponse(BaseModel):
         default=None, description="Body dropped by license gate"
     )
     errors: Optional[int] = Field(default=None, description="Per-publication failures")
+
+
+class PhenotypeSuggestionItem(BaseModel):
+    """A suggested phenotype extracted from publication passages or metadata."""
+
+    hpo_id: str = Field(..., description="HPO term identifier (e.g. HP:0000107)")
+    label: str = Field(..., description="Canonical or matched term label")
+    excluded: bool = Field(False, description="Whether term is negated in source text")
+    section: str = Field(..., description="Passage section or metadata source")
+    passage_id: Optional[str] = Field(None, description="Source passage identifier")
+    sentence: str = Field(..., description="Extracted source sentence")
+    score: float = Field(1.0, description="Match confidence score")
+
+
+class PhenotypeSuggestionResponse(BaseModel):
+    """Response containing phenotype suggestions for a PMID."""
+
+    pmid: str = Field(..., description="Normalized PubMed ID")
+    suggestions: list[PhenotypeSuggestionItem] = Field(
+        default_factory=list, description="Extracted phenotype suggestions"
+    )

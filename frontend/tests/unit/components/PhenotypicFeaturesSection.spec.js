@@ -399,3 +399,203 @@ describe('PhenotypicFeaturesSection evidence auto-attach (Task 7 §3)', () => {
     expect(emitted[0].evidence).toEqual(existingEvidence);
   });
 });
+
+describe('PhenotypicFeaturesSection keyboard-first quick-add (#549)', () => {
+  const EVIDENCE_CODE_ITEMS = [
+    { id: 'ECO:0000033', label: 'author statement' },
+    { id: 'ECO:0000218', label: 'clinical study' },
+  ];
+
+  it('renders quick-add input with data-testid="hpo-quick-add-input"', () => {
+    const wrapper = mountSection([]);
+    const input = wrapper.find('[data-testid="hpo-quick-add-input"]');
+    expect(input.exists()).toBe(true);
+  });
+
+  it('focuses the quick-add input on Cmd+K or / when not typing in editable element', async () => {
+    const wrapper = mountSection([]);
+    const inputEl = wrapper.find('[data-testid="hpo-quick-add-input"]').find('input').element;
+    const focusSpy = vi.spyOn(inputEl, 'focus');
+
+    // Dispatches Cmd+K on window
+    const cmdKEvent = new KeyboardEvent('keydown', {
+      key: 'k',
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(cmdKEvent);
+    await flushPromises();
+    expect(focusSpy).toHaveBeenCalled();
+
+    focusSpy.mockClear();
+
+    // Dispatches / on window
+    const slashEvent = new KeyboardEvent('keydown', {
+      key: '/',
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(slashEvent);
+    await flushPromises();
+    expect(focusSpy).toHaveBeenCalled();
+  });
+
+  it('does NOT trigger focus on / when typing in an INPUT element', async () => {
+    const wrapper = mountSection([]);
+    const inputEl = wrapper.find('[data-testid="hpo-quick-add-input"]').find('input').element;
+    const focusSpy = vi.spyOn(inputEl, 'focus');
+
+    const dummyInput = document.createElement('input');
+    document.body.appendChild(dummyInput);
+    dummyInput.focus();
+
+    const slashEvent = new KeyboardEvent('keydown', {
+      key: '/',
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(slashEvent);
+    await flushPromises();
+    expect(focusSpy).not.toHaveBeenCalled();
+
+    document.body.removeChild(dummyInput);
+  });
+
+  it('provides instant local suggestions from groups.value and fetches remote autocomplete', async () => {
+    get.mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('autocomplete')) {
+        return {
+          data: {
+            data: [{ hpo_id: 'HP:0000083', label: 'Renal insufficiency' }],
+          },
+        };
+      }
+      return { data: { data: [] } };
+    });
+
+    const wrapper = mountSection([]);
+    await flushPromises();
+
+    // Type query matching local term 'Renal cyst'
+    await wrapper.vm.onSearchInput('renal');
+
+    // Instant local matches includes 'Renal cyst'
+    expect(wrapper.vm.suggestions.some((s) => s.id === 'HP:0000107')).toBe(true);
+
+    expect(wrapper.vm.suggestions.some((s) => s.id === 'HP:0000083')).toBe(true);
+  });
+
+  it('navigates suggestions with ArrowDown and ArrowUp', async () => {
+    const wrapper = mountSection([]);
+    wrapper.vm.suggestions = [
+      { id: 'HP:0000107', label: 'Renal cyst' },
+      { id: 'HP:0000083', label: 'Renal insufficiency' },
+    ];
+    wrapper.vm.activeIndex = 0;
+
+    const downEvent = { key: 'ArrowDown', preventDefault: vi.fn() };
+    wrapper.vm.handleInputKeydown(downEvent);
+    expect(downEvent.preventDefault).toHaveBeenCalled();
+    expect(wrapper.vm.activeIndex).toBe(1);
+
+    const upEvent = { key: 'ArrowUp', preventDefault: vi.fn() };
+    wrapper.vm.handleInputKeydown(upEvent);
+    expect(upEvent.preventDefault).toHaveBeenCalled();
+    expect(wrapper.vm.activeIndex).toBe(0);
+  });
+
+  it('adds highlighted term as Present on Enter with evidence attached', () => {
+    const wrapper = mountSection([], {
+      evidenceCodeItems: EVIDENCE_CODE_ITEMS,
+      anchoringReference: 'PMID:12345678',
+    });
+
+    wrapper.vm.suggestions = [{ id: 'HP:0000107', label: 'Renal cyst' }];
+    wrapper.vm.activeIndex = 0;
+
+    const enterEvent = { key: 'Enter', shiftKey: false, preventDefault: vi.fn() };
+    wrapper.vm.handleInputKeydown(enterEvent);
+
+    expect(enterEvent.preventDefault).toHaveBeenCalled();
+    const emitted = wrapper.emitted('update:modelValue')[0][0];
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].type.id).toBe('HP:0000107');
+    expect(emitted[0].excluded).toBe(false);
+    expect(emitted[0].evidence).toEqual([
+      {
+        evidenceCode: { id: 'ECO:0000033', label: 'author statement' },
+        reference: { id: 'PMID:12345678' },
+      },
+    ]);
+  });
+
+  it('adds highlighted term as Excluded on Shift+Enter (omitting laterality modifier)', () => {
+    const wrapper = mountSection([]);
+    wrapper.vm.quickLaterality = 'HP:0012832'; // Bilateral
+    wrapper.vm.suggestions = [{ id: 'HP:0000107', label: 'Renal cyst' }];
+    wrapper.vm.activeIndex = 0;
+
+    const shiftEnterEvent = { key: 'Enter', shiftKey: true, preventDefault: vi.fn() };
+    wrapper.vm.handleInputKeydown(shiftEnterEvent);
+
+    expect(shiftEnterEvent.preventDefault).toHaveBeenCalled();
+    const emitted = wrapper.emitted('update:modelValue')[0][0];
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].type.id).toBe('HP:0000107');
+    expect(emitted[0].excluded).toBe(true);
+    expect(emitted[0].modifiers).toBeUndefined();
+  });
+
+  it('toggles laterality via Alt+B, Alt+U, Alt+L, Alt+R inline hotkeys', () => {
+    const wrapper = mountSection([]);
+
+    const eventB = { key: 'b', altKey: true, ctrlKey: false, metaKey: false, preventDefault: vi.fn() };
+    wrapper.vm.handleInputKeydown(eventB);
+    expect(wrapper.vm.quickLaterality).toBe('HP:0012832'); // Bilateral
+
+    const eventU = { key: 'u', altKey: true, ctrlKey: false, metaKey: false, preventDefault: vi.fn() };
+    wrapper.vm.handleInputKeydown(eventU);
+    expect(wrapper.vm.quickLaterality).toBe('HP:0012833'); // Unilateral
+
+    const eventL = { key: 'l', altKey: true, ctrlKey: false, metaKey: false, preventDefault: vi.fn() };
+    wrapper.vm.handleInputKeydown(eventL);
+    expect(wrapper.vm.quickLaterality).toBe('HP:0012835'); // Left
+
+    const eventR = { key: 'r', altKey: true, ctrlKey: false, metaKey: false, preventDefault: vi.fn() };
+    wrapper.vm.handleInputKeydown(eventR);
+    expect(wrapper.vm.quickLaterality).toBe('HP:0012834'); // Right
+  });
+
+  it('attaches onset and laterality modifier when present and allowed by policy', () => {
+    const wrapper = mountSection([]);
+    wrapper.vm.quickLaterality = 'HP:0012832'; // Bilateral
+    wrapper.vm.quickOnset = 'P20Y';
+
+    wrapper.vm.addSuggestedTerm({ id: 'HP:0000107', label: 'Renal cyst' }, false);
+
+    const emitted = wrapper.emitted('update:modelValue')[0][0];
+    expect(emitted[0].modifiers).toEqual([{ id: 'HP:0012832', label: 'Bilateral' }]);
+    expect(emitted[0].onset).toEqual({ age: { iso8601duration: 'P20Y' } });
+  });
+
+  it('renders non-grouped terms in Additional Curated Phenotypes list and supports removal', async () => {
+    const customFeature = {
+      type: { id: 'HP:0001250', label: 'Seizure' },
+      excluded: false,
+    };
+    const wrapper = mountSection([customFeature]);
+    await flushPromises();
+
+    const additionalSection = wrapper.find('[data-testid="additional-phenotypes-section"]');
+    expect(additionalSection.exists()).toBe(true);
+    expect(additionalSection.text()).toContain('Seizure');
+    expect(additionalSection.text()).toContain('HP:0001250');
+
+    // Remove the custom phenotype
+    wrapper.vm.removeFeature('HP:0001250');
+    const emitted = wrapper.emitted('update:modelValue')[0][0];
+    expect(emitted).toEqual([]);
+  });
+});
+

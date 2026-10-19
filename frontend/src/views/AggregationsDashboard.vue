@@ -1,7 +1,14 @@
 <!-- src/views/AggregationsDashboard.vue -->
 <template>
   <v-container fluid>
-    <h1 class="text-h5 font-weight-bold text-teal-darken-2 mb-3">Aggregations</h1>
+    <div class="d-flex align-center justify-space-between mb-3 flex-wrap ga-2">
+      <h1 class="text-h5 font-weight-bold text-teal-darken-2 mb-0">Aggregations</h1>
+      <SavedFiltersMenu
+        scope-key="aggregations"
+        :current-filters="currentFilterState"
+        @apply="onApplyPreset"
+      />
+    </div>
     <v-alert
       v-if="pageError"
       type="error"
@@ -301,6 +308,7 @@ import VariantComparisonChart from '@/components/analyses/VariantComparisonChart
 import KaplanMeierChart from '@/components/analyses/KaplanMeierChart.vue';
 import DNADistanceAnalysis from '@/components/analyses/DNADistanceAnalysis.vue';
 import SurvivalDataPanels from '@/components/analyses/SurvivalDataPanels.vue';
+import SavedFiltersMenu from '@/components/common/SavedFiltersMenu.vue';
 import * as API from '@/api';
 import { useUrlState } from '@/composables/useUrlState';
 import { useResponsiveChartWidth } from '@/composables/useResponsiveChartWidth';
@@ -398,6 +406,103 @@ const displayLimitValue = computed({
     displayLimit.value = val;
   },
 });
+
+// Filter state object for presets and URL sync
+const currentFilterState = computed(() => {
+  const currentTab = tab.value || URL_STATE_DEFAULTS.tab;
+  const state = { tab: currentTab };
+
+  if (category.value && category.value !== URL_STATE_DEFAULTS.category) {
+    state.category = category.value;
+  } else if (currentTab === 'donut') {
+    state.category = category.value;
+  }
+
+  if (aggregation.value && aggregation.value !== URL_STATE_DEFAULTS.aggregation) {
+    state.aggregation = aggregation.value;
+  } else if (currentTab === 'donut') {
+    state.aggregation = aggregation.value;
+  }
+
+  if (countMode.value && countMode.value !== URL_STATE_DEFAULTS.countMode) {
+    state.countMode = countMode.value;
+  } else if (currentTab === 'donut') {
+    state.countMode = countMode.value;
+  }
+
+  if (displayLimit.value && displayLimit.value !== URL_STATE_DEFAULTS.displayLimit) {
+    state.displayLimit = displayLimit.value;
+  } else if (currentTab === 'stacked-bar') {
+    state.displayLimit = displayLimit.value;
+  }
+
+  if (timelineMode.value && timelineMode.value !== URL_STATE_DEFAULTS.timelineMode) {
+    state.timelineMode = timelineMode.value;
+  } else if (currentTab === 'publications') {
+    state.timelineMode = timelineMode.value;
+  }
+
+  if (comparison.value && comparison.value !== URL_STATE_DEFAULTS.comparison) {
+    state.comparison = comparison.value;
+  } else if (currentTab === 'variant-comparison') {
+    state.comparison = comparison.value;
+  }
+
+  if (organSystem.value && organSystem.value !== URL_STATE_DEFAULTS.organSystem) {
+    state.organSystem = organSystem.value;
+  } else if (currentTab === 'variant-comparison') {
+    state.organSystem = organSystem.value;
+  }
+
+  if (sortBy.value && sortBy.value !== URL_STATE_DEFAULTS.sortBy) {
+    state.sortBy = sortBy.value;
+  } else if (currentTab === 'variant-comparison') {
+    state.sortBy = sortBy.value;
+  }
+
+  if (
+    survivalComparison.value &&
+    survivalComparison.value !== URL_STATE_DEFAULTS.survivalComparison
+  ) {
+    state.survivalComparison = survivalComparison.value;
+  } else if (currentTab === 'survival') {
+    state.survivalComparison = survivalComparison.value;
+  }
+
+  if (
+    survivalEndpoint.value &&
+    survivalEndpoint.value !== URL_STATE_DEFAULTS.survivalEndpoint
+  ) {
+    state.survivalEndpoint = survivalEndpoint.value;
+  } else if (currentTab === 'survival') {
+    state.survivalEndpoint = survivalEndpoint.value;
+  }
+
+  return state;
+});
+
+function onApplyPreset(presetFilters) {
+  if (!presetFilters || typeof presetFilters !== 'object') return;
+  if (presetFilters.tab !== undefined) tab.value = presetFilters.tab;
+  if (presetFilters.category !== undefined) category.value = presetFilters.category;
+  if (presetFilters.aggregation !== undefined) aggregation.value = presetFilters.aggregation;
+  if (presetFilters.countMode !== undefined) countMode.value = presetFilters.countMode;
+  if (presetFilters.displayLimit !== undefined) {
+    displayLimit.value = Number(presetFilters.displayLimit);
+  }
+  if (presetFilters.timelineMode !== undefined) {
+    timelineMode.value = presetFilters.timelineMode;
+  }
+  if (presetFilters.comparison !== undefined) comparison.value = presetFilters.comparison;
+  if (presetFilters.organSystem !== undefined) organSystem.value = presetFilters.organSystem;
+  if (presetFilters.sortBy !== undefined) sortBy.value = presetFilters.sortBy;
+  if (presetFilters.survivalComparison !== undefined) {
+    survivalComparison.value = presetFilters.survivalComparison;
+  }
+  if (presetFilters.survivalEndpoint !== undefined) {
+    survivalEndpoint.value = presetFilters.survivalEndpoint;
+  }
+}
 
 // Static configuration
 const donutCategories = DONUT_CATEGORIES;

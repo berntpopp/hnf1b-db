@@ -5,13 +5,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.database import get_db
+from app.ontology.conformance import _snapshot
 from app.publications.fulltext.embeddings import (
     EmbeddingProvider,
     get_embedding_provider,
@@ -22,7 +26,13 @@ from app.publications.fulltext.retrieval import (
     search_passages,
 )
 
-from .schemas import PassageHit, PassagesMeta, PassagesResponse
+from .schemas import (
+    PassageHit,
+    PassagesMeta,
+    PassagesResponse,
+    PhenotypeSuggestionItem,
+    PhenotypeSuggestionResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -163,4 +173,178 @@ async def search_publication_passages(
             truncated=result.truncated,
             notes=list(result.notes),
         ),
+    )
+
+
+_CLAUSE_BREAK_REGEX = re.compile(
+    r"[,;:]|\b(?:but|however|whereas|while|although|except)\b",
+    re.IGNORECASE,
+)
+_PRE_NEGATION_REGEX = re.compile(
+    r"\b(?:no|not|without|absent|absence of|normal|negative for|excluded|ruled out|lack of|free of)\b",
+    re.IGNORECASE,
+)
+_POST_NEGATION_REGEX = re.compile(
+    r"^\s*(?:was|were|is|are)?\s*(?:not\s+\w+|absent|excluded|negative|normal|ruled out)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_match_negated(sentence: str, start: int, end: int) -> bool:
+    """Return whether a phenotype match at [start, end) is negated in its local clause."""
+    clause_start = 0
+    for m in _CLAUSE_BREAK_REGEX.finditer(sentence, 0, start):
+        clause_start = m.end()
+
+    clause_end = len(sentence)
+    m_after = _CLAUSE_BREAK_REGEX.search(sentence, end)
+    if m_after is not None:
+        clause_end = m_after.start()
+
+    prefix = sentence[max(clause_start, start - 65) : start]
+    if _PRE_NEGATION_REGEX.search(prefix):
+        return True
+
+    suffix = sentence[end : min(clause_end, end + 40)]
+    if _POST_NEGATION_REGEX.search(suffix):
+        return True
+
+    return False
+
+
+@lru_cache(maxsize=1)
+def _get_hpo_terms_for_suggestion() -> list[tuple[re.Pattern[str], str, str]]:
+    """Return precompiled (pattern, hpo_id, canonical_name) tuples for HP terms.
+
+    Sorted by candidate phrase length descending so longer phrases match first.
+    """
+    snapshot = _snapshot()
+    candidates: list[tuple[str, str, str]] = []
+    for term_id, term_data in snapshot.items():
+        if not term_id.startswith("HP:"):
+            continue
+        canonical_name = term_data.get("name") or ""
+        if len(canonical_name) >= 4:
+            candidates.append((canonical_name, term_id, canonical_name))
+        for syn in term_data.get("synonyms") or []:
+            if len(syn) >= 4:
+                candidates.append((syn, term_id, canonical_name))
+
+    # Sort descending by length of phrase
+    candidates.sort(key=lambda c: len(c[0]), reverse=True)
+
+    compiled: list[tuple[re.Pattern[str], str, str]] = []
+    for phrase, term_id, canonical_name in candidates:
+        pattern = re.compile(r"\b" + re.escape(phrase) + r"\b", re.IGNORECASE)
+        compiled.append((pattern, term_id, canonical_name))
+    return compiled
+
+
+@router.get(
+    "/passages/suggest-phenotypes",
+    response_model=PhenotypeSuggestionResponse,
+    summary="Suggest HPO phenotypes from publication passages or metadata",
+    description="Scan stored passages (or metadata fallback) for a PMID against curated HPO terms and negation cues.",
+)
+async def suggest_phenotypes_from_pmid(
+    pmid: str = Query(..., min_length=1, description="PubMed identifier"),
+    db: AsyncSession = Depends(get_db),
+) -> PhenotypeSuggestionResponse:
+    """Extract candidate HPO phenotypes from publication passages or metadata."""
+    clean_pmid = pmid.strip()
+    if clean_pmid.upper().startswith("PMID:"):
+        clean_pmid = clean_pmid[5:].strip()
+
+    prefixed_pmid = f"PMID:{clean_pmid}"
+    bare_pmid = clean_pmid
+
+    # 1. Query publication_fulltext
+    stmt_fulltext = text(
+        "SELECT passage_id, section, text FROM publication_fulltext "
+        "WHERE pmid = :prefixed OR pmid = :bare "
+        "ORDER BY seq ASC"
+    )
+    result = await db.execute(
+        stmt_fulltext, {"prefixed": prefixed_pmid, "bare": bare_pmid}
+    )
+    rows = result.fetchall()
+
+    passages_to_scan: list[dict[str, str]] = []
+    if rows:
+        for row in rows:
+            passages_to_scan.append(
+                {
+                    "passage_id": row.passage_id,
+                    "section": row.section,
+                    "text": row.text or "",
+                }
+            )
+    else:
+        # Fallback to publication_metadata (abstract / title)
+        stmt_meta = text(
+            "SELECT title, abstract FROM publication_metadata "
+            "WHERE pmid = :prefixed OR pmid = :bare"
+        )
+        meta_result = await db.execute(
+            stmt_meta, {"prefixed": prefixed_pmid, "bare": bare_pmid}
+        )
+        meta_row = meta_result.fetchone()
+        if meta_row:
+            if meta_row.title:
+                passages_to_scan.append(
+                    {
+                        "passage_id": f"PMID:{clean_pmid}:title",
+                        "section": "title",
+                        "text": meta_row.title,
+                    }
+                )
+            if meta_row.abstract:
+                passages_to_scan.append(
+                    {
+                        "passage_id": f"PMID:{clean_pmid}:abstract",
+                        "section": "abstract",
+                        "text": meta_row.abstract,
+                    }
+                )
+
+    hpo_candidates = _get_hpo_terms_for_suggestion()
+    suggestions: list[PhenotypeSuggestionItem] = []
+    seen_keys: set[tuple[str, bool]] = set()
+
+    for passage in passages_to_scan:
+        passage_text = passage["text"]
+        if not passage_text:
+            continue
+        raw_sentences = re.split(r"(?<=[.!?])\s+|\n+", passage_text)
+        for sentence in raw_sentences:
+            s_clean = sentence.strip()
+            if not s_clean:
+                continue
+            matched_in_sentence: set[str] = set()
+
+            for pattern, term_id, canonical_name in hpo_candidates:
+                if term_id in matched_in_sentence:
+                    continue
+                match = pattern.search(s_clean)
+                if match:
+                    matched_in_sentence.add(term_id)
+                    is_negated = _is_match_negated(s_clean, match.start(), match.end())
+                    dedup_key = (term_id, is_negated)
+                    if dedup_key not in seen_keys:
+                        seen_keys.add(dedup_key)
+                        suggestions.append(
+                            PhenotypeSuggestionItem(
+                                hpo_id=term_id,
+                                label=canonical_name,
+                                excluded=is_negated,
+                                section=passage["section"],
+                                passage_id=passage["passage_id"],
+                                sentence=s_clean,
+                                score=1.0,
+                            )
+                        )
+
+    return PhenotypeSuggestionResponse(
+        pmid=clean_pmid,
+        suggestions=suggestions,
     )

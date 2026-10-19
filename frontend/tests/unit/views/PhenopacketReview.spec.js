@@ -126,9 +126,16 @@ const tabStub = {
 
 const stubs = {
   ReviewHeader: ReviewHeaderStub,
-  SemanticDiff: { template: '<section data-testid="semantic-diff">Semantic changes</section>' },
+  SemanticDiff: {
+    props: ['changes', 'baseline', 'candidate'],
+    template: '<section data-testid="semantic-diff">Semantic changes</section>',
+  },
   CandidateSnapshot: {
     template: '<section data-testid="candidate-snapshot">Candidate snapshot</section>',
+  },
+  RevisionCompare: {
+    props: ['baseline', 'candidate', 'changes'],
+    template: '<section data-testid="revision-compare">Revision compare</section>',
   },
   ReviewIssuesPanel: ReviewIssuesPanelStub,
   ReviewActionPanel: ReviewActionPanelStub,
@@ -246,6 +253,27 @@ describe('PhenopacketReview', () => {
 
     await tabs.find((tab) => tab.text() === 'History').trigger('click');
     expect(wrapper.get('[data-testid="history-view"]').text()).toContain('History 1');
+  });
+
+  it('renders side-by-side revision compare and passes candidate to SemanticDiff', async () => {
+    const wrapper = mountWorkspace();
+    await flushPromises();
+
+    // Verify candidate is passed to SemanticDiff
+    const diffComponent = wrapper.findComponent(stubs.SemanticDiff);
+    expect(diffComponent.props('candidate')).toBe(review.context.value.candidate);
+    expect(diffComponent.props('baseline')).toBe(review.context.value.baseline);
+
+    // Switch to Side-by-Side Compare via tab
+    const compareTab = wrapper.get('[data-testid="side-by-side-compare"]');
+    expect(compareTab.text()).toContain('Side-by-Side Compare');
+    await compareTab.trigger('click');
+
+    const compareView = wrapper.get('[data-testid="revision-compare"]');
+    expect(compareView.exists()).toBe(true);
+    const compareComponent = wrapper.findComponent(stubs.RevisionCompare);
+    expect(compareComponent.props('baseline')).toBe(review.context.value.baseline);
+    expect(compareComponent.props('candidate')).toBe(review.context.value.candidate);
   });
 
   it('uses context reload as the mutation boundary then refreshes history and announces completion', async () => {

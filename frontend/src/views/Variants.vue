@@ -37,6 +37,11 @@
               <v-icon start size="small">mdi-filter-off</v-icon>
               Clear Filters ({{ activeFilterCount }})
             </v-btn>
+            <SavedFiltersMenu
+              scope-key="variants"
+              :current-filters="currentFilterState"
+              @apply="onApplyPreset"
+            />
           </template>
         </AppTableToolbar>
       </template>
@@ -201,6 +206,7 @@ import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
 import ColumnHeaderFilter from '@/components/common/ColumnHeaderFilter.vue';
+import SavedFiltersMenu from '@/components/common/SavedFiltersMenu.vue';
 
 export default {
   name: 'Variants',
@@ -209,6 +215,7 @@ export default {
     AppTableToolbar,
     AppPagination,
     ColumnHeaderFilter,
+    SavedFiltersMenu,
   },
   setup() {
     // URL state synchronization for shareable/bookmarkable URLs
@@ -216,7 +223,12 @@ export default {
     const urlState = useTableUrlState({
       defaultPageSize: 10,
       defaultSort: '-simple_id',
-      filters: { type: null, classification: null },
+      filters: {
+        type: null,
+        classification: null,
+        consequence: null,
+        domain: null,
+      },
     });
 
     return { urlState };
@@ -335,11 +347,44 @@ export default {
         }
       },
     },
+    consequenceFilter: {
+      get() {
+        return this.urlState?.filters?.consequence?.value ?? null;
+      },
+      set(value) {
+        if (this.urlState?.filters?.consequence) {
+          this.urlState.filters.consequence.value = value;
+        }
+      },
+    },
+    domainFilter: {
+      get() {
+        return this.urlState?.filters?.domain?.value ?? null;
+      },
+      set(value) {
+        if (this.urlState?.filters?.domain) {
+          this.urlState.filters.domain.value = value;
+        }
+      },
+    },
+    // Filter state object for presets and URL sync
+    currentFilterState() {
+      const state = {};
+      if (this.searchQuery) state.q = this.searchQuery;
+      if (this.typeFilter) state.variant_type = this.typeFilter;
+      if (this.classificationFilter) state.classification = this.classificationFilter;
+      if (this.consequenceFilter) state.consequence = this.consequenceFilter;
+      if (this.domainFilter) state.domain = this.domainFilter;
+      return state;
+    },
     // Keep filterValues for compatibility (read-only)
     filterValues() {
       return {
-        type: this.urlState?.filters?.type?.value ?? null,
-        classification: this.urlState?.filters?.classification?.value ?? null,
+        type: this.typeFilter,
+        variant_type: this.typeFilter,
+        classification: this.classificationFilter,
+        consequence: this.consequenceFilter,
+        domain: this.domainFilter,
       };
     },
     hasActiveFilters() {
@@ -360,6 +405,22 @@ export default {
       },
     },
     'urlState.filters.classification.value': {
+      handler() {
+        if (this.loadingInitialized) {
+          this.urlState.resetPage();
+          this.fetchVariants();
+        }
+      },
+    },
+    'urlState.filters.consequence.value': {
+      handler() {
+        if (this.loadingInitialized) {
+          this.urlState.resetPage();
+          this.fetchVariants();
+        }
+      },
+    },
+    'urlState.filters.domain.value': {
       handler() {
         if (this.loadingInitialized) {
           this.urlState.resetPage();
@@ -411,19 +472,27 @@ export default {
     async fetchVariants() {
       this.loading = true;
 
-      // Read state from URL state refs
+      // Read state from URL state refs and computed filter getters
       const currentPage = this.urlState?.page?.value ?? 1;
       const pageSize = this.urlState?.pageSize?.value ?? 10;
       const sortValue = this.urlState?.sort?.value ?? '-simple_id';
       const searchValue = this.urlState?.search?.value ?? '';
-      const typeFilter = this.urlState?.filters?.type?.value ?? null;
-      const classificationFilter = this.urlState?.filters?.classification?.value ?? null;
+      const typeFilter = this.typeFilter;
+      const classificationFilter = this.classificationFilter;
+      const consequenceFilter = this.consequenceFilter;
+      const domainFilter = this.domainFilter;
 
       window.logService.debug('Fetching variants', {
         page: currentPage,
         pageSize,
         sort: sortValue,
-        filters: { search: searchValue, type: typeFilter, classification: classificationFilter },
+        filters: {
+          search: searchValue,
+          type: typeFilter,
+          classification: classificationFilter,
+          consequence: consequenceFilter,
+          domain: domainFilter,
+        },
       });
 
       try {
@@ -434,6 +503,8 @@ export default {
           ...(searchValue && { query: searchValue }),
           ...(typeFilter && { variant_type: typeFilter }),
           ...(classificationFilter && { classification: classificationFilter }),
+          ...(consequenceFilter && { consequence: consequenceFilter }),
+          ...(domainFilter && { domain: domainFilter }),
         };
 
         const response = await getVariants(requestParams);
@@ -496,6 +567,17 @@ export default {
 
     clearAllFilters() {
       this.urlState.clearAllFilters();
+    },
+
+    onApplyPreset(presetFilters) {
+      if (!presetFilters || typeof presetFilters !== 'object') return;
+      this.searchQuery = presetFilters.q || presetFilters.query || presetFilters.search || '';
+      this.typeFilter = presetFilters.variant_type || presetFilters.type || null;
+      this.classificationFilter = presetFilters.classification || null;
+      this.consequenceFilter = presetFilters.consequence || null;
+      this.domainFilter = presetFilters.domain || null;
+      this.urlState?.resetPage?.();
+      this.fetchVariants();
     },
 
     // Utility functions

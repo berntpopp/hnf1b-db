@@ -807,4 +807,58 @@ describe('PagePhenopacket', () => {
     expect(wrapper.vm.reviewContext.phenopacket_id).toBe('PP-002');
     expect(wrapper.vm.loading).toBe(false);
   });
+
+  describe('Clone Cohort / Sibling Template button (#551)', () => {
+    it('renders the Clone Cohort button for curators and navigates on click', async () => {
+      useAuthStore.mockReturnValue(createAuthStore('curator'));
+      const pushMock = vi.fn();
+
+      const wrapper = shallowMount(PagePhenopacket, {
+        global: {
+          mocks: {
+            $route: {
+              params: { phenopacket_id: 'PP-001' },
+              path: '/phenopackets/PP-001',
+            },
+            $router: {
+              push: pushMock,
+              back: vi.fn(),
+            },
+          },
+        },
+      });
+
+      await flushPromises();
+
+      const cloneBtn = wrapper.find('[data-testid="clone-cohort-btn"]');
+      expect(cloneBtn.exists()).toBe(true);
+
+      await cloneBtn.trigger('click');
+      expect(pushMock).toHaveBeenCalledWith('/phenopackets/create?cloneFrom=PP-001');
+    });
+
+    it('hides the Clone Cohort button for non-curator viewer', async () => {
+      useAuthStore.mockReturnValue(createAuthStore('viewer'));
+
+      const wrapper = shallowMount(PagePhenopacket, {
+        global: {
+          mocks: {
+            $route: {
+              params: { phenopacket_id: 'PP-001' },
+              path: '/phenopackets/PP-001',
+            },
+            $router: {
+              push: vi.fn(),
+              back: vi.fn(),
+            },
+          },
+        },
+      });
+
+      await flushPromises();
+
+      const cloneBtn = wrapper.find('[data-testid="clone-cohort-btn"]');
+      expect(cloneBtn.exists()).toBe(false);
+    });
+  });
 });
