@@ -11,19 +11,20 @@ class AgeParser:
 
     @staticmethod
     def build_iso8601_duration(
-        years: int = 0, months: int = 0, days: int = 0
+        years: int = 0, months: int = 0, weeks: int = 0, days: int = 0
     ) -> Optional[str]:
         """Build ISO8601 duration string from components.
 
         Args:
             years: Number of years
             months: Number of months
+            weeks: Number of weeks
             days: Number of days
 
         Returns:
-            ISO8601 duration string (e.g., "P1Y2M3D") or None if all values are 0
+            ISO8601 duration string (e.g., "P1Y2M3D", "P28W") or None if all values are 0
         """
-        if not any([years, months, days]):
+        if not any([years, months, weeks, days]):
             return None
 
         duration_parts = []
@@ -31,6 +32,8 @@ class AgeParser:
             duration_parts.append(f"{years}Y")
         if months > 0:
             duration_parts.append(f"{months}M")
+        if weeks > 0:
+            duration_parts.append(f"{weeks}W")
         if days > 0:
             duration_parts.append(f"{days}D")
 
@@ -82,19 +85,25 @@ class AgeParser:
         elif age_str in ["adult", "adulthood"]:
             return {"ontologyClass": {"id": "HP:0003581", "label": "Adult onset"}}
 
-        # Parse numeric ages (e.g., "1y9m", "2y", "6m", "3d")
+        # Parse numeric ages (e.g., "1y9m", "2y", "6m", "28w", "3d")
         try:
-            # Pattern for years, months, days
-            pattern = r"^(?:(\d+)\s*y(?:ears?)?)?\s*(?:(\d+)\s*m(?:onths?)?)?\s*(?:(\d+)\s*d(?:ays?)?)?$"
+            # Pattern for years, months, weeks, days
+            pattern = (
+                r"^(?:(\d+)\s*y(?:ears?)?)?\s*"
+                r"(?:(\d+)\s*m(?:onths?)?)?\s*"
+                r"(?:(\d+)\s*w(?:eeks?)?)?\s*"
+                r"(?:(\d+)\s*d(?:ays?)?)?$"
+            )
             match = re.match(pattern, age_str)
 
             if match and any(match.groups()):
                 years = int(match.group(1)) if match.group(1) else 0
                 months = int(match.group(2)) if match.group(2) else 0
-                days = int(match.group(3)) if match.group(3) else 0
+                weeks = int(match.group(3)) if match.group(3) else 0
+                days = int(match.group(4)) if match.group(4) else 0
 
                 # Build ISO8601 duration using helper method
-                duration = cls.build_iso8601_duration(years, months, days)
+                duration = cls.build_iso8601_duration(years, months, weeks, days)
                 if duration:
                     return {"iso8601duration": duration}
 

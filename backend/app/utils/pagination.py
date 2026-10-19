@@ -215,6 +215,9 @@ def decode_cursor(cursor: str) -> Dict[str, Any]:
         json_str = base64.urlsafe_b64decode(cursor.encode()).decode()
         data = json.loads(json_str)
 
+        if not isinstance(data, dict):
+            raise ValueError("Invalid cursor format: cursor must be a JSON object")
+
         # Convert created_at string back to datetime
         if "created_at" in data:
             data["created_at"] = datetime.fromisoformat(
@@ -226,7 +229,7 @@ def decode_cursor(cursor: str) -> Dict[str, Any]:
             data["id"] = uuid.UUID(data["id"])
 
         return data
-    except (ValueError, json.JSONDecodeError, KeyError) as e:
+    except (ValueError, json.JSONDecodeError, KeyError, TypeError) as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid cursor format: {e}",

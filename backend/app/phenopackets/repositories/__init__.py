@@ -15,6 +15,7 @@ from .visibility import (
     public_head_query,
     resolve_curator_content,
     resolve_public_content,
+    resolve_public_contents,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "public_head_query",
     "resolve_curator_content",
     "resolve_public_content",
+    "resolve_public_contents",
 ]

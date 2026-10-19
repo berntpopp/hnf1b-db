@@ -29,6 +29,7 @@ from app.phenopackets.repositories.visibility import (
     public_head_query,
     resolve_curator_content,
     resolve_public_content,
+    resolve_public_contents,
 )
 
 # ---------------------------------------------------------------------------
@@ -196,3 +197,16 @@ async def test_resolve_public_content_returns_none_when_no_head(
     assert draft_record.head_published_revision_id is None
     result = await resolve_public_content(db_session, draft_record)
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_public_contents_batch(db_session, published_record, draft_record):
+    """resolve_public_contents batch fetches published content in a single lookup."""
+    # Batch query with both a published record and a draft record
+    batch = await resolve_public_contents(db_session, [published_record, draft_record])
+    assert published_record.id in batch
+    assert draft_record.id not in batch
+
+    single = await resolve_public_content(db_session, published_record)
+    assert batch[published_record.id] == single
+

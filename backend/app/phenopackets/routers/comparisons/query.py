@@ -51,8 +51,10 @@ def build_phenotype_distribution_query(
         WHERE p.deleted_at IS NULL
           AND p.state = 'published'
           AND p.head_published_revision_id IS NOT NULL
-          AND gen_interp.value->>'interpretationStatus'
-              IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
+          AND COALESCE(
+              gen_interp.value->'variantInterpretation'->>'acmgPathogenicityClassification',
+              gen_interp.value->>'interpretationStatus'
+          ) IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')
     ),
     variant_phenotype_matrix AS (
         -- Create a matrix of: variant_id x phenotype x present/absent.

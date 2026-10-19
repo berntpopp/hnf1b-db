@@ -22,5 +22,9 @@ CURRENT_AGE_PATH = (
 
 # Interpretation status path (used for P/LP filtering).
 INTERP_STATUS_PATH = (
+    "COALESCE("
+    "interp.value->'diagnosis'->'genomicInterpretations'->0"
+    "->'variantInterpretation'->>'acmgPathogenicityClassification', "
     "interp.value->'diagnosis'->'genomicInterpretations'->0->>'interpretationStatus'"
+    ")"
 )
