@@ -275,10 +275,7 @@ describe('PhenotypicFeaturesSection laterality (Task 7 §1)', () => {
     // Change laterality to Right: severity must remain intact
     await select.vm.$emit('update:modelValue', 'HP:0012834');
     const updated = wrapper.emitted('update:modelValue').at(-1)[0];
-    expect(updated[0].modifiers).toEqual([
-      severityModifier,
-      { id: 'HP:0012834', label: 'Right' },
-    ]);
+    expect(updated[0].modifiers).toEqual([severityModifier, { id: 'HP:0012834', label: 'Right' }]);
 
     // Clear laterality: severity must still remain intact
     await select.vm.$emit('update:modelValue', null);
@@ -550,19 +547,43 @@ describe('PhenotypicFeaturesSection keyboard-first quick-add (#549)', () => {
   it('toggles laterality via Alt+B, Alt+U, Alt+L, Alt+R inline hotkeys', () => {
     const wrapper = mountSection([]);
 
-    const eventB = { key: 'b', altKey: true, ctrlKey: false, metaKey: false, preventDefault: vi.fn() };
+    const eventB = {
+      key: 'b',
+      altKey: true,
+      ctrlKey: false,
+      metaKey: false,
+      preventDefault: vi.fn(),
+    };
     wrapper.vm.handleInputKeydown(eventB);
     expect(wrapper.vm.quickLaterality).toBe('HP:0012832'); // Bilateral
 
-    const eventU = { key: 'u', altKey: true, ctrlKey: false, metaKey: false, preventDefault: vi.fn() };
+    const eventU = {
+      key: 'u',
+      altKey: true,
+      ctrlKey: false,
+      metaKey: false,
+      preventDefault: vi.fn(),
+    };
     wrapper.vm.handleInputKeydown(eventU);
     expect(wrapper.vm.quickLaterality).toBe('HP:0012833'); // Unilateral
 
-    const eventL = { key: 'l', altKey: true, ctrlKey: false, metaKey: false, preventDefault: vi.fn() };
+    const eventL = {
+      key: 'l',
+      altKey: true,
+      ctrlKey: false,
+      metaKey: false,
+      preventDefault: vi.fn(),
+    };
     wrapper.vm.handleInputKeydown(eventL);
     expect(wrapper.vm.quickLaterality).toBe('HP:0012835'); // Left
 
-    const eventR = { key: 'r', altKey: true, ctrlKey: false, metaKey: false, preventDefault: vi.fn() };
+    const eventR = {
+      key: 'r',
+      altKey: true,
+      ctrlKey: false,
+      metaKey: false,
+      preventDefault: vi.fn(),
+    };
     wrapper.vm.handleInputKeydown(eventR);
     expect(wrapper.vm.quickLaterality).toBe('HP:0012834'); // Right
   });
@@ -598,4 +619,3 @@ describe('PhenotypicFeaturesSection keyboard-first quick-add (#549)', () => {
     expect(emitted).toEqual([]);
   });
 });
-

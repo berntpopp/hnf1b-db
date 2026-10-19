@@ -75,9 +75,7 @@ describe('SavedFiltersMenu', () => {
       classification: 'PATHOGENIC',
     });
 
-    const stored = JSON.parse(
-      window.localStorage.getItem(`hnf1b_saved_filters_${scopeKey}`)
-    );
+    const stored = JSON.parse(window.localStorage.getItem(`hnf1b_saved_filters_${scopeKey}`));
     expect(stored).toHaveLength(1);
     expect(stored[0].name).toBe('Female Pathogenic');
   });
@@ -117,9 +115,7 @@ describe('SavedFiltersMenu', () => {
     expect(wrapper.emitted('delete')).toBeTruthy();
     expect(wrapper.emitted('delete')[0][0]).toBe('To Delete');
 
-    const stored = JSON.parse(
-      window.localStorage.getItem(`hnf1b_saved_filters_${scopeKey}`)
-    );
+    const stored = JSON.parse(window.localStorage.getItem(`hnf1b_saved_filters_${scopeKey}`));
     expect(stored).toHaveLength(0);
   });
 });

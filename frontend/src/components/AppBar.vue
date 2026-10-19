@@ -103,7 +103,6 @@
 
       <v-spacer />
 
-
       <!-- User Menu (all screen sizes) -->
       <div v-if="authStore.isAuthenticated" class="ml-4">
         <v-menu location="bottom">

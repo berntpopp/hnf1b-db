@@ -230,9 +230,7 @@ export function useSavedFilters(scopeKey, options = {}) {
   function deletePreset(name) {
     if (!name) return;
     const trimmed = String(name).trim().toLowerCase();
-    const filtered = presets.value.filter(
-      (p) => p.name.trim().toLowerCase() !== trimmed
-    );
+    const filtered = presets.value.filter((p) => p.name.trim().toLowerCase() !== trimmed);
     presets.value = filtered;
     persistPresetsToStorage(keyRef.value, filtered);
   }

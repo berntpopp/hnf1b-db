@@ -26,8 +26,12 @@ describe('MetadataCard formatExternalReferenceUrl [SEC-04]', () => {
   const { formatExternalReferenceUrl } = MetadataCard.methods;
 
   it('allows valid https and http URLs in reference field', () => {
-    expect(formatExternalReferenceUrl({ reference: 'https://example.com' })).toBe('https://example.com');
-    expect(formatExternalReferenceUrl({ reference: 'http://example.com' })).toBe('http://example.com');
+    expect(formatExternalReferenceUrl({ reference: 'https://example.com' })).toBe(
+      'https://example.com'
+    );
+    expect(formatExternalReferenceUrl({ reference: 'http://example.com' })).toBe(
+      'http://example.com'
+    );
   });
 
   it('blocks javascript: URLs in reference field and falls back to "#"', () => {

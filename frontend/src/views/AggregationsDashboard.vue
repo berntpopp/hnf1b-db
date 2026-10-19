@@ -469,10 +469,7 @@ const currentFilterState = computed(() => {
     state.survivalComparison = survivalComparison.value;
   }
 
-  if (
-    survivalEndpoint.value &&
-    survivalEndpoint.value !== URL_STATE_DEFAULTS.survivalEndpoint
-  ) {
+  if (survivalEndpoint.value && survivalEndpoint.value !== URL_STATE_DEFAULTS.survivalEndpoint) {
     state.survivalEndpoint = survivalEndpoint.value;
   } else if (currentTab === 'survival') {
     state.survivalEndpoint = survivalEndpoint.value;

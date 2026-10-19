@@ -99,10 +99,9 @@ describe('PhenotypeSuggestionDrawer.vue', () => {
     const btn = document.querySelector('[data-testid="suggest-phenotypes-btn"]');
     btn.click();
 
-    expect(apiClient.get).toHaveBeenCalledWith(
-      '/publications/passages/suggest-phenotypes',
-      { params: { pmid: '12345678' } }
-    );
+    expect(apiClient.get).toHaveBeenCalledWith('/publications/passages/suggest-phenotypes', {
+      params: { pmid: '12345678' },
+    });
 
     await vi.waitFor(() => {
       const dialog = document.querySelector('[data-testid="phenotype-suggestion-drawer"]');

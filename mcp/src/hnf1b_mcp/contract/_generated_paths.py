@@ -122,12 +122,14 @@ PHENOPACKETS_BY_PUBLICATION_BY_PMID = "/phenopackets/by-publication/{pmid}"
 PHENOPACKETS_BY_RECORD_ID_REVIEW_CONTEXT = "/phenopackets/{record_id}/review-context"
 PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID = "/phenopackets/by-variant/{variant_id}"
 PHENOPACKETS_COMPARE_VARIANT_TYPES = "/phenopackets/compare/variant-types"
+PHENOPACKETS_IMPORT_BATCH = "/phenopackets/import-batch"
 PHENOPACKETS_REVIEW_QUEUE = "/phenopackets/review-queue"
 PHENOPACKETS_SEARCH = "/phenopackets/search"
 PHENOPACKETS_SEARCH_FACETS = "/phenopackets/search/facets"
 PUBLICATIONS = "/publications/"
 PUBLICATIONS_BY_PMID_METADATA = "/publications/{pmid}/metadata"
 PUBLICATIONS_PASSAGES = "/publications/passages"
+PUBLICATIONS_PASSAGES_SUGGEST_PHENOTYPES = "/publications/passages/suggest-phenotypes"
 PUBLICATIONS_SYNC = "/publications/sync"
 REFERENCE_GENES = "/reference/genes"
 REFERENCE_GENES_BY_SYMBOL = "/reference/genes/{symbol}"
@@ -241,12 +243,14 @@ ALL_PATHS: tuple[str, ...] = (
     PHENOPACKETS_BY_RECORD_ID_REVIEW_CONTEXT,
     PHENOPACKETS_BY_VARIANT_BY_VARIANT_ID,
     PHENOPACKETS_COMPARE_VARIANT_TYPES,
+    PHENOPACKETS_IMPORT_BATCH,
     PHENOPACKETS_REVIEW_QUEUE,
     PHENOPACKETS_SEARCH,
     PHENOPACKETS_SEARCH_FACETS,
     PUBLICATIONS,
     PUBLICATIONS_BY_PMID_METADATA,
     PUBLICATIONS_PASSAGES,
+    PUBLICATIONS_PASSAGES_SUGGEST_PHENOTYPES,
     PUBLICATIONS_SYNC,
     REFERENCE_GENES,
     REFERENCE_GENES_BY_SYMBOL,

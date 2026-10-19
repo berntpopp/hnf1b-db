@@ -52,9 +52,9 @@ describe('variants.js [DATA-01]', () => {
   describe('getVariantType and details', () => {
     it('classifies CNV from hg38 coordinate range', () => {
       expect(getVariantType({ hg38: '17:37686431-37745059:DEL' })).toBe('CNV');
-      expect(
-        getVariantType({ hg38: '17:37686431-37745059:DEL' }, { specificCNVType: true })
-      ).toBe('deletion');
+      expect(getVariantType({ hg38: '17:37686431-37745059:DEL' }, { specificCNVType: true })).toBe(
+        'deletion'
+      );
     });
 
     it('calculates variant size for CNVs', () => {

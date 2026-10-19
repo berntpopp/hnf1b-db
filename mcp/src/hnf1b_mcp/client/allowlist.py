@@ -62,6 +62,8 @@ _DENY = [
         r"^/dev",
         # Live PubMed fetch + DB write.
         r"^/publications/sync$",
+        # Curator-only RAG phenotype suggestion helper.
+        r"^/publications/passages/suggest-phenotypes$",
         # Clinical aggregation routes — not part of the curated MCP statistics surface.
         r"^/clinical/",
         # Curation collaboration surface (comments, edits, resolve) — write/privileged.
@@ -71,9 +73,9 @@ _DENY = [
         # Build/version info — not data.
         r"^/info$",
         r"^/version$",
-        # Review queue is a curator-only collection route; deny it before the
-        # generic public /phenopackets/{id} rule can treat its slug as an ID.
+        # Curator-only collection routes; deny before generic /phenopackets/{id}.
         r"^/phenopackets/review-queue$",
+        r"^/phenopackets/import-batch$",
         # Per-phenopacket workflow/audit/revision routes — curation internals.
         r"^/phenopackets/[^/]+/(audit|curation|reports|review-context|revisions|timeline|transitions)(/|$)",
         # Statistical-comparison endpoint — not in the curated metric set.

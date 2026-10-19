@@ -12,12 +12,7 @@
       Suggest Phenotypes from PMID
     </v-btn>
 
-    <v-dialog
-      v-model="isOpen"
-      max-width="640"
-      scrollable
-      data-testid="phenotype-suggestion-drawer"
-    >
+    <v-dialog v-model="isOpen" max-width="640" scrollable data-testid="phenotype-suggestion-drawer">
       <v-card class="d-flex flex-column fill-height">
         <v-toolbar color="surface" density="compact" class="border-b px-4">
           <v-icon icon="mdi-lightbulb-outline" class="mr-2" color="primary" />
@@ -38,13 +33,7 @@
           </div>
 
           <!-- Error state -->
-          <v-alert
-            v-else-if="error"
-            type="error"
-            variant="tonal"
-            density="compact"
-            class="mb-4"
-          >
+          <v-alert v-else-if="error" type="error" variant="tonal" density="compact" class="mb-4">
             {{ error }}
           </v-alert>
 
@@ -65,12 +54,7 @@
               <span class="text-caption text-medium-emphasis">
                 {{ suggestions.length }} suggested term{{ suggestions.length > 1 ? 's' : '' }} found
               </span>
-              <v-btn
-                variant="text"
-                density="compact"
-                size="small"
-                @click="toggleSelectAll"
-              >
+              <v-btn variant="text" density="compact" size="small" @click="toggleSelectAll">
                 {{ allSelected ? 'Deselect All' : 'Select All' }}
               </v-btn>
             </div>
@@ -164,14 +148,13 @@ const selectedIndices = ref([]);
 
 const cleanPmid = computed(() => {
   if (!props.pmid) return '';
-  return String(props.pmid).replace(/^PMID:/i, '').trim();
+  return String(props.pmid)
+    .replace(/^PMID:/i, '')
+    .trim();
 });
 
 const allSelected = computed(() => {
-  return (
-    suggestions.value.length > 0 &&
-    selectedIndices.value.length === suggestions.value.length
-  );
+  return suggestions.value.length > 0 && selectedIndices.value.length === suggestions.value.length;
 });
 
 function toggleSelectAll() {
@@ -196,8 +179,7 @@ async function fetchSuggestions() {
     suggestions.value = response.data?.suggestions || [];
     selectedIndices.value = suggestions.value.map((_, idx) => idx);
   } catch (err) {
-    error.value =
-      err.response?.data?.detail || err.message || 'Failed to fetch suggestions';
+    error.value = err.response?.data?.detail || err.message || 'Failed to fetch suggestions';
     if (window.logService?.error) {
       window.logService.error('Failed to fetch phenotype suggestions', { error: err });
     }
@@ -236,9 +218,7 @@ function acceptSelected() {
     : [];
 
   const existing = [...(props.modelValue || [])];
-  const existingIds = new Set(
-    existing.map((f) => f.type?.id).filter(Boolean)
-  );
+  const existingIds = new Set(existing.map((f) => f.type?.id).filter(Boolean));
 
   for (const idx of selectedIndices.value) {
     const item = suggestions.value[idx];

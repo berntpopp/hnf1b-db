@@ -261,9 +261,7 @@ describe('useSavedFilters composable', () => {
         query: {},
       };
 
-      await expect(
-        syncToQuery(mockRouter, mockRoute, { sex: 'FEMALE' })
-      ).resolves.not.toThrow();
+      await expect(syncToQuery(mockRouter, mockRoute, { sex: 'FEMALE' })).resolves.not.toThrow();
     });
   });
 });
