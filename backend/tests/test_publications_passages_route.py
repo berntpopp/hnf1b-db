@@ -165,7 +165,9 @@ async def test_suggest_phenotypes_from_passages(async_client, db_session):
     body = resp.json()
     assert body["pmid"] == "5"
     hpo_ids = {s["hpo_id"]: s for s in body["suggestions"]}
-    assert "HP:0000107" in hpo_ids  # Renal cyst (from "cystic kidney disease" / "renal cysts")
+    assert (
+        "HP:0000107" in hpo_ids
+    )  # Renal cyst (from "cystic kidney disease" / "renal cysts")
     assert hpo_ids["HP:0000107"]["excluded"] is False
     assert "HP:0000819" in hpo_ids  # Diabetes mellitus
     assert hpo_ids["HP:0000819"]["excluded"] is False
@@ -183,7 +185,9 @@ async def test_suggest_phenotypes_from_passages(async_client, db_session):
 async def test_suggest_phenotypes_with_negation(async_client, db_session):
     """Verify negation cues correctly set excluded=True."""
     negated_pmid = "PMID:99"
-    await persistence.ensure_metadata_row(db_session, negated_pmid, title="Negation test")
+    await persistence.ensure_metadata_row(
+        db_session, negated_pmid, title="Negation test"
+    )
     passages = [
         PassageRow(
             negated_pmid,

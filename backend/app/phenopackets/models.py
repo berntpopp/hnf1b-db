@@ -897,9 +897,7 @@ class BatchImportRowResult(BaseModel):
     errors: list[str] = Field(
         default_factory=list, description="Validation or conflict errors"
     )
-    warnings: list[str] = Field(
-        default_factory=list, description="Advisory warnings"
-    )
+    warnings: list[str] = Field(default_factory=list, description="Advisory warnings")
     already_exists: bool = Field(
         False, description="Whether phenopacket ID already exists in DB"
     )

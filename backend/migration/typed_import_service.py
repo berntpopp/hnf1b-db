@@ -398,7 +398,9 @@ async def run_batch_import(
         already_exists = False
         if phenopacket_id:
             if phenopacket_id in seen_batch_ids:
-                errors.append(f"Duplicate phenopacket ID '{phenopacket_id}' within batch")
+                errors.append(
+                    f"Duplicate phenopacket ID '{phenopacket_id}' within batch"
+                )
             else:
                 seen_batch_ids.add(phenopacket_id)
 
