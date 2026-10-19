@@ -22,6 +22,8 @@ async def get_renal_insufficiency_cases(
     include_transplant: Optional[bool] = Query(
         None, description="Include transplant cases"
     ),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """Get all cases with renal insufficiency, optionally filtered by stage."""
@@ -44,6 +46,8 @@ async def get_renal_insufficiency_cases(
     if include_transplant is False:
         query = ClinicalQueries.exclude_transplant_cases(query)
 
+    query = query.limit(limit).offset(offset)
+
     # Execute and format results
     def format_row(row):
         return {
@@ -63,6 +67,8 @@ async def get_genital_abnormalities(
     sex_filter: Optional[str] = Query(
         None, enum=["FEMALE", "MALE"], description="Filter by sex"
     ),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """Get all cases with genital tract abnormalities."""
@@ -84,6 +90,8 @@ async def get_genital_abnormalities(
     # Apply sex filter if specified
     if sex_filter:
         query = ClinicalQueries.filter_by_sex(query, sex_filter)
+
+    query = query.limit(limit).offset(offset)
 
     # Execute and format results
     def format_row(row):
@@ -112,6 +120,8 @@ async def get_diabetes_cases(
     with_complications: Optional[bool] = Query(
         None, description="Only cases with complications"
     ),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """Get all cases with diabetes."""
@@ -153,6 +163,8 @@ async def get_diabetes_cases(
         )
         query = query.where(complication_exists)
 
+    query = query.limit(limit).offset(offset)
+
     # Execute and format results
     result = await db.execute(query)
     rows = result.fetchall()
@@ -185,6 +197,8 @@ async def get_hypomagnesemia_cases(
     with_measurements: Optional[bool] = Query(
         None, description="Only cases with measurements"
     ),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """Get all cases with hypomagnesemia."""
@@ -206,6 +220,8 @@ async def get_hypomagnesemia_cases(
         query = phenotype_query.intersect(measurement_query)
     else:
         query = phenotype_query
+
+    query = query.limit(limit).offset(offset)
 
     # Execute query
     result = await db.execute(query)
@@ -250,6 +266,8 @@ async def get_pancreatic_abnormalities(
     include_diabetes: Optional[bool] = Query(
         True, description="Include cases with diabetes"
     ),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """Get all cases with pancreatic abnormalities."""
@@ -276,47 +294,24 @@ async def get_pancreatic_abnormalities(
         )
         query = query.where(diabetes_exclusion)
 
+    # Inline quick checks into main query instead of per-row N+1 queries
+    diabetes_expr = func.jsonb_path_exists(
+        PhenopacketRevision.content_jsonb,
+        text("'$.diseases[*] ? (@.term.label like_regex \"diabetes\")'::jsonpath"),
+    ).label("has_diabetes")
+    exocrine_expr = func.jsonb_path_exists(
+        PhenopacketRevision.content_jsonb,
+        text("'$.phenotypicFeatures[*] ? (@.type.id == \"HP:0001738\")'::jsonpath"),
+    ).label("has_exocrine_insufficiency")
+    query = query.add_columns(diabetes_expr, exocrine_expr)
+    query = query.limit(limit).offset(offset)
+
     # Execute and format results
     result = await db.execute(query)
     rows = result.fetchall()
 
     formatted_results = []
     for row in rows:
-        # Check for diabetes and exocrine insufficiency
-
-        # Quick check queries
-        diabetes_check = await db.scalar(
-            select(
-                func.jsonb_path_exists(
-                    PhenopacketRevision.content_jsonb,
-                    text(
-                        "'$.diseases[*] ? (@.term.label like_regex \"diabetes\")'::jsonpath"
-                    ),
-                )
-            )
-            .join(
-                PhenopacketRevision,
-                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
-            )
-            .where(Phenopacket.phenopacket_id == row.phenopacket_id)
-        )
-
-        exocrine_check = await db.scalar(
-            select(
-                func.jsonb_path_exists(
-                    PhenopacketRevision.content_jsonb,
-                    text(
-                        "'$.phenotypicFeatures[*] ? (@.type.id == \"HP:0001738\")'::jsonpath"
-                    ),
-                )
-            )
-            .join(
-                PhenopacketRevision,
-                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
-            )
-            .where(Phenopacket.phenopacket_id == row.phenopacket_id)
-        )
-
         features = row.features if hasattr(row, "features") else []
         feature_labels = [f.get("type", {}).get("label") for f in features if f]
 
@@ -326,8 +321,10 @@ async def get_pancreatic_abnormalities(
                 "subject_id": row.subject_id,
                 "sex": row.sex,
                 "pancreatic_features": feature_labels,
-                "has_diabetes": diabetes_check or False,
-                "has_exocrine_insufficiency": exocrine_check or False,
+                "has_diabetes": bool(getattr(row, "has_diabetes", False)),
+                "has_exocrine_insufficiency": bool(
+                    getattr(row, "has_exocrine_insufficiency", False)
+                ),
             }
         )
 
@@ -336,6 +333,8 @@ async def get_pancreatic_abnormalities(
 
 @router.get("/liver-abnormalities")
 async def get_liver_abnormalities(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """Get all cases with liver abnormalities."""
@@ -351,11 +350,23 @@ async def get_liver_abnormalities(
         "HP:0001410",
     ]
 
-    # Liver function test LOINC codes
-    lft_loinc = ["LOINC:1742-6", "LOINC:1920-8", "LOINC:6768-6", "LOINC:1975-2"]
-
     # Build query using reusable components
     query = ClinicalQueries.get_phenotype_features_query(hpo_terms)
+
+    # Inline LFT query into main query instead of per-row N+1 queries
+    lft_expr = func.jsonb_path_query_array(
+        PhenopacketRevision.content_jsonb,
+        text(
+            "'$.measurements[*] ? ("
+            "@.assay.id == \"LOINC:1742-6\" || "
+            "@.assay.id == \"LOINC:1920-8\" || "
+            "@.assay.id == \"LOINC:6768-6\" || "
+            "@.assay.id == \"LOINC:1975-2\""
+            ")'::jsonpath"
+        ),
+    ).label("lft_result")
+    query = query.add_columns(lft_expr)
+    query = query.limit(limit).offset(offset)
 
     # Execute main query
     result = await db.execute(query)
@@ -363,23 +374,7 @@ async def get_liver_abnormalities(
 
     formatted_results = []
     for row in rows:
-        # Get liver function tests separately
-
-        lft_result = await db.scalar(
-            select(
-                func.jsonb_path_query_array(
-                    PhenopacketRevision.content_jsonb,
-                    "$.measurements[*] ? (@.assay.id == $loinc)",
-                    func.jsonb_build_object("loinc", func.any_(lft_loinc)),
-                )
-            )
-            .join(
-                PhenopacketRevision,
-                PhenopacketRevision.id == Phenopacket.head_published_revision_id,
-            )
-            .where(Phenopacket.phenopacket_id == row.phenopacket_id)
-        )
-
+        lft_result = getattr(row, "lft_result", None)
         lft_labels = []
         if lft_result:
             lft_labels = [m.get("assay", {}).get("label") for m in lft_result if m]
@@ -406,11 +401,14 @@ async def get_kidney_morphology(
         None,
         description="Filter by morphology type (cysts, dysplasia, hypoplasia)",
     ),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """Get cases with kidney morphological abnormalities."""
     # Use reusable morphology query
     query = ClinicalQueries.get_morphology_features(morphology_type)
+    query = query.limit(limit).offset(offset)
 
     # Execute and format results
     result = await db.execute(query)
@@ -449,11 +447,14 @@ async def get_multisystem_involvement(
     min_systems: int = Query(
         2, ge=2, le=10, description="Minimum number of systems involved"
     ),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """Get cases with multiple system involvement."""
     # Use reusable multisystem query
     query = ClinicalQueries.get_multisystem_involvement(min_systems)
+    query = query.limit(limit).offset(offset)
 
     # Execute and format results
     result = await db.execute(query)

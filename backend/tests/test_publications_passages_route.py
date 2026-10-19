@@ -5,6 +5,8 @@ endpoint exercises the lexical path; ``rerank=rrf`` gracefully degrades to
 lexical and the response reports it.
 """
 
+import inspect
+
 import pytest
 from sqlalchemy import text
 
@@ -132,3 +134,19 @@ async def test_passages_invalid_rerank_400(async_client, db_session):
 async def test_passages_requires_query(async_client, db_session):
     resp = await async_client.get("/api/v2/publications/passages")
     assert resp.status_code == 422  # missing required q
+
+
+@pytest.mark.asyncio
+async def test_shared_provider_async_offloaded():
+    """Verify _shared_provider is an async function that uses thread offloading and caching."""
+    from app.publications.endpoints.passages_route import (
+        _PROVIDER_CACHE,
+        _shared_provider,
+    )
+
+    assert inspect.iscoroutinefunction(_shared_provider)
+    p1 = await _shared_provider()
+    p2 = await _shared_provider()
+    assert p1 is p2
+    assert "provider" in _PROVIDER_CACHE
+

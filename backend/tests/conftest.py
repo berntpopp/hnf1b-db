@@ -33,6 +33,7 @@ from sqlalchemy.pool import NullPool
 # test engine instead of the production-pool engine created at module load.
 import app.database as app_database  # noqa: E402
 from app.auth.password import get_password_hash
+from app.core.cache import cache
 from app.core.config import settings
 from app.main import app
 from app.models.user import User
@@ -172,6 +173,15 @@ async def _isolate_database_between_tests():
     """Wipe mutable tables after each test for guaranteed isolation."""
     yield
     await _truncate_mutable_tables()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cache_between_tests():
+    """Ensure in-memory cache fallback and clear between tests for rate limit isolation."""
+    cache.use_fallback_only()
+    cache.clear_fallback()
+    yield
+    cache.clear_fallback()
 
 
 @pytest_asyncio.fixture

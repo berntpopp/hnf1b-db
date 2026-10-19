@@ -95,6 +95,7 @@ ADMIN_ROUTES: list[tuple[str, str, str, Optional[dict]]] = [
     ),
     ("admin_sync_genes", "POST", "/api/v2/admin/sync/genes", None),
     ("admin_sync_genes_status", "GET", "/api/v2/admin/sync/genes/status", None),
+    ("search_refresh", "POST", "/api/v2/search/refresh", None),
 ]
 
 _ROUTE_IDS = [name for name, *_ in ADMIN_ROUTES]
@@ -208,3 +209,13 @@ async def test_admin_route_reachable_for_admin(
         f"[{name}] {method} {url} returned {status_code} for admin "
         f"(expected non-{{401, 403}})"
     )
+
+
+@pytest.mark.asyncio
+async def test_search_refresh_unauthorized_for_anonymous(
+    async_client: AsyncClient,
+) -> None:
+    """Anonymous request to /search/refresh must return 401."""
+    resp = await async_client.post("/api/v2/search/refresh")
+    assert resp.status_code == 401
+

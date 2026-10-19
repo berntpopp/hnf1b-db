@@ -51,7 +51,6 @@ const vuetifyStubs = {
     template: '<aside><slot /></aside>',
   },
   'v-img': { template: '<button type="button" @click="$emit(`click`)" />' },
-  ThemeSwitcher: { template: '<button type="button" aria-label="Theme" />' },
 };
 
 const mountWithStubs = (component, options = {}) =>

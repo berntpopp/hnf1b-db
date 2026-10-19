@@ -383,6 +383,11 @@ class SchemaValidator:
                                 "UNCERTAIN_SIGNIFICANCE",
                                 "LIKELY_BENIGN",
                                 "BENIGN",
+                                "UNKNOWN_STATUS",
+                                "REJECTED",
+                                "CANDIDATE",
+                                "CONTRIBUTORY",
+                                "CAUSATIVE",
                             ],
                         },
                         "variantInterpretation": {
@@ -612,6 +617,12 @@ class SchemaValidator:
             True if valid interpretation status
         """
         valid_statuses = [
+            "UNKNOWN",
+            "PATHOGENIC",
+            "LIKELY_PATHOGENIC",
+            "UNCERTAIN_SIGNIFICANCE",
+            "LIKELY_BENIGN",
+            "BENIGN",
             "UNKNOWN_STATUS",
             "REJECTED",
             "CANDIDATE",

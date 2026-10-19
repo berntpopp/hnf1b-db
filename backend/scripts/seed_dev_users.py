@@ -14,9 +14,23 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import TypedDict
+
+# Refuse immediately outside development before importing application modules
+if (
+    __name__ == "__main__"
+    and os.environ.get("ENVIRONMENT", "development") != "development"
+):
+    env = os.environ.get("ENVIRONMENT", "development")
+    print(
+        "seed_dev_users refuses to run outside development "
+        f"(ENVIRONMENT={env!r})",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 # Ensure the backend app package is importable when running this file directly
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -130,10 +144,12 @@ async def _seed() -> None:
 
 def main() -> int:
     """Entry point: refuse unless dev mode, otherwise seed fixture users."""
-    if settings.environment != "development":
+    env = os.environ.get("ENVIRONMENT") or settings.environment
+    if env != "development" or settings.environment != "development":
+        resolved = env if env != "development" else settings.environment
         print(
             "seed_dev_users refuses to run outside development "
-            f"(ENVIRONMENT={settings.environment!r})",
+            f"(ENVIRONMENT={resolved!r})",
             file=sys.stderr,
         )
         return 1

@@ -199,4 +199,25 @@ describe('transport — request auth and refresh queue', () => {
     expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
     expect(clearTokens).toHaveBeenCalledOnce();
   });
+
+  it('normalizes error.userMessage using formatApiError on rejection [QUAL-01]', async () => {
+    await import('@/api/transport');
+
+    const error = {
+      config: { url: '/api/v2/items', headers: {} },
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            validation_errors: ['name is required', 'age must be positive'],
+          },
+        },
+      },
+      message: 'Request failed with status code 400',
+    };
+
+    await expect(responseInterceptorReject(error)).rejects.toMatchObject({
+      userMessage: 'name is required; age must be positive',
+    });
+  });
 });

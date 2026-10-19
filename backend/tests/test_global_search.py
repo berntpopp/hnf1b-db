@@ -1159,3 +1159,18 @@ class TestGlobalSearchPhenotypeText:
                 text("REFRESH MATERIALIZED VIEW global_search_index")
             )
             await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_punctuation_only_search_query_does_not_500(async_client):
+    """Test that punctuation-only search queries return 200 and empty results without 500 error [BUG-02]."""
+    for q in ["!", "&", "!", ":", "()", "*"]:
+        resp = await async_client.get(
+            "/api/v2/search/global",
+            params={"q": q},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["results"] == []
+        assert data["total"] == 0
+

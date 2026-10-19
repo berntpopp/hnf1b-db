@@ -17,6 +17,9 @@ Invariants enforced:
 
 from __future__ import annotations
 
+import uuid
+from typing import Sequence
+
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -123,6 +126,42 @@ async def resolve_public_content(
         )
     ).scalar_one()
     return redact_public_document(rev.content_jsonb)
+
+
+async def resolve_public_contents(
+    db: AsyncSession,
+    pps: Sequence[Phenopacket],
+) -> dict[uuid.UUID, dict]:
+    """Batch-resolve authoritative public content for a sequence of phenopackets.
+
+    Dereferences ``head_published_revision_id`` for all phenopackets in a
+    single query against ``phenopacket_revisions`` rather than N queries.
+
+    Returns:
+        Mapping from phenopacket UUID (``pp.id``) to redacted public content dict.
+    """
+    head_ids = [
+        pp.head_published_revision_id
+        for pp in pps
+        if pp.head_published_revision_id is not None
+    ]
+    if not head_ids:
+        return {}
+
+    result = await db.execute(
+        select(PhenopacketRevision).where(PhenopacketRevision.id.in_(head_ids))
+    )
+    rev_by_id = {rev.id: rev for rev in result.scalars().all()}
+
+    resolved: dict[uuid.UUID, dict] = {}
+    for pp in pps:
+        if (
+            pp.head_published_revision_id is not None
+            and pp.head_published_revision_id in rev_by_id
+        ):
+            rev = rev_by_id[pp.head_published_revision_id]
+            resolved[pp.id] = redact_public_document(rev.content_jsonb)
+    return resolved
 
 
 def resolve_curator_content(pp: Phenopacket) -> dict:

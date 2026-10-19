@@ -51,6 +51,23 @@ class TestJWTSecretValidation:
         assert "JWT_SECRET is empty" in call_args
         assert "Set JWT_SECRET in .env file" in call_args
 
+    def test_jwt_secret_rejects_placeholder_in_production(self):
+        """Test that placeholder JWT_SECRET is rejected outside development."""
+        with pytest.raises(ValueError) as exc_info:
+            Settings(
+                JWT_SECRET="dev-secret-change-in-production",
+                environment="production",
+            )
+        assert "cannot be a default placeholder" in str(exc_info.value)
+
+    def test_jwt_secret_allows_placeholder_in_development(self):
+        """Test that placeholder JWT_SECRET is allowed when ENVIRONMENT=development."""
+        settings = Settings(
+            JWT_SECRET="dev-secret-change-in-production",
+            environment="development",
+        )
+        assert settings.JWT_SECRET == "dev-secret-change-in-production"
+
 
 class TestCORSConfiguration:
     """Test CORS configuration validation."""

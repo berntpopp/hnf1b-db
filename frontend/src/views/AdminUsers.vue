@@ -92,6 +92,7 @@ import UserListTable from '@/components/admin/UserListTable.vue';
 import UserCreateDialog from '@/components/admin/UserCreateDialog.vue';
 import UserInviteDialog from '@/components/admin/UserInviteDialog.vue';
 import UserEditDialog from '@/components/admin/UserEditDialog.vue';
+import { formatApiError } from '@/utils/apiError';
 
 const users = ref([]);
 const loading = ref(true);
@@ -113,7 +114,7 @@ const fetchUsers = async () => {
     error.value = null;
   } catch (err) {
     window.logService.error('Failed to fetch users', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to load users';
+    error.value = formatApiError(err, 'Failed to load users');
   }
 };
 
@@ -137,7 +138,7 @@ const handleDelete = async () => {
     await fetchUsers();
   } catch (err) {
     window.logService.error('Failed to delete user', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to delete user';
+    error.value = formatApiError(err, 'Failed to delete user');
   } finally {
     deleting.value = false;
   }
@@ -151,7 +152,7 @@ const handleUnlock = async (user) => {
     await fetchUsers();
   } catch (err) {
     window.logService.error('Failed to unlock user', { error: err.message });
-    error.value = err.response?.data?.detail || 'Failed to unlock user';
+    error.value = formatApiError(err, 'Failed to unlock user');
   }
 };
 

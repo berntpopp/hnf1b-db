@@ -17,7 +17,7 @@
       :headers="displayHeaders"
       :items="phenopackets"
       :loading="loading"
-      :items-length="phenopackets.length"
+      :items-length="pagination.totalRecords"
       :custom-sort="customSort"
       hide-default-footer
       title="Phenopacket Registry"

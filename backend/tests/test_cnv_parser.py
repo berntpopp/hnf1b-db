@@ -4,6 +4,7 @@
 import pandas as pd
 
 from migration.vrs.cnv_parser import CNVParser
+from migration.vrs.vrs_builder import VRSBuilder
 
 
 def test_cnv_parser():
@@ -75,6 +76,11 @@ def test_cnv_parser():
                 test_case["VariantReported"],
             )
 
+            assert variant is not None
+            assert "dbVar" not in variant["label"]
+            ext_names = [ext["name"] for ext in variant.get("extensions", [])]
+            assert "external_reference" not in ext_names
+
             if variant:
                 print("\n✓ Phenopacket variant created:")
                 print(f"  ID: {variant['id']}")
@@ -103,6 +109,42 @@ def test_cnv_parser():
                             print(f"    - External ref: {ext['value']['id']}")
         else:
             print("✗ Failed to parse coordinates")
+            assert False, f"Failed to parse coordinates for {test_case['name']}"
+
+
+def test_dbvar_mapping_removed():
+    """Verify fabricated dbVar mappings are removed."""
+    assert CNVParser.get_dbvar_id("DEL") is None
+    assert CNVParser.get_dbvar_id("DUP") is None
+    assert CNVParser.DBVAR_MAPPINGS == {}
+
+
+def test_iscn_notation_17q12():
+    """Verify ISCN notation is generated only for 17q12 locus."""
+    # 17q12 region
+    assert (
+        CNVParser.create_iscn_notation("17", 36459258, 37832869, "DEL")
+        == "del(17)(q12)"
+    )
+    assert (
+        CNVParser.create_iscn_notation("17", 36459258, 37832869, "DUP")
+        == "dup(17)(q12)"
+    )
+    # Outside 17q12
+    assert CNVParser.create_iscn_notation("1", 36459258, 37832869, "DEL") is None
+    assert CNVParser.create_iscn_notation("17", 1000000, 2000000, "DEL") is None
+
+
+def test_vrs_builder_canonical_refget():
+    """Verify canonical RefGet digest for NC_000017.11."""
+    assert (
+        VRSBuilder.create_placeholder_refget("NC_000017.11")
+        == "SQ.dLZ15tNO1Ur0IcGjwc3Sdi_0A6Yf4zm7"
+    )
+    # Non-canonical sequence produces fallback SQ. prefix
+    fallback = VRSBuilder.create_placeholder_refget("NC_000001.11")
+    assert fallback.startswith("SQ.")
+    assert fallback != "SQ.dLZ15tNO1Ur0IcGjwc3Sdi_0A6Yf4zm7"
 
 
 def test_google_sheets_integration():

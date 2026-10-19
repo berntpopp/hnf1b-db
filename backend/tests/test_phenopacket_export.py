@@ -213,3 +213,93 @@ async def test_full_mode_requires_curator(async_client, published_record):
         f"/api/v2/phenopackets/{published_record.phenopacket_id}/export?mode=full"
     )
     assert response.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_ga4gh_export_normalizes_legacy_interpretation_and_extensions(
+    async_client, curator_headers, db_session
+):
+    """Normalize legacy interpretationStatus: PATHOGENIC without HTTP 422 [DATA-03]."""
+    payload = {
+        "phenopacket": {
+            "id": "phenopacket-legacy-export-test",
+            "subject": {"id": "legacy-test", "sex": "FEMALE"},
+            "metaData": {
+                "created": "2026-07-30T00:00:00Z",
+                "createdBy": "test",
+                "resources": [{"id": "hp", "name": "HPO", "namespacePrefix": "HP"}],
+            },
+            "interpretations": [
+                {
+                    "id": "interp-legacy-1",
+                    "progressStatus": "COMPLETED",
+                    "diagnosis": {
+                        "genomicInterpretations": [
+                            {
+                                "subjectOrBiosampleId": "legacy-test",
+                                "interpretationStatus": "PATHOGENIC",
+                                "variantInterpretation": {
+                                    "variationDescriptor": {
+                                        "id": "var-legacy-1",
+                                        "extensions": [
+                                            {
+                                                "name": "zygosity",
+                                                "value": "heterozygous",
+                                            }
+                                        ],
+                                    },
+                                    "extensions": [
+                                        {
+                                            "name": "classification_criteria",
+                                            "value": {"guidelines": "ACMG"},
+                                        }
+                                    ],
+                                },
+                            }
+                        ]
+                    },
+                }
+            ],
+        }
+    }
+    response = await async_client.post(
+        "/api/v2/phenopackets/", json=payload, headers=curator_headers
+    )
+    assert response.status_code in (200, 201)
+    pp_id = "phenopacket-legacy-export-test"
+
+    pp = (
+        await db_session.execute(
+            select(Phenopacket).where(Phenopacket.phenopacket_id == pp_id)
+        )
+    ).scalar_one()
+    rev = PhenopacketRevision(
+        record_id=pp.id,
+        parent_revision_id=pp.editing_revision_id,
+        revision_number=pp.revision + 1,
+        state="published",
+        content_jsonb=pp.phenopacket,
+        change_reason="publish for legacy export test",
+        actor_id=pp.created_by_id,
+        from_state="draft",
+        to_state="published",
+        event_type="published",
+    )
+    db_session.add(rev)
+    await db_session.flush()
+    pp.state = "published"
+    pp.revision += 1
+    pp.head_published_revision_id = rev.id
+    pp.editing_revision_id = None
+    pp.draft_owner_id = None
+    await db_session.commit()
+
+    export_resp = await async_client.get(
+        f"/api/v2/phenopackets/{pp_id}/export?representation=ga4gh"
+    )
+    assert export_resp.status_code == 200
+    data = export_resp.json()
+    genomic_interp = data["interpretations"][0]["diagnosis"]["genomicInterpretations"][
+        0
+    ]
+    assert genomic_interp["interpretationStatus"] == "CAUSATIVE"

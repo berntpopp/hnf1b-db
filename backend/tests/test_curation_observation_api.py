@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import pytest
 from sqlalchemy import select
 
 from app.models.user import User
@@ -477,3 +478,38 @@ async def test_preview_runs_domain_and_parser_validation_without_writing(
     assert parser_response.json()["detail"]["code"] == "parser_error"
     await db_session.refresh(record)
     assert record.revision == 1
+
+
+@pytest.mark.asyncio
+async def test_curation_service_validate_domain_enforces_schema(db_session):
+    """CurationService._validate_domain rejects documents violating schema [DATA-06]."""
+    from app.phenopackets.services.curation_service import (
+        CurationService,
+        CurationServiceError,
+    )
+
+    service = CurationService(db_session)
+    malformed_document = {
+        "id": "malformed-phenopacket",
+    }
+    with pytest.raises(CurationServiceError) as exc_info:
+        await service._validate_domain(malformed_document)
+    assert exc_info.value.code == "invalid_schema"
+
+
+def test_typed_import_service_enforces_schema(monkeypatch):
+    """TypedObservationImportService._document_for_subject rejects malformed phenopackets [DATA-06]."""
+    from migration.typed_import_service import (
+        TypedImportApplyError,
+        TypedObservationImportService,
+    )
+    from tests.curation.test_profile_models import report
+
+    # Monkeypatch canonicalize_curation_document to return a document missing subject
+    monkeypatch.setattr(
+        "migration.typed_import_service.canonicalize_curation_document",
+        lambda doc: {"id": "test-doc"},
+    )
+    with pytest.raises(TypedImportApplyError) as exc_info:
+        TypedObservationImportService._document_for_subject("source-317", [report()])
+    assert "violates schema constraints" in str(exc_info.value)

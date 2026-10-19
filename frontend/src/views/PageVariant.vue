@@ -636,14 +636,22 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, defineAsyncComponent } from 'vue';
 import { useRoute } from 'vue-router';
 import { getVariants, getPhenopacketsByVariant } from '@/api';
 import HNF1BGeneVisualization from '@/components/gene/HNF1BGeneVisualization.vue';
 import HNF1BProteinVisualization from '@/components/gene/HNF1BProteinVisualization.vue';
-import ProteinStructure3D from '@/components/gene/ProteinStructure3D.vue';
 import AppDataTable from '@/components/common/AppDataTable.vue';
-import PhenotypeHeatmap from '@/components/analyses/PhenotypeHeatmap.vue';
+
+const ProteinStructure3D = defineAsyncComponent(
+  () => import('@/components/gene/ProteinStructure3D.vue')
+);
+ProteinStructure3D.name = 'ProteinStructure3D';
+
+const PhenotypeHeatmap = defineAsyncComponent(
+  () => import('@/components/analyses/PhenotypeHeatmap.vue')
+);
+PhenotypeHeatmap.name = 'PhenotypeHeatmap';
 import {
   extractCNotation,
   extractPNotation,

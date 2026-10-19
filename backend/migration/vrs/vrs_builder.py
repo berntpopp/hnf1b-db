@@ -59,6 +59,11 @@ class VRSBuilder:
         "MT": "NC_012920.1",
     }
 
+    # Known canonical RefGet sequence digests for reference sequences (GRCh38)
+    CANONICAL_REFGET = {
+        "NC_000017.11": "SQ.dLZ15tNO1Ur0IcGjwc3Sdi_0A6Yf4zm7",
+    }
+
     @staticmethod
     def parse_vcf_to_vrs(vcf_string: str) -> Optional[Dict[str, Any]]:
         """Parse VCF-style string to VRS components.
@@ -96,20 +101,23 @@ class VRSBuilder:
         except (ValueError, IndexError):
             return None
 
-    @staticmethod
-    def create_placeholder_refget(refseq_id: str) -> str:
-        """Create a format-compliant RefGet accession placeholder.
+    @classmethod
+    def create_placeholder_refget(cls, refseq_id: str) -> str:
+        """Create a format-compliant RefGet accession or return canonical digest.
 
-        Note: This creates a deterministic placeholder that follows the RefGet format
-        but is not a real sequence digest. Real RefGet IDs require access to actual
-        sequence data to compute SHA512t24u digests.
+        Note: Real RefGet IDs require access to actual sequence data to compute
+        SHA512t24u digests. Known canonical digests are used when available;
+        otherwise, a deterministic format-compliant placeholder is generated.
 
         Args:
             refseq_id: RefSeq accession (e.g., 'NC_000017.11')
 
         Returns:
-            Format-compliant RefGet accession (e.g., 'SQ.xxx...')
+            Canonical RefGet accession or format-compliant placeholder (e.g., 'SQ.xxx...')
         """
+        if refseq_id in cls.CANONICAL_REFGET:
+            return cls.CANONICAL_REFGET[refseq_id]
+
         # Create a deterministic hash from RefSeq ID using SHA512t24u (GA4GH RefGet spec)
         sha512_digest = hashlib.sha512(refseq_id.encode()).digest()
         # Truncate to first 24 bytes (24 × 8 = 192 bits) per GA4GH RefGet specification

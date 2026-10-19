@@ -8,6 +8,7 @@ import {
   isDevQuickLoginEnabled,
 } from '@/config/devAuth';
 import { clearTokens, getAccessToken, getCsrfToken, persistTokens } from '@/api/session';
+import { formatApiError } from '@/utils/apiError';
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -48,7 +49,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       return true;
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Login failed';
+      error.value = formatApiError(err, 'Login failed');
       window.logService.error('Login failed', {
         error: error.value,
       });
@@ -163,7 +164,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       return true;
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Password change failed';
+      error.value = formatApiError(err, 'Password change failed');
       window.logService.error('Password change failed', {
         error: error.value,
       });
@@ -202,7 +203,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (err.response?.status === 404) {
         error.value = getDevQuickLoginBackendUnavailableMessage();
       } else {
-        error.value = err.response?.data?.detail || 'Dev quick-login failed';
+        error.value = formatApiError(err, 'Dev quick-login failed');
       }
       window.logService.error('dev quick-login failed', { username, error: err.message });
       throw err;

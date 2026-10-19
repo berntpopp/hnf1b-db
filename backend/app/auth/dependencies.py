@@ -1,5 +1,6 @@
 """FastAPI dependencies for authentication and authorization."""
 
+import hmac
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -189,7 +190,11 @@ async def require_csrf_token(request: Request) -> None:
     cookie_token = request.cookies.get(settings.CSRF_COOKIE_NAME)
     header_token = request.headers.get("x-csrf-token")
 
-    if not cookie_token or not header_token or cookie_token != header_token:
+    if (
+        not cookie_token
+        or not header_token
+        or not hmac.compare_digest(cookie_token, header_token)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="CSRF token missing or invalid",

@@ -62,4 +62,24 @@ describe('ExternalLink', () => {
     expect(sr.exists()).toBe(true);
     expect(sr.text()).toMatch(/opens in new tab/i);
   });
+
+  it('blocks javascript: URLs and falls back to "#" [SEC-04]', () => {
+    const wrapper = mount(ExternalLink, {
+      props: { href: 'javascript:alert(1)' },
+      slots: { default: 'XSS' },
+    });
+    expect(wrapper.get('a').attributes('href')).toBe('#');
+  });
+
+  it('allows valid http and https URLs', () => {
+    const httpWrapper = mount(ExternalLink, {
+      props: { href: 'http://example.com' },
+    });
+    expect(httpWrapper.get('a').attributes('href')).toBe('http://example.com');
+
+    const httpsWrapper = mount(ExternalLink, {
+      props: { href: 'https://example.com' },
+    });
+    expect(httpsWrapper.get('a').attributes('href')).toBe('https://example.com');
+  });
 });

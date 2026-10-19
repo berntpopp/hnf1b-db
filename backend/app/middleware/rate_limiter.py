@@ -30,11 +30,17 @@ def get_client_ip(request: Request) -> str:
     Returns:
         Client IP address as string
     """
+    # Check X-Real-IP header (set by trusted reverse proxy)
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
     # Check X-Forwarded-For header (for requests behind proxy/load balancer)
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        # X-Forwarded-For can contain multiple IPs, take the first one
-        return forwarded_for.split(",")[0].strip()
+        # X-Forwarded-For can contain multiple IPs, take the last one
+        # appended by trusted proxy
+        return forwarded_for.split(",")[-1].strip()
 
     # Fall back to direct client IP
     if request.client:

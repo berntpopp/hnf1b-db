@@ -9,6 +9,7 @@ count-and-reject logic; exact window semantics require Redis.
 from fastapi import HTTPException, Request, status
 
 from app.core.cache import cache
+from app.middleware.rate_limiter import get_client_ip
 
 
 class RateLimiter:
@@ -33,7 +34,7 @@ class RateLimiter:
 
     async def __call__(self, request: Request) -> None:
         """Check rate limit; raise 429 if exceeded."""
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request)
         key = f"rate:{self.key_prefix}:{client_ip}"
         count = await cache.incr(key, ttl=self.window_seconds)
 

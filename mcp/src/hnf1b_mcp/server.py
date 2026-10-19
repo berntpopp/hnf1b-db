@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -63,21 +64,28 @@ management.
 """
 
 
-def is_origin_allowed(origin: str | None, allowed_origins: list[str]) -> bool:
+def is_origin_allowed(
+    origin: str | None,
+    allowed_origins: list[str],
+    *,
+    require_origin: bool = False,
+) -> bool:
     """Return whether a request Origin header is acceptable.
 
-    A missing Origin (non-browser client) is always allowed. A present Origin
+    When *require_origin* is ``False``, a missing Origin (non-browser client)
+    is allowed. When ``True``, a missing Origin is rejected. A present Origin
     is allowed only when it appears in *allowed_origins*.
 
     Args:
         origin: The value of the request ``Origin`` header, or ``None``.
         allowed_origins: The list of permitted origin strings.
+        require_origin: Whether an explicit allowed Origin is strictly required.
 
     Returns:
         ``True`` when the request should proceed, ``False`` to reject with 403.
     """
     if origin is None:
-        return True
+        return not require_origin
     return origin in allowed_origins
 
 
@@ -235,17 +243,24 @@ class ErrorEnvelopeMiddleware(FastMCPMiddleware):
 
 
 class OriginValidationMiddleware(BaseHTTPMiddleware):
-    """Reject requests whose Origin header is present but not allowlisted."""
+    """Reject requests whose Origin header is disallowed or missing when required."""
 
-    def __init__(self, app: ASGIApp, allowed_origins: list[str]) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        allowed_origins: list[str],
+        require_origin: bool = False,
+    ) -> None:
         """Store the allowlist and wrap the downstream ASGI app.
 
         Args:
             app: The wrapped ASGI application.
             allowed_origins: Permitted ``Origin`` header values.
+            require_origin: Whether Origin header is strictly required.
         """
         super().__init__(app)
         self._allowed_origins = allowed_origins
+        self._require_origin = require_origin
 
     async def dispatch(
         self,
@@ -263,10 +278,72 @@ class OriginValidationMiddleware(BaseHTTPMiddleware):
             downstream response.
         """
         origin = request.headers.get("origin")
-        if not is_origin_allowed(origin, self._allowed_origins):
+        require_origin = self._require_origin and request.url.path != "/health"
+        if not is_origin_allowed(
+            origin,
+            self._allowed_origins,
+            require_origin=require_origin,
+        ):
             return JSONResponse(
                 {"error": {"code": "forbidden", "message": "Origin not allowed."}},
                 status_code=403,
+            )
+        return await call_next(request)
+
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    """Enforce optional Bearer token authentication on HTTP endpoints."""
+
+    def __init__(self, app: ASGIApp, api_key: str) -> None:
+        """Store the secret API key.
+
+        Args:
+            app: The wrapped ASGI application.
+            api_key: Required Bearer token.
+        """
+        super().__init__(app)
+        self._api_key = api_key
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Verify the Bearer token for protected routes.
+
+        Allows ``/health`` without authentication.
+
+        Args:
+            request: The incoming request.
+            call_next: The downstream handler.
+
+        Returns:
+            A 401 response when token is missing or invalid, otherwise the
+            downstream response.
+        """
+        if request.url.path == "/health":
+            return await call_next(request)
+        auth = request.headers.get("authorization")
+        if not auth or not auth.startswith("Bearer "):
+            return JSONResponse(
+                {
+                    "error": {
+                        "code": "unauthorized",
+                        "message": "Missing or invalid Bearer token.",
+                    }
+                },
+                status_code=401,
+            )
+        token = auth[len("Bearer ") :].strip()
+        if not secrets.compare_digest(token, self._api_key):
+            return JSONResponse(
+                {
+                    "error": {
+                        "code": "unauthorized",
+                        "message": "Invalid Bearer token.",
+                    }
+                },
+                status_code=401,
             )
         return await call_next(request)
 
@@ -331,6 +408,16 @@ def build_http_app(settings: Settings | None = None) -> Starlette:
     """
     settings = settings or get_settings()
     mcp = build_app(settings)
+    middleware = [
+        Middleware(
+            OriginValidationMiddleware,
+            allowed_origins=settings.allowed_origins,
+            require_origin=settings.require_origin,
+        )
+    ]
+    if settings.api_key:
+        middleware.append(Middleware(BearerAuthMiddleware, api_key=settings.api_key))
+
     app = mcp.http_app(
         # Mount the streamable-HTTP endpoint at the root so clients connect to
         # the bare subdomain (https://mcp.hnf1b.org) instead of the redundant
@@ -339,12 +426,7 @@ def build_http_app(settings: Settings | None = None) -> Starlette:
         path="/",
         stateless_http=True,
         json_response=True,
-        middleware=[
-            Middleware(
-                OriginValidationMiddleware,
-                allowed_origins=settings.allowed_origins,
-            )
-        ],
+        middleware=middleware,
     )
     return app
 
@@ -353,6 +435,16 @@ def main() -> None:
     """Run the HNF1B MCP server over HTTP transport."""
     settings = get_settings()
     mcp = build_app(settings)
+    middleware = [
+        Middleware(
+            OriginValidationMiddleware,
+            allowed_origins=settings.allowed_origins,
+            require_origin=settings.require_origin,
+        )
+    ]
+    if settings.api_key:
+        middleware.append(Middleware(BearerAuthMiddleware, api_key=settings.api_key))
+
     mcp.run(
         transport="http",
         host=settings.host,
@@ -362,12 +454,7 @@ def main() -> None:
         path="/",
         stateless_http=True,
         json_response=True,
-        middleware=[
-            Middleware(
-                OriginValidationMiddleware,
-                allowed_origins=settings.allowed_origins,
-            )
-        ],
+        middleware=middleware,
     )
 
 

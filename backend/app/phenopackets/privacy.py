@@ -38,6 +38,7 @@ _RESTRICTED_LOCAL_KEYS = {
     "secret",
     "clientsecret",
     "client_secret",
+    "dateofbirth",
 }
 
 # Phenopackets v2 JSON field names. This is intentionally an allowlist shared
@@ -52,7 +53,6 @@ _GA4GH_KEYS = {
     "taxonomy",
     "timeAtLastEncounter",
     "alternateIds",
-    "dateOfBirth",
     "ageAtCollection",
     "phenotypicFeatures",
     "type",

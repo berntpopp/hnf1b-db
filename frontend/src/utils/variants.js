@@ -13,10 +13,10 @@ import { extractCNotation } from './hgvs';
 // These constants are intentionally hardcoded for performance reasons to avoid
 // API calls on every variant type check. Values are sourced from NCBI Gene ID 6928.
 // Source: https://www.ncbi.nlm.nih.gov/gene/6928
-// Coordinates: chr17:36,098,063-36,112,306 (GRCh38/hg38)
+// Coordinates: chr17:37,686,431-37,745,059 (GRCh38/hg38)
 // Last verified: 2025-01
-const HNF1B_START = 36098063;
-const HNF1B_END = 36112306;
+export const HNF1B_START = 37686431;
+export const HNF1B_END = 37745059;
 
 /**
  * Determine the variant type from HGVS notation and genomic coordinates.
@@ -97,18 +97,21 @@ export function getVariantType(variant, options = {}) {
 
 /**
  * Check if a variant is a Copy Number Variant (CNV).
- * CNVs are large structural variants that extend beyond HNF1B gene boundaries.
+ * CNVs are large structural variants (>= 50bp) or explicitly typed as CNV.
  *
- * @param {Object} variant - Variant object with hg38 field
- * @returns {boolean} True if variant is a CNV (>= 50bp and extends beyond HNF1B)
+ * @param {Object} variant - Variant object with hg38 and/or variant_type/type field
+ * @returns {boolean} True if variant is a CNV
  *
  * @example
- * isCNV({ hg38: '17:36000000-36200000:...' }) // Returns: true (large, extends beyond HNF1B)
- * isCNV({ hg38: '17:36098100-36098150:...' }) // Returns: false (small, within HNF1B)
- * isCNV({ transcript: 'NM_000458.4:c.544del' }) // Returns: false (no genomic coords)
+ * isCNV({ hg38: '17:36000000-36200000:DEL' }) // Returns: true (large CNV)
+ * isCNV({ hg38: '17:37690000-37740000:DEL' }) // Returns: true (intragenic CNV >= 50bp)
+ * isCNV({ hg38: '17:37686431:A:G' }) // Returns: false (SNV)
+ * isCNV({ variant_type: 'CNV' }) // Returns: true (explicit type)
  */
 export function isCNV(variant) {
-  if (!variant?.hg38) return false;
+  if (!variant) return false;
+  if (variant.variant_type === 'CNV' || variant.type === 'CNV') return true;
+  if (!variant.hg38) return false;
 
   // Parse genomic coordinates: chr:start-end:...
   const match = variant.hg38.match(/(\d+|X|Y|MT?):(\d+)-(\d+):/);
@@ -116,13 +119,9 @@ export function isCNV(variant) {
 
   const start = parseInt(match[2]);
   const end = parseInt(match[3]);
-  const size = end - start;
+  const size = Math.abs(end - start);
 
-  // CNV criteria:
-  // 1. Size >= 50bp (structural variant threshold)
-  // 2. Extends beyond HNF1B gene boundaries
-  const extendsBeyondHNF1B = start < HNF1B_START || end > HNF1B_END;
-  return size >= 50 && extendsBeyondHNF1B;
+  return size >= 50;
 }
 
 /**

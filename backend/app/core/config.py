@@ -18,12 +18,13 @@ Usage:
 """
 
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Literal, Optional
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -407,6 +408,12 @@ def load_yaml_config() -> YamlConfig:
 # ============================================================================
 
 
+# Known insecure placeholder secrets to reject outside development
+INSECURE_JWT_PLACEHOLDERS: frozenset[str] = frozenset({
+    "dev-secret-change-in-production",
+})
+
+
 class Settings(BaseSettings):
     """Application settings combining .env secrets and YAML behavior config.
 
@@ -416,6 +423,10 @@ class Settings(BaseSettings):
     Behavior config (from config.yaml):
         pagination, rate_limiting, external_apis, database, security
     """
+
+    # === Environment and dev-mode gating (Wave 5a Layer 1) ===
+    environment: Literal["development", "staging", "production"] = "production"
+    enable_dev_auth: bool = False
 
     # === SECRETS (from .env - NEVER in YAML) ===
     DATABASE_URL: str = ""
@@ -476,11 +487,6 @@ class Settings(BaseSettings):
     AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
     AUTH_COOKIE_SECURE: bool = False
 
-    # === Environment and dev-mode gating (Wave 5a Layer 1) ===
-
-    environment: Literal["development", "staging", "production"] = "production"
-    enable_dev_auth: bool = False
-
     # === YAML CONFIG (lazy-loaded) ===
     _yaml_config: Optional[YamlConfig] = None
 
@@ -488,8 +494,8 @@ class Settings(BaseSettings):
 
     @field_validator("JWT_SECRET")
     @classmethod
-    def validate_jwt_secret(cls, v: str) -> str:
-        """Fail fast if JWT_SECRET is missing.
+    def validate_jwt_secret(cls, v: str, info: ValidationInfo) -> str:
+        """Fail fast if JWT_SECRET is missing or insecure in non-development.
 
         Raises ValueError if JWT_SECRET is not set to prevent running
         with insecure configuration. Using ValueError instead of sys.exit()
@@ -504,6 +510,16 @@ class Settings(BaseSettings):
             raise ValueError(
                 "JWT_SECRET is required. Set JWT_SECRET in .env file. "
                 "Generate with: openssl rand -hex 32"
+            )
+        env = (
+            (info.data.get("environment") or os.environ.get("ENVIRONMENT") or "production")
+            if info and info.data
+            else (os.environ.get("ENVIRONMENT") or "production")
+        )
+        if env != "development" and v in INSECURE_JWT_PLACEHOLDERS:
+            raise ValueError(
+                f"JWT_SECRET cannot be a default placeholder in {env} environment. "
+                "Set a secure JWT_SECRET in .env file."
             )
         return v
 
@@ -579,6 +595,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 "REFUSING TO START: AUTH_COOKIE_SECURE must be true when "
                 f"ENVIRONMENT={self.environment}."
+            )
+
+        if (
+            self.environment != "development"
+            and self.JWT_SECRET in INSECURE_JWT_PLACEHOLDERS
+        ):
+            raise ValueError(
+                f"JWT_SECRET cannot be a default placeholder in {self.environment} environment. "
+                "Set a secure JWT_SECRET in .env file."
             )
 
         return self

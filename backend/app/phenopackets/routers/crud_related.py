@@ -136,6 +136,8 @@ async def get_phenopacket_audit_history(
 @router.get("/by-variant/{variant_id}")
 async def get_phenopackets_by_variant(
     variant_id: str,
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     """Return every phenopacket that contains a specific variant id.
@@ -171,10 +173,13 @@ async def get_phenopackets_by_variant(
               = :variant_id
     )
     ORDER BY p.created_at DESC
+    LIMIT :limit OFFSET :offset
     """
     )
 
-    result = await db.execute(query, {"variant_id": variant_id})
+    result = await db.execute(
+        query, {"variant_id": variant_id, "limit": limit, "offset": offset}
+    )
     rows = result.mappings().all()
 
     # Return structured response with metadata and phenopacket data.

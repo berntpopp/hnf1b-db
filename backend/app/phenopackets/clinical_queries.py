@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy import (
     Integer,
+    String,
     and_,
     case,
     func,
@@ -286,7 +287,7 @@ class ClinicalQueries:
             )
         )
 
-        conditions = []
+        conditions: List[Any] = []
 
         # Check for disease IDs
         if disease_terms:
@@ -294,18 +295,21 @@ class ClinicalQueries:
             for term in disease_terms:
                 id_condition = func.jsonb_path_exists(
                     PhenopacketRevision.content_jsonb,
-                    text(f"'$.diseases[*] ? (@.term.id == \"{term}\")'::jsonpath"),
+                    text("'$.diseases[*] ? (@.term.id == $term)'::jsonpath"),
+                    func.jsonb_build_object("term", term),
                 )
                 conditions.append(id_condition)
 
-        # Check for disease labels
+        # Check for disease labels (case-insensitive substring match, parameterized)
         if disease_labels:
             for label in disease_labels:
-                label_condition = func.jsonb_path_exists(
-                    PhenopacketRevision.content_jsonb,
-                    text(
-                        f"'$.diseases[*] ? (@.term.label like_regex \"{label}\")'::jsonpath"
-                    ),
+                label_condition = (
+                    func.jsonb_path_query_array(
+                        PhenopacketRevision.content_jsonb,
+                        text("'$.diseases[*].term.label'::jsonpath"),
+                    )
+                    .cast(String)
+                    .ilike(f"%{label}%")
                 )
                 conditions.append(label_condition)
 
@@ -355,7 +359,10 @@ class ClinicalQueries:
             loinc_conditions.append(
                 func.jsonb_path_exists(
                     PhenopacketRevision.content_jsonb,
-                    text(f"'$.measurements[*] ? (@.assay.id == \"{code}\")'::jsonpath"),
+                    text(
+                        "'$.measurements[*] ? (@.assay.id == $code)'::jsonpath"
+                    ),
+                    func.jsonb_build_object("code", code),
                 )
             )
         if loinc_conditions:
@@ -366,8 +373,9 @@ class ClinicalQueries:
             interpretation_condition = func.jsonb_path_exists(
                 PhenopacketRevision.content_jsonb,
                 text(
-                    f"'$.measurements[*] ? (@.interpretation.id == \"{interpretation_hpo}\")'::jsonpath"
+                    "'$.measurements[*] ? (@.interpretation.id == $interpretation)'::jsonpath"
                 ),
+                func.jsonb_build_object("interpretation", interpretation_hpo),
             )
             conditions.append(interpretation_condition)
 

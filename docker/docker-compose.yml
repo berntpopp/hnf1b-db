@@ -98,7 +98,7 @@ services:
       # Redis
       REDIS_URL: redis://hnf1b_cache:6379/0
       # Security
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       # App config. ENVIRONMENT defaults to production (fail-closed: the Wave 5c
       # validators then require real SMTP + secure cookies + a non-empty
       # ADMIN_PASSWORD). Set ENVIRONMENT=development in --env-file to boot the

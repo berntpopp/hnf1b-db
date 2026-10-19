@@ -10,16 +10,17 @@
 export function parseAge(iso8601duration) {
   if (!iso8601duration) return null;
 
-  const regex = /P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?/;
+  const regex = /P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?/;
   const matches = iso8601duration.match(regex);
 
   if (!matches) return null;
 
   const years = parseInt(matches[1] || 0);
   const months = parseInt(matches[2] || 0);
-  const days = parseInt(matches[3] || 0);
+  const weeks = parseInt(matches[3] || 0);
+  const days = parseInt(matches[4] || 0);
 
-  return years + months / 12 + days / 365;
+  return years + months / 12 + (weeks * 7) / 365.25 + days / 365;
 }
 
 /**
@@ -48,6 +49,7 @@ export function formatAge(age) {
  */
 export function onsetClassToAge(hpoId) {
   const onsetMapping = {
+    'HP:0030674': -0.25, // Antenatal onset
     'HP:0003577': 0, // Congenital onset
     'HP:0003623': 0, // Neonatal onset (0-4 weeks)
     // HP:0034199 removed: it is "Late first trimester onset", not "Neonatal

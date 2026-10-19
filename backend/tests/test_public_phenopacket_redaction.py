@@ -93,3 +93,19 @@ def test_ga4gh_representation_preserves_medical_actions():
         "metaData": {"created": "2026-08-09T00:00:00Z", "createdBy": "system"},
     }
     assert "medicalActions" in ga4gh_representation(document)
+
+
+def test_public_redaction_removes_date_of_birth():
+    """DateOfBirth must be redacted from public document representations."""
+    document = {
+        "id": "pp-1",
+        "subject": {
+            "id": "patient-1",
+            "dateOfBirth": "1990-01-01T00:00:00Z",
+            "sex": "FEMALE",
+        },
+    }
+    public = redact_public_document(document)
+    assert "dateOfBirth" not in public["subject"]
+    assert public["subject"]["id"] == "patient-1"
+    assert public["subject"]["sex"] == "FEMALE"

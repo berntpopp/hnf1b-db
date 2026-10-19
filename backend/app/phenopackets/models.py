@@ -601,16 +601,18 @@ class PhenopacketCreate(BaseModel):
 class PhenopacketUpdate(BaseModel):
     """Request model for updating a phenopacket.
 
-    Includes optional optimistic locking support via revision field and
-    audit trail support via change_reason field. ``updated_by`` is no
-    longer accepted — the authenticated actor is always used.
+    Includes optimistic locking support via revision field and audit trail
+    support via change_reason field. ``updated_by`` is no longer accepted —
+    the authenticated actor is always used.
     """
 
     phenopacket: Dict[str, Any]
     revision: Optional[int] = Field(
         None,
         description=(
-            "Optional revision for optimistic locking (disabled if not provided)"
+            "Optimistic-locking revision (required unless supplied via If-Match "
+            "header). Update returns 409 Conflict when the current row revision "
+            "differs."
         ),
     )
     change_reason: str = Field(

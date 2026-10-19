@@ -81,3 +81,57 @@ async def test_health_origin_validation():
         # Disallowed Origin -> 403.
         r = await ac.get("/health", headers={"Origin": "https://evil.example"})
         assert r.status_code == 403
+
+
+def test_origin_helper_strict():
+    allowed = ["https://claude.ai"]
+    assert is_origin_allowed(None, allowed, require_origin=True) is False
+    assert is_origin_allowed("https://claude.ai", allowed, require_origin=True) is True
+
+
+@pytest.mark.asyncio
+async def test_health_strict_origin_validation():
+    settings = Settings(allowed_origins=["https://claude.ai"], require_origin=True)
+    app = build_http_app(settings=settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as ac:
+            # Headerless /health probe still succeeds with require_origin=True.
+            r = await ac.get("/health")
+            assert r.status_code == 200
+            # MCP endpoint without Origin with require_origin=True -> 403.
+            r = await ac.post("/")
+            assert r.status_code == 403
+            # Allowed Origin on /health -> 200.
+            r = await ac.get("/health", headers={"Origin": "https://claude.ai"})
+            assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_bearer_token_auth():
+    settings = Settings(api_key="secret-token-123")
+    app = build_http_app(settings=settings)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as ac:
+            # /health is open without auth
+            r = await ac.get("/health")
+            assert r.status_code == 200
+
+            # Protected endpoint without auth -> 401
+            r = await ac.post("/")
+            assert r.status_code == 401
+            assert r.json()["error"]["code"] == "unauthorized"
+
+            # Wrong token -> 401
+            r = await ac.post("/", headers={"Authorization": "Bearer wrong-token"})
+            assert r.status_code == 401
+            assert r.json()["error"]["code"] == "unauthorized"
+
+            # Correct token -> authorized (passes middleware)
+            r = await ac.post("/", headers={"Authorization": "Bearer secret-token-123"})
+            assert r.status_code != 401

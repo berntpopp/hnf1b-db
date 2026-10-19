@@ -48,7 +48,7 @@ class GlobalSearchRepository:
         sanitized = re.sub(r"[&|!():*<>]", " ", word)
         # Take first non-empty part
         parts = sanitized.split()
-        return parts[0] if parts else word
+        return parts[0] if parts else ""
 
     @staticmethod
     def _build_or_tsquery(query: str) -> str:
@@ -60,7 +60,7 @@ class GlobalSearchRepository:
         """
         words = query.split()
         if not words:
-            return query
+            return ""
 
         # Sanitize each word and build prefix match
         sanitized_parts = []
@@ -69,7 +69,7 @@ class GlobalSearchRepository:
             if clean:
                 sanitized_parts.append(f"{clean}:*")
 
-        return " | ".join(sanitized_parts) if sanitized_parts else query
+        return " | ".join(sanitized_parts) if sanitized_parts else ""
 
     async def search(
         self,
@@ -96,6 +96,8 @@ class GlobalSearchRepository:
         """
         # Build OR-based tsquery for broader matching
         or_tsquery = self._build_or_tsquery(query)
+        if not or_tsquery:
+            return []
         params: dict[str, Any] = {
             "query": query,
             "or_tsquery": or_tsquery,
@@ -163,6 +165,8 @@ class GlobalSearchRepository:
             Dictionary mapping type names to counts
         """
         or_tsquery = self._build_or_tsquery(query)
+        if not or_tsquery:
+            return {}
         # Hybrid count: exact FTS + OR prefix FTS + ILIKE
         sql = text("""
             WITH all_matches AS (
@@ -222,6 +226,8 @@ class GlobalSearchRepository:
             List of autocomplete suggestion dictionaries.
         """
         or_tsquery = self._build_or_tsquery(query)
+        if not or_tsquery:
+            return []
         sql = text("""
             SELECT id, label, type, subtype, extra_info, score
             FROM (
