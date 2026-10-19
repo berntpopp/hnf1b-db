@@ -123,7 +123,10 @@ async function fillText(locator, value) {
 /** Open a v-select/-combobox control and pick the option whose accessible name matches EXACTLY. */
 async function selectExact(page, controlLocator, optionText) {
   await controlLocator.click();
-  await page.getByRole('option', { name: optionText, exact: true }).click();
+  await page
+    .locator('.v-overlay--active')
+    .getByRole('option', { name: optionText, exact: true })
+    .click();
 }
 
 /**
@@ -134,7 +137,10 @@ async function selectExact(page, controlLocator, optionText) {
 async function selectContains(page, controlLocator, optionSubstring) {
   await controlLocator.click();
   const escaped = optionSubstring.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  await page.getByRole('option', { name: new RegExp(escaped) }).click();
+  await page
+    .locator('.v-overlay--active')
+    .getByRole('option', { name: new RegExp(escaped) })
+    .click();
 }
 
 async function addChip(locator, value) {

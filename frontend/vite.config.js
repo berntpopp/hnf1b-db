@@ -47,6 +47,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      'sprintf-js': path.resolve(__dirname, 'src/utils/sprintf.js'),
     },
     // Prevent duplicate Vue instances (can cause hydration issues)
     // Proven optimization from agde-frontend
