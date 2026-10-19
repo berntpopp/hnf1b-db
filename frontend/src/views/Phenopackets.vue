@@ -47,6 +47,11 @@
               <v-icon start size="small">mdi-filter-off</v-icon>
               Clear Filters ({{ activeFilterCount }})
             </v-btn>
+            <SavedFiltersMenu
+              scope-key="phenopackets"
+              :current-filters="currentFilterState"
+              @apply="onApplyPreset"
+            />
           </template>
         </AppTableToolbar>
       </template>
@@ -182,6 +187,7 @@ import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppTableToolbar from '@/components/common/AppTableToolbar.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
 import ColumnHeaderFilter from '@/components/common/ColumnHeaderFilter.vue';
+import SavedFiltersMenu from '@/components/common/SavedFiltersMenu.vue';
 import StateBadge from '@/components/state/StateBadge.vue';
 
 export default {
@@ -191,6 +197,7 @@ export default {
     AppTableToolbar,
     AppPagination,
     ColumnHeaderFilter,
+    SavedFiltersMenu,
     StateBadge,
   },
   setup() {
@@ -199,7 +206,12 @@ export default {
     const urlState = useTableUrlState({
       defaultPageSize: 10,
       defaultSort: null,
-      filters: { sex: null },
+      filters: {
+        sex: null,
+        has_variants: null,
+        classification: null,
+        pathogenicity: null,
+      },
     });
 
     // Expose authStore so template + computed can access user role reactively.
@@ -259,10 +271,57 @@ export default {
         }
       },
     },
+    hasVariantsFilter: {
+      get() {
+        return (
+          this.urlState?.filters?.has_variants?.value ??
+          this.urlState?.filters?.has_variant?.value ??
+          null
+        );
+      },
+      set(value) {
+        if (this.urlState?.filters?.has_variants) {
+          this.urlState.filters.has_variants.value = value;
+        }
+      },
+    },
+    classificationFilter: {
+      get() {
+        return (
+          this.urlState?.filters?.classification?.value ??
+          this.urlState?.filters?.pathogenicity?.value ??
+          null
+        );
+      },
+      set(value) {
+        if (this.urlState?.filters?.classification) {
+          this.urlState.filters.classification.value = value;
+        }
+      },
+    },
+    // Filter state object for presets and URL sync
+    currentFilterState() {
+      const state = {};
+      if (this.searchQuery) state.q = this.searchQuery;
+      if (this.sexFilter) state.sex = this.sexFilter;
+      if (
+        this.hasVariantsFilter !== null &&
+        this.hasVariantsFilter !== undefined &&
+        this.hasVariantsFilter !== ''
+      ) {
+        state.has_variants = this.hasVariantsFilter;
+      }
+      if (this.classificationFilter) {
+        state.classification = this.classificationFilter;
+      }
+      return state;
+    },
     // Keep filterValues for compatibility but read-only
     filterValues() {
       return {
         sex: this.urlState?.filters?.sex?.value ?? null,
+        has_variants: this.hasVariantsFilter,
+        classification: this.classificationFilter,
       };
     },
     // Table headers — state column shown only to curator/admin (Wave 7/D.1 §9.2).
@@ -348,6 +407,18 @@ export default {
         this.fetchPhenopackets();
       },
     },
+    'urlState.filters.has_variants.value': {
+      handler() {
+        this.urlState.resetPage();
+        this.fetchPhenopackets();
+      },
+    },
+    'urlState.filters.classification.value': {
+      handler() {
+        this.urlState.resetPage();
+        this.fetchPhenopackets();
+      },
+    },
   },
   mounted() {
     // Initial fetch with URL state
@@ -406,13 +477,23 @@ export default {
           'page[size]': this.urlState?.pageSize?.value ?? 10,
         };
 
-        // Get sex filter from URL state
+        // Get filters from URL state
         const sexFilter = this.urlState?.filters?.sex?.value;
+        const hasVariants =
+          this.urlState?.filters?.has_variants?.value ??
+          this.urlState?.filters?.has_variant?.value;
+        const classification =
+          this.urlState?.filters?.classification?.value ??
+          this.urlState?.filters?.pathogenicity?.value;
 
         const response = await getPhenopackets({
           ...paginationParams,
           ...(sortParam && { sort: sortParam }),
           ...(sexFilter && { 'filter[sex]': sexFilter }),
+          ...(hasVariants !== null &&
+            hasVariants !== undefined &&
+            hasVariants !== '' && { 'filter[has_variants]': hasVariants }),
+          ...(classification && { 'filter[classification]': classification }),
         });
 
         const jsonApiData = response.data || {};
@@ -611,6 +692,23 @@ export default {
       // Clear all filters via URL state
       this.urlState.clearAllFilters();
       this.pagination.currentPage = 1;
+      this.fetchPhenopackets();
+    },
+
+    onApplyPreset(presetFilters) {
+      if (!presetFilters || typeof presetFilters !== 'object') return;
+      this.searchQuery = presetFilters.q || presetFilters.search || '';
+      this.sexFilter = presetFilters.sex || null;
+      if (presetFilters.has_variants !== undefined) {
+        this.hasVariantsFilter = presetFilters.has_variants;
+      } else if (presetFilters.has_variant !== undefined) {
+        this.hasVariantsFilter = presetFilters.has_variant;
+      } else {
+        this.hasVariantsFilter = null;
+      }
+      this.classificationFilter =
+        presetFilters.classification || presetFilters.pathogenicity || null;
+      this.urlState?.resetPage?.();
       this.fetchPhenopackets();
     },
   },
