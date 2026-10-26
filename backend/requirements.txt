@@ -42,7 +42,7 @@ bioutils==0.6.1
     # via ga4gh-vrs
 canonicaljson==2.0.0
     # via ga4gh-vrs
-certifi==2026.7.22
+certifi==2026.10.18
     # via
     #   httpcore
     #   httpx
