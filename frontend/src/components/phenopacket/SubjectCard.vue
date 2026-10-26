@@ -201,8 +201,8 @@ export default {
   --font-size-md: 13px;
 
   /* Color tokens */
-  --color-text-primary: rgba(0, 0, 0, 0.87);
-  --color-text-secondary: rgba(0, 0, 0, 0.5);
+  --color-text-primary: rgba(var(--v-theme-on-surface), 0.87);
+  --color-text-secondary: rgba(var(--v-theme-on-surface), 0.6);
 
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

@@ -15,7 +15,7 @@
       <v-col cols="12" md="10" lg="9">
         <!-- Header -->
         <div class="text-center mb-8">
-          <v-avatar color="teal" size="80" class="mb-4">
+          <v-avatar color="primary" size="80" class="mb-4">
             <v-icon size="48" color="white">mdi-robot-outline</v-icon>
           </v-avatar>
           <h1 class="text-h3 font-weight-bold text-high-emphasis mb-2">
@@ -36,7 +36,7 @@
         <!-- What you get -->
         <v-card class="mb-6" elevation="2">
           <v-card-title class="card-band">
-            <v-icon color="teal" class="mr-2">mdi-database-search-outline</v-icon>
+            <v-icon color="primary" class="mr-2">mdi-database-search-outline</v-icon>
             What you get
           </v-card-title>
           <v-card-text class="pa-6">
@@ -56,7 +56,7 @@
         <!-- Server address -->
         <v-card class="mb-6" elevation="2">
           <v-card-title class="card-band">
-            <v-icon color="teal" class="mr-2">mdi-link-variant</v-icon>
+            <v-icon color="primary" class="mr-2">mdi-link-variant</v-icon>
             Server address
           </v-card-title>
           <v-card-text class="pa-6">
@@ -65,7 +65,7 @@
               <v-btn
                 size="small"
                 variant="tonal"
-                color="teal"
+                color="primary"
                 prepend-icon="mdi-content-copy"
                 @click="copy(endpoint, 'Server address')"
               >

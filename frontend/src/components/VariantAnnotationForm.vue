@@ -812,7 +812,7 @@ defineExpose({
 
 <style scoped>
 .v-list-item {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: rgba(var(--v-theme-on-surface), 0.02);
 }
 
 .variant-annotation-form__item--editing {

@@ -12,7 +12,8 @@
  *   #242424  surface-light (2dp)  — replaces bg-grey-lighten-4
  *   #1A1A1A  surface-dim          — replaces bg-grey-lighten-5
  *
- * Imported once globally from main.js so it covers every view.
+ * Imported once globally from main.js so it covers every view. The
+ * last section holds the matching light-theme text-contrast fixes.
  */
 
 .v-theme--dark .bg-white {
@@ -95,15 +96,13 @@
   color: rgba(255, 255, 255, 0.78) !important;
 }
 
-/* Hero text on dark — the h1 uses text-teal-darken-2 (a dark-green
- * intended for white backgrounds). Flip to the lifted-teal tone of
- * the dark palette so it stays readable on the dark gradient. */
-.v-theme--dark .hero-section h1,
-.v-theme--dark .hero-section .text-teal-darken-2 {
+/* Home hero h1 on dark — lift to the light-teal tone so it reads on the
+ * dark gradient. Scoped to Home: detail pages keep their own title colour. */
+.v-theme--dark .home-container .hero-section h1 {
   color: #80cbc4 !important;
 }
-.v-theme--dark .hero-section p,
-.v-theme--dark .hero-section .text-subtitle-1 {
+.v-theme--dark .home-container .hero-section p,
+.v-theme--dark .home-container .hero-section .text-subtitle-1 {
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
@@ -151,4 +150,57 @@
 .v-theme--dark .visualization-container {
   background-color: #1e1e1e;
   border-radius: 8px;
+}
+
+/* Pastel `bg-*-lighten-5` section headers (cardStyles.js CARD_HEADERS,
+ * About/FAQ section titles) are light islands on dark. Use the raised
+ * dark surface; the header icon keeps the colour coding. Chips excluded
+ * because their pastel fills carry auto-contrasted dark text. */
+.v-theme--dark [class*='bg-'][class*='-lighten-5']:not(.v-chip) {
+  background-color: rgb(var(--v-theme-surface-light)) !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+/* Saturated mid-tone palette colours used as text/icon colour drop to
+ * ~2:1 on #1E1E1E. Lift to their lighten-3 tones (>= 7:1). */
+.v-theme--dark .text-deep-purple {
+  color: #b39ddb !important;
+}
+.v-theme--dark .text-purple {
+  color: #ce93d8 !important;
+}
+.v-theme--dark .text-pink {
+  color: #f48fb1 !important;
+}
+.v-theme--dark .text-indigo {
+  color: #9fa8da !important;
+}
+.v-theme--dark .text-teal,
+.v-theme--dark .text-primary-darken-1 {
+  color: #80cbc4 !important;
+}
+.v-theme--dark .text-blue-darken-2 {
+  color: #90caf9 !important;
+}
+.v-theme--dark .text-green-darken-2,
+.v-theme--dark .text-green-darken-3 {
+  color: #a5d6a7 !important;
+}
+
+/* Light theme: the 500-shade palette colours used as text/icon colour on
+ * white (orange 2.2:1, blue 3.1:1, green 2.8:1, pink 4.3:1). Deepen to
+ * 800-shade equivalents (>= 4.5:1). Dark theme keeps the bright 500s. */
+.v-theme--light .text-orange,
+.v-theme--light .text-orange-darken-2,
+.v-theme--light .text-amber-darken-2 {
+  color: #b45309 !important;
+}
+.v-theme--light .text-blue {
+  color: #1565c0 !important;
+}
+.v-theme--light .text-green {
+  color: #2e7d32 !important;
+}
+.v-theme--light .text-pink {
+  color: #c2185b !important;
 }

@@ -13,7 +13,7 @@
  * Based on ACMG/AMP guidelines for variant interpretation.
  */
 const PATHOGENICITY_VUETIFY_COLORS = {
-  PATHOGENIC: 'red-lighten-1',
+  PATHOGENIC: 'red-darken-2', // white label needs >= 4.5:1
   LIKELY_PATHOGENIC: 'orange-lighten-1',
   UNCERTAIN_SIGNIFICANCE: 'yellow-darken-1',
   VUS: 'yellow-darken-1',
@@ -52,7 +52,7 @@ const PATHOGENICITY_SCORES = {
  * Provides visual distinction between different mutation types.
  */
 const VARIANT_TYPE_COLORS = {
-  SNV: 'purple-lighten-3',
+  SNV: 'purple-lighten-4',
   deletion: 'red-lighten-3',
   duplication: 'blue-lighten-3',
   insertion: 'green-lighten-3',

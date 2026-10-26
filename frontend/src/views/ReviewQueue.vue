@@ -8,7 +8,7 @@
             Records ready for curator review and publication.
           </p>
         </div>
-        <v-chip color="teal" variant="tonal" aria-live="polite">
+        <v-chip color="primary" variant="tonal" aria-live="polite">
           {{ queue.meta.value.total.toLocaleString() }} records
         </v-chip>
       </div>

@@ -49,10 +49,10 @@ export const CARD_HEADERS = {
  * Used for classification badges and chips.
  */
 export const INTERPRETATION_STATUS_COLORS = {
-  CAUSATIVE: 'red',
+  CAUSATIVE: 'red-darken-2',
   CONTRIBUTORY: 'orange',
   CANDIDATE: 'blue',
-  PATHOGENIC: 'red',
+  PATHOGENIC: 'red-darken-2',
   LIKELY_PATHOGENIC: 'orange',
   UNCERTAIN_SIGNIFICANCE: 'grey',
   LIKELY_BENIGN: 'green-lighten-1',
@@ -182,7 +182,7 @@ export const TYPOGRAPHY = {
     relaxed: 1.6,
   },
   // Monospace font stack
-  fontFamilyMono: "'Roboto Mono', 'Consolas', 'Monaco', monospace",
+  fontFamilyMono: "'JetBrains Mono', 'Consolas', monospace",
 };
 
 /**
@@ -192,9 +192,10 @@ export const TYPOGRAPHY = {
 export const COLORS = {
   // Text colors (use with text-{color} classes or CSS vars)
   text: {
-    primary: 'rgba(0, 0, 0, 0.87)', // High emphasis
-    secondary: 'rgba(0, 0, 0, 0.6)', // Medium emphasis
-    disabled: 'rgba(0, 0, 0, 0.38)', // Disabled/hint
+    // Theme-aware: on-surface flips with light/dark.
+    primary: 'rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))',
+    secondary: 'rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity))',
+    disabled: 'rgba(var(--v-theme-on-surface), var(--v-disabled-opacity))',
   },
   // Semantic colors for variants/interpretations
   variant: {
@@ -205,7 +206,7 @@ export const COLORS = {
   },
   // Code background colors
   codeBg: {
-    default: 'rgba(0, 0, 0, 0.06)',
+    default: 'rgba(var(--v-theme-on-surface), 0.06)',
     cNotation: 'rgba(33, 150, 243, 0.1)', // Blue tint
     pNotation: 'rgba(76, 175, 80, 0.1)', // Green tint
   },

@@ -245,6 +245,11 @@ export default {
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
 }
 
+/* Legend colour lives in the dot + tonal tint; label text stays readable. */
+.filter-chip :deep(.v-chip__content) {
+  color: rgb(var(--v-theme-on-surface));
+}
+
 .filter-chip--hidden {
   opacity: 0.45;
 }
@@ -262,7 +267,7 @@ export default {
   margin-left: 6px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  opacity: 0.7;
+  opacity: 0.75;
 }
 
 /* "only" — subtle, reveals on hover/focus of its chip group so the rows stay

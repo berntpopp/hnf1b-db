@@ -28,6 +28,7 @@
           v-bind="menuProps"
           :color="hasActiveFilter ? 'primary' : 'default'"
           class="filter-btn"
+          :aria-label="`Filter by ${title}`"
         >
           <v-icon size="small">
             {{ hasActiveFilter ? 'mdi-filter' : 'mdi-filter-outline' }}
@@ -126,7 +127,7 @@ const hasActiveFilter = computed(() => {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #37474f;
+  color: rgb(var(--v-theme-secondary));
 }
 
 /* Properly sized filter button */

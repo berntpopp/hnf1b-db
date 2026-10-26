@@ -122,7 +122,7 @@
         <!-- Legend -->
         <v-divider class="my-4" />
         <div class="text-caption text-grey mb-2">Organ System Categories:</div>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="d-flex flex-wrap ga-2">
           <v-chip
             v-for="category in ORGAN_SYSTEMS"
             :key="category.value"

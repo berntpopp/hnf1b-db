@@ -1035,7 +1035,7 @@ export default {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.56);
+  background: rgba(var(--v-theme-on-surface), 0.56);
 }
 
 .leave-dialog-card {

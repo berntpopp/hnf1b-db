@@ -10,7 +10,7 @@
     <div>
       <!-- Keyboard-First HPO Quick-Add Bar (#549) -->
       <v-card variant="outlined" class="pa-3 mb-4" density="compact">
-        <div class="d-flex align-center flex-wrap gap-2 mb-2">
+        <div class="d-flex align-center flex-wrap ga-2 mb-2">
           <div class="text-subtitle-2 font-weight-bold d-flex align-center">
             <v-icon size="small" color="primary" class="mr-1">mdi-lightning-bolt</v-icon>
             Quick-Add Phenotype
@@ -21,7 +21,7 @@
           <v-chip size="x-small" variant="tonal" color="grey"> Alt+B/U/R/L = Laterality </v-chip>
         </div>
 
-        <div class="d-flex flex-wrap align-center gap-2">
+        <div class="d-flex flex-wrap align-center ga-2">
           <div class="flex-grow-1" style="min-width: 260px; position: relative">
             <v-text-field
               ref="quickAddInputRef"
@@ -70,7 +70,7 @@
                   </v-list-item-title>
 
                   <template #append>
-                    <div class="d-flex align-center gap-1">
+                    <div class="d-flex align-center ga-1">
                       <v-btn
                         size="x-small"
                         variant="tonal"
@@ -146,7 +146,7 @@
       </div>
 
       <!-- Legend -->
-      <div v-else class="mb-4 d-flex align-center gap-4">
+      <div v-else class="mb-4 d-flex align-center ga-4">
         <div class="text-caption d-flex align-center">
           <v-icon color="grey" size="small" class="mr-1">mdi-help-circle</v-icon>
           Unknown
@@ -261,10 +261,10 @@
         class="mt-4 mb-6"
         data-testid="additional-phenotypes-section"
       >
-        <div class="text-h6 mb-2 d-flex align-center text-teal-darken-2">
-          <v-icon color="teal-darken-2" class="mr-2">mdi-tag-plus-outline</v-icon>
+        <div class="text-h6 mb-2 d-flex align-center text-primary">
+          <v-icon color="primary" class="mr-2">mdi-tag-plus-outline</v-icon>
           Additional Curated Phenotypes
-          <v-chip size="x-small" color="teal-darken-2" variant="flat" class="ml-2">
+          <v-chip size="x-small" color="primary" variant="flat" class="ml-2">
             {{ customPhenotypes.length }}
           </v-chip>
         </div>
@@ -304,7 +304,7 @@
             </v-list-item-subtitle>
 
             <template #append>
-              <div class="d-flex align-center gap-2">
+              <div class="d-flex align-center ga-2">
                 <v-select
                   v-if="showLaterality(feature.type?.id)"
                   :model-value="getModifierValue(feature.type?.id)"
@@ -401,7 +401,7 @@ const SYSTEM_COLORS = {
 };
 
 const SYSTEM_ICONS = {
-  Kidney: 'mdi-kidney',
+  Kidney: 'mdi-water-outline', // MDI has no kidney glyph
   'Urinary tract': 'mdi-water',
   'CKD Stages': 'mdi-format-list-numbered',
   Liver: 'mdi-bacteria-outline',
@@ -933,13 +933,10 @@ defineExpose({
   border-left: 3px solid transparent;
 }
 .phenotype-item:hover {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: rgba(var(--v-theme-on-surface), 0.02);
 }
 .phenotype-column {
   min-height: 100px;
-}
-.gap-4 {
-  gap: 16px;
 }
 .phenotype-item__laterality {
   max-width: 11rem;
@@ -958,6 +955,6 @@ defineExpose({
   cursor: pointer;
 }
 .quick-add-suggestion-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
 }
 </style>

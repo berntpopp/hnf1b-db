@@ -2,7 +2,7 @@
 <template>
   <v-container fluid>
     <div class="d-flex align-center justify-space-between mb-3 flex-wrap ga-2">
-      <h1 class="text-h5 font-weight-bold text-teal-darken-2 mb-0">Aggregations</h1>
+      <h1 class="text-h5 font-weight-bold text-primary mb-0">Aggregations</h1>
       <SavedFiltersMenu
         scope-key="aggregations"
         :current-filters="currentFilterState"
@@ -23,7 +23,12 @@
       <v-col cols="12">
         <v-sheet outlined>
           <v-card>
-            <v-tabs v-model="activeTabLabel" bg-color="primary" show-arrows>
+            <!-- Mobile: reserve the scroll arrows up front; added after measuring they shift the tabs -->
+            <v-tabs
+              v-model="activeTabLabel"
+              bg-color="primary"
+              :show-arrows="$vuetify.display.smAndDown ? 'always' : true"
+            >
               <v-tab v-for="tabDef in AGGREGATION_TABS" :key="tabDef.slug" :value="tabDef.label">
                 {{ tabDef.label }}
               </v-tab>

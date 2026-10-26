@@ -18,7 +18,7 @@
         <v-row justify="center" align="center">
           <v-col cols="12" xl="10">
             <!-- Compact Header with Breadcrumbs -->
-            <div class="d-flex align-center flex-wrap gap-2 mb-2">
+            <div class="d-flex align-center ga-2 mb-2">
               <v-btn
                 icon="mdi-arrow-left"
                 variant="text"
@@ -30,12 +30,12 @@
             </div>
 
             <!-- Title Row with Inline Stats Chips -->
-            <div class="d-flex flex-wrap align-center gap-3">
+            <div class="d-flex flex-wrap align-center ga-3">
               <v-icon color="orange-darken-2" size="large" aria-hidden="true">
                 mdi-book-open-variant
               </v-icon>
               <div class="flex-grow-1">
-                <div class="d-flex flex-wrap align-center gap-2">
+                <div class="d-flex flex-wrap align-center ga-2">
                   <h1 class="text-h6 font-weight-bold text-orange-darken-2 ma-0">
                     Publication Details
                   </h1>
@@ -203,10 +203,10 @@
                       </v-row>
 
                       <!-- Data Summary Card -->
-                      <v-card variant="tonal" color="green-lighten-5" class="mt-6">
+                      <v-card variant="flat" class="mt-6 bg-green-lighten-5">
                         <v-card-text>
-                          <div class="d-flex align-center gap-2">
-                            <v-icon color="green-darken-2">mdi-account-multiple</v-icon>
+                          <div class="d-flex align-center ga-2">
+                            <v-icon color="green-darken-3">mdi-account-multiple</v-icon>
                             <span class="text-body-1 font-weight-medium">
                               {{ pagination.totalRecords }} Individual{{
                                 pagination.totalRecords === 1 ? '' : 's'
@@ -214,7 +214,7 @@
                               in Registry
                             </span>
                           </div>
-                          <div class="text-body-2 text-grey-darken-1 mt-2">
+                          <div class="text-body-2 text-medium-emphasis mt-2">
                             This publication has contributed
                             {{ pagination.totalRecords }} phenopacket record{{
                               pagination.totalRecords === 1 ? '' : 's'
@@ -222,7 +222,7 @@
                             to the HNF1B database.
                           </div>
                           <v-btn
-                            color="green-darken-2"
+                            color="green-darken-3"
                             variant="tonal"
                             size="small"
                             class="mt-3"
@@ -693,7 +693,7 @@ export default {
 
 .hero-section {
   background: linear-gradient(180deg, rgba(251, 140, 0, 0.05) 0%, transparent 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 
 /* Clickable row styling for phenopacket navigation */

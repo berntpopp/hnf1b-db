@@ -37,7 +37,6 @@
               size="small"
               class="feature-chip"
               label
-              :aria-label="chipAriaLabel(feature)"
             >
               <!-- Excluded indicator -->
               <v-icon v-if="feature.excluded" size="x-small" class="mr-1" aria-hidden="true">
@@ -145,7 +144,7 @@
 
       <!-- Summary stats row - only show if there's meaningful data -->
       <div v-if="hasSummaryData" class="summary-row mt-3 pt-2 border-t">
-        <div class="d-flex flex-wrap gap-2 text-caption text-medium-emphasis">
+        <div class="d-flex flex-wrap ga-3 text-caption text-medium-emphasis">
           <span v-if="onsetCategories.prenatal > 0">
             <v-icon size="x-small" class="mr-1">mdi-baby-carriage</v-icon>
             {{ onsetCategories.prenatal }} prenatal
@@ -259,13 +258,6 @@ export default {
     tooltipAriaLabel(feature) {
       const base = `${feature.type.label} - ${feature.type.id}`;
       return feature.excluded ? `${base} (excluded)` : base;
-    },
-
-    chipAriaLabel(feature) {
-      const base = `${feature.type.label} (${feature.type.id})`;
-      return feature.excluded
-        ? `${base} - Excluded - Click to view in HPO Browser`
-        : `${base} - Click to view in HPO Browser`;
     },
 
     getHpoUrl(hpoId) {
@@ -390,11 +382,11 @@ export default {
   --font-size-sm: 11px;
   --font-size-base: 12px;
   --font-size-md: 13px;
-  --font-mono: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
 
   /* Color tokens */
-  --color-text-primary: rgba(0, 0, 0, 0.87);
-  --color-text-secondary: rgba(0, 0, 0, 0.6);
+  --color-text-primary: rgba(var(--v-theme-on-surface), 0.87);
+  --color-text-secondary: rgba(var(--v-theme-on-surface), 0.6);
 
   display: flex;
   flex-wrap: wrap;
@@ -423,7 +415,7 @@ export default {
 .modifier-count {
   font-size: var(--font-size-xs);
   font-weight: 600;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(var(--v-theme-on-surface), 0.1);
   border-radius: 4px;
   padding: 1px 4px;
 }
@@ -473,14 +465,10 @@ export default {
 }
 
 .summary-row {
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 
 .border-t {
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.gap-2 {
-  gap: 12px;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 </style>

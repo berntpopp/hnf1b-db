@@ -2,11 +2,11 @@
   <v-footer
     app
     height="44"
-    class="d-flex align-center justify-center text-caption"
+    class="d-flex align-center justify-space-between text-caption"
     :class="xs ? 'footer-compact px-1' : 'px-4'"
   >
-    <!-- Backend Status -->
-    <div class="d-flex align-center mr-auto">
+    <!-- Backend Status (fixed width: "Checking..." -> "Good | 132ms" must not move the links) -->
+    <div class="footer-status d-flex align-center">
       <v-btn
         variant="text"
         size="small"
@@ -24,48 +24,11 @@
       </v-btn>
     </div>
 
-    <!-- Footer Links -->
-    <div class="d-flex align-center ml-auto">
-      <!-- Internal Page Links (About, FAQ) -->
-      <v-tooltip location="top" text="About HNF1B Database" aria-label="About HNF1B Database">
-        <template #activator="{ props }">
-          <v-btn
-            v-bind="props"
-            to="/about"
-            icon
-            variant="text"
-            size="small"
-            class="mx-1"
-            aria-label="About"
-          >
-            <v-icon size="small">mdi-information-outline</v-icon>
-          </v-btn>
-        </template>
-      </v-tooltip>
-
-      <v-tooltip
-        location="top"
-        text="Frequently Asked Questions"
-        aria-label="Frequently Asked Questions"
-      >
-        <template #activator="{ props }">
-          <v-btn
-            v-bind="props"
-            to="/faq"
-            icon
-            variant="text"
-            size="small"
-            class="mx-1"
-            aria-label="FAQ"
-          >
-            <v-icon size="small">mdi-frequently-asked-questions</v-icon>
-          </v-btn>
-        </template>
-      </v-tooltip>
-
-      <v-divider vertical class="mx-1" />
-
-      <!-- External Links -->
+    <!-- Footer Links (fills the remaining width so its box never moves) -->
+    <div class="d-flex align-center justify-end flex-grow-1">
+      <!-- External links first: they arrive from a runtime config fetch, and
+           inserting them at the left of this right-anchored group moves
+           nothing already painted (no layout shift). -->
       <v-btn
         v-for="link in footerLinks"
         :key="link.id"
@@ -99,6 +62,45 @@
             aria-label="MCP access"
           >
             <v-icon size="small">mdi-robot-outline</v-icon>
+          </v-btn>
+        </template>
+      </v-tooltip>
+
+      <v-divider vertical class="mx-1" />
+
+      <!-- Internal Page Links (About, FAQ) -->
+      <v-tooltip location="top" text="About HNF1B Database" aria-label="About HNF1B Database">
+        <template #activator="{ props }">
+          <v-btn
+            v-bind="props"
+            to="/about"
+            icon
+            variant="text"
+            size="small"
+            class="mx-1"
+            aria-label="About"
+          >
+            <v-icon size="small">mdi-information-outline</v-icon>
+          </v-btn>
+        </template>
+      </v-tooltip>
+
+      <v-tooltip
+        location="top"
+        text="Frequently Asked Questions"
+        aria-label="Frequently Asked Questions"
+      >
+        <template #activator="{ props }">
+          <v-btn
+            v-bind="props"
+            to="/faq"
+            icon
+            variant="text"
+            size="small"
+            class="mx-1"
+            aria-label="FAQ"
+          >
+            <v-icon size="small">mdi-frequently-asked-questions</v-icon>
           </v-btn>
         </template>
       </v-tooltip>
@@ -304,6 +306,15 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.footer-status {
+  flex: 0 0 auto;
+}
+@media (min-width: 600px) {
+  .footer-status {
+    min-width: 11rem;
+  }
+}
+
 .status-text {
   font-size: 0.75rem;
 }

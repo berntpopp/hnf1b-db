@@ -1,8 +1,9 @@
 <template>
-  <div class="saved-filters-menu-root d-inline-flex align-center ga-1">
+  <div class="saved-filters-menu-root d-inline-flex flex-wrap align-center ga-1">
     <!-- Copy Cohort Link Button -->
     <v-tooltip
       :text="copied ? 'Cohort link copied to clipboard!' : 'Copy shareable cohort link'"
+      :aria-label="copied ? 'Cohort link copied to clipboard!' : 'Copy shareable cohort link'"
       location="bottom"
     >
       <template #activator="{ props: tooltipProps }">

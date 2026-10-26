@@ -31,7 +31,13 @@
       <v-spacer />
 
       <!-- Results count badge -->
-      <v-chip v-if="showResultCount" color="teal" size="small" variant="tonal" class="result-chip">
+      <v-chip
+        v-if="showResultCount"
+        color="primary"
+        size="small"
+        variant="tonal"
+        class="result-chip"
+      >
         <v-icon start size="x-small">mdi-database</v-icon>
         {{ resultCount.toLocaleString() }} {{ resultLabel }}
       </v-chip>
@@ -115,7 +121,7 @@ function onClearSearch() {
 .table-toolbar {
   padding: 12px 16px;
   background-color: rgba(var(--v-theme-on-surface), 0.02);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 
 .toolbar-row {

@@ -114,7 +114,7 @@ function formatTimestamp(timestamp) {
 .history-tab__table td {
   padding: 12px 8px;
   text-align: left;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   vertical-align: top;
 }
 </style>

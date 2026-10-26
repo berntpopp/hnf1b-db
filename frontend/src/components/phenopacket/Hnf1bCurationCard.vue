@@ -5,12 +5,12 @@
       class="text-subtitle-1 py-2 bg-teal-lighten-5 d-flex align-center justify-space-between flex-wrap ga-2"
     >
       <div class="d-flex align-center ga-2">
-        <v-icon color="teal-darken-2" size="small">mdi-database-check-outline</v-icon>
+        <v-icon color="primary" size="small">mdi-database-check-outline</v-icon>
         <span class="font-weight-medium">Curation Profile</span>
       </div>
       <v-chip
         v-if="curation.cohort"
-        color="teal"
+        color="primary"
         size="small"
         variant="tonal"
         class="text-capitalize"

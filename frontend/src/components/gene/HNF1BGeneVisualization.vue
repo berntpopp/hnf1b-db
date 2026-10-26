@@ -124,7 +124,7 @@
               <v-icon left size="small"> mdi-rectangle-outline </v-icon>
               Small Variant (&lt;50bp)
             </v-chip>
-            <v-chip v-if="spliceVariants.length > 0" size="small" color="teal">
+            <v-chip v-if="spliceVariants.length > 0" size="small" color="primary">
               <v-icon left size="small"> mdi-rhombus </v-icon>
               Splice Variant
             </v-chip>
