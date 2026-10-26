@@ -5,10 +5,46 @@ import path from 'path';
 import vuetify from 'vite-plugin-vuetify';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
+import fs from 'fs';
+
+// Build-only: strip the ~7,400 unused `.mdi-*::before` rules from the
+// render-blocking MDI stylesheet, keeping only names referenced in src/,
+// public/config/ and Vuetify's own mdi aliases.
+// ponytail: icon names built at runtime (e.g. `mdi-${x}`) would be dropped;
+// none exist today. Switch to @mdi/js SVG icons if that ever changes.
+function mdiSubset() {
+  const roots = ['src', 'public/config', 'node_modules/vuetify/lib/iconsets/mdi.js'];
+  const used = new Set();
+  const scan = (p) => {
+    if (fs.statSync(p).isDirectory()) {
+      for (const f of fs.readdirSync(p)) scan(path.join(p, f));
+    } else {
+      for (const m of fs.readFileSync(p, 'utf8').matchAll(/mdi-[a-z0-9]+(?:-[a-z0-9]+)*/g)) {
+        used.add(m[0]);
+      }
+    }
+  };
+  return {
+    name: 'mdi-subset',
+    apply: 'build',
+    buildStart() {
+      roots.forEach((r) => scan(path.resolve(__dirname, r)));
+      if (used.size < 50) this.error(`mdi-subset: only ${used.size} icons found, scan is broken`);
+    },
+    transform(code, id) {
+      if (!id.includes('materialdesignicons.css')) return null;
+      return code.replace(
+        /\.(mdi-[a-z0-9-]+)::before \{\s*content: "[^"]+";\s*\}\s*/g,
+        (rule, name) => (used.has(name) ? rule : '')
+      );
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     vue(),
+    mdiSubset(),
     // Restore Material Design 2 typography (Roboto + larger heading scale +
     // uppercase buttons) so Vuetify 4's MD3 defaults don't regress the
     // current production look. Overrides live in src/styles/settings.scss.
@@ -115,7 +151,9 @@ export default defineConfig({
         manualChunks(id) {
           // Heavy visualization libraries - lazy loaded on demand
           if (id.includes('chart.js')) return 'charts';
-          if (id.includes('ngl')) return 'ngl-viewer';
+          // Anchor to the package dir: a bare includes('ngl') also caught any
+          // path containing "single"/"angle" and pulled this chunk into the entry.
+          if (/[\\/]node_modules[\\/]ngl[\\/]/.test(id)) return 'ngl-viewer';
 
           // D3 modules - used for visualizations
           if (id.includes('d3-') || id.includes('/d3/')) return 'd3-modules';
@@ -149,8 +187,8 @@ export default defineConfig({
           // File utilities - only needed for downloads
           if (id.includes('file-saver')) return 'file-utils';
 
-          // Other node_modules
-          if (id.includes('node_modules')) return 'vendor';
+          // No catch-all vendor bucket: it merged route-only deps (e.g. the
+          // curator TipTap editor) into a chunk every page preloads.
         },
       },
     },
