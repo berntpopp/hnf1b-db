@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-10-26
+
+### Added
+- Light/dark theme toggle in the app bar again (it was removed as dead code in 0.3.1); new visitors follow their OS setting until they choose.
+- Unit test that fails on Material Design Icon names missing from `@mdi/font`.
+
+### Changed
+- Fonts (Inter, JetBrains Mono) are self-hosted instead of loaded from Google Fonts: no render-blocking third-party request, no visitor IPs sent to Google, and compatible with the production CSP.
+- Light-theme brand primary moves to Teal 700 (`#00796B`) and semantic info/success/warning to 700–800 shades so text and tonal components pass WCAG AA.
+- Production bundle no longer preloads route-only code (3D structure viewer, curator editor) on every page; only the ~240 icon rules in use ship in the render-blocking stylesheet.
+
+### Fixed
+- Dark mode readability across all pages: hard-coded light colours (footer, card headers, labels, variant page hero/background, chips, legends) are now theme-aware. Zero WCAG AA contrast failures across 15 pages in both themes.
+- Layout shift on load (registry tables, pagination, footer, detail-page heroes, breadcrumbs, scrollbar appearance) — CLS ≤ 0.008.
+- Missing chip spacing (`gap-N` is not a Vuetify utility; now `ga-N`), headings falling back to an unloaded Roboto, and three icons that rendered blank.
+- Accessibility: unnamed tooltips and icon buttons, label-in-name mismatches, invalid list semantics in search results, diff lines that relied on colour alone, and horizontal overflow at 320 px. Lighthouse accessibility 100 on desktop.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added
