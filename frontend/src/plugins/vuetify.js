@@ -32,24 +32,32 @@ export const LIGHT_THEME = 'light';
 export const DARK_THEME = 'dark';
 
 // Light theme — current production palette.
-// Primary: #009688 (Teal)
+// Primary: #00796B (Teal 700). Teal 500 (#009688) is only 3.5:1 as text
+// on white, so the brand uses the 700 shade to pass WCAG AA (5.3:1).
 // Secondary: #37474F (Slate)
 // Accent: #FF8A65 (Soft Coral)
 const hnf1bTheme = {
   dark: false,
+  // Vuetify's 0.60 stacks with 0.87 text on labels/subtitles (4.3:1 on
+  // white); 0.68 lifts them past WCAG AA.
+  variables: {
+    'medium-emphasis-opacity': 0.68,
+  },
   colors: {
     background: '#F5F7FA', // Soft off-white for depth
     surface: '#FFFFFF',
-    primary: '#009688',
-    'primary-darken-1': '#00796B',
-    'primary-darken-2': '#00695C',
+    primary: '#00796B',
+    'primary-darken-1': '#00695C',
+    'primary-darken-2': '#004D40',
     secondary: '#37474F',
     'secondary-darken-1': '#263238',
     accent: '#FF8A65',
     error: '#B00020',
-    info: '#2196F3',
-    success: '#4CAF50',
-    warning: '#FB8C00',
+    // 700-800 shades: tonal alerts/chips render these as text on white,
+    // where the 500 shades fall to 2.6-3.1:1.
+    info: '#1565C0',
+    success: '#2E7D32',
+    warning: '#B45309',
   },
 };
 
@@ -82,6 +90,8 @@ const hnf1bThemeDark = {
     // Desaturated teal keeps the brand but passes AA on #1E1E1E
     // (contrast ratio ≈ 4.9 for large text against surface).
     primary: '#4DB6AC',
+    // Vuetify picks white on this light teal (2.4:1); force dark text (9:1).
+    'on-primary': '#000000',
     'primary-darken-1': '#00897B',
     'primary-darken-2': '#00695C',
     secondary: '#B0BEC5',
