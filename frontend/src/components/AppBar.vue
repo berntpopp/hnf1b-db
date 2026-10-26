@@ -1,5 +1,5 @@
 <template>
-  <v-app-bar app color="teal" dark elevation="2" style="z-index: 1009">
+  <v-app-bar app color="teal-darken-2" dark elevation="2" style="z-index: 1009">
     <v-container fluid class="d-flex align-center px-2 px-sm-4">
       <!-- Mobile: Hamburger Menu (visible < 960px) -->
       <v-app-bar-nav-icon
@@ -103,6 +103,9 @@
 
       <v-spacer />
 
+      <!-- Theme switcher (always available, no auth required) -->
+      <ThemeSwitcher class="ml-2" />
+
       <!-- User Menu (all screen sizes) -->
       <div v-if="authStore.isAuthenticated" class="ml-4">
         <v-menu location="bottom">
@@ -176,6 +179,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { useAuthStore } from '@/stores/authStore';
 import { navigationItems } from '@/config/navigationItems';
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue';
 
 // Emit toggle-drawer event for mobile menu
 defineEmits(['toggle-drawer']);
@@ -194,7 +198,7 @@ const tooltipText = 'HNF1B Database: Curated clinical & genetic variants';
  * Responsive logo width based on screen size
  */
 const logoWidth = computed(() => {
-  if (xs.value) return 140; // Extra small screens
+  if (xs.value) return 120; // Extra small screens (fits 320px with menu, theme, login)
   if (smAndDown.value) return 160; // Small screens
   return 184; // Default (medium and up)
 });
@@ -339,6 +343,7 @@ const handleLogout = async () => {
 
 /* Active route indicator */
 .v-btn--active {
-  background-color: rgba(255, 255, 255, 0.1);
+  /* Darken rather than lighten so white label stays >= 4.5:1 */
+  background-color: rgba(0, 0, 0, 0.18);
 }
 </style>

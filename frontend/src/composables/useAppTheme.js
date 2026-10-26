@@ -43,9 +43,9 @@ function readStoredPreference() {
   if (stored === 'light' || stored === LIGHT_THEME) return 'light';
   if (stored === 'dark' || stored === DARK_THEME) return 'dark';
   if (stored === 'system') return 'system';
-  // Default to light (brand choice). Users who want system-follow can
-  // pick it explicitly; see ThemeSwitcher for the entry point.
-  return 'light';
+  // Unset → follow the OS (must match index.html boot script and
+  // resolveInitialTheme in vuetify.js, or the first paint flips).
+  return 'system';
 }
 
 function systemPrefersDark() {

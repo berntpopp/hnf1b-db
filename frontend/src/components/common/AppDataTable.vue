@@ -64,6 +64,15 @@
         :mobile="isMobile"
         hover
       >
+        <!-- Desktop first load: reserve the page's row height so the
+             pagination below doesn't jump when rows arrive (CLS guard). -->
+        <template v-if="!$slots.loading" #loading>
+          <v-skeleton-loader
+            type="table-row-divider@10"
+            class="table-skeleton"
+            :style="{ height: skeletonCount * rowHeight + 'px' }"
+          />
+        </template>
         <!-- Pass through all slots except internal ones -->
         <template v-for="(_, name) in $slots" :key="name" #[name]="slotData">
           <slot v-if="!internalSlots.includes(name)" :name="name" v-bind="slotData || {}" />
@@ -80,6 +89,15 @@
         :mobile="isMobile"
         hover
       >
+        <!-- Desktop first load: reserve the page's row height so the
+             pagination below doesn't jump when rows arrive (CLS guard). -->
+        <template v-if="!$slots.loading" #loading>
+          <v-skeleton-loader
+            type="table-row-divider@10"
+            class="table-skeleton"
+            :style="{ height: skeletonCount * rowHeight + 'px' }"
+          />
+        </template>
         <!-- Pass through all slots except internal ones -->
         <template v-for="(_, name) in $slots" :key="name" #[name]="slotData">
           <slot v-if="!internalSlots.includes(name)" :name="name" v-bind="slotData || {}" />
@@ -129,6 +147,14 @@ const props = defineProps({
   mobileSkeletonHeight: {
     type: Number,
     default: 200,
+  },
+  /**
+   * Height (px) of one desktop row; with the page size it sizes the loading
+   * placeholder. 36 matches compact rows with x-small chips.
+   */
+  rowHeight: {
+    type: Number,
+    default: 36,
   },
 });
 
@@ -283,6 +309,12 @@ const internalSlots = ['title-actions', 'toolbar', 'filters'];
   overflow-x: hidden; /* never horizontal-scroll on mobile */
   background: rgb(var(--v-theme-background));
   padding: 4px 0;
+}
+
+/* Desktop loading placeholder: clip the skeleton rows to the reserved height */
+.table-skeleton {
+  overflow: hidden;
+  background: transparent;
 }
 
 /* Loading skeletons that reserve the cards' height (CLS guard) */

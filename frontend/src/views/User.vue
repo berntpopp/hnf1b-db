@@ -5,7 +5,7 @@
       <v-col cols="12">
         <v-card elevation="2" rounded="lg">
           <v-card-text class="pa-6">
-            <div class="d-flex flex-column flex-sm-row align-center gap-4">
+            <div class="d-flex flex-column flex-sm-row align-center ga-4">
               <!-- Avatar -->
               <v-avatar :color="getRoleColor(authStore.user?.role)" size="96">
                 <span class="text-h3 font-weight-bold text-white">
@@ -18,7 +18,7 @@
                 <h1 class="text-h4 font-weight-bold mb-2">
                   {{ authStore.user?.full_name || authStore.user?.username }}
                 </h1>
-                <div class="d-flex flex-wrap gap-2 justify-center justify-sm-start">
+                <div class="d-flex flex-wrap ga-2 justify-center justify-sm-start">
                   <v-chip
                     :color="getRoleColor(authStore.user?.role)"
                     variant="flat"
@@ -46,7 +46,7 @@
               </div>
 
               <!-- Quick Actions -->
-              <div class="d-flex flex-column gap-2">
+              <div class="d-flex flex-column ga-2">
                 <v-btn
                   color="primary"
                   variant="elevated"
@@ -171,7 +171,7 @@
                   Account Status
                 </v-list-item-title>
                 <v-list-item-subtitle>
-                  <div class="d-flex gap-2 mt-1">
+                  <div class="d-flex ga-2 mt-1">
                     <v-chip
                       :color="authStore.user?.is_active ? 'success' : 'error'"
                       size="small"
@@ -219,7 +219,7 @@
                   {{ category.permissions.length }}
                 </v-chip>
               </div>
-              <div class="d-flex flex-wrap gap-2">
+              <div class="d-flex flex-wrap ga-2">
                 <v-chip
                   v-for="permission in category.permissions"
                   :key="permission"

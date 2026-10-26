@@ -16,7 +16,7 @@
     :class="
       mobile
         ? 'app-pagination--mobile flex-column flex-wrap justify-center ga-1'
-        : 'justify-end flex-wrap'
+        : 'justify-space-between flex-wrap'
     "
   >
     <!-- Meta: items-per-page selector + range text -->
@@ -39,14 +39,19 @@
       </div>
 
       <!-- Range text -->
-      <span class="text-caption font-weight-medium" :class="mobile ? '' : 'mx-4'">
+      <span class="pg-range text-caption font-weight-medium" :class="mobile ? '' : 'mx-4'">
         {{ rangeText }}
       </span>
     </div>
 
-    <!-- Navigation buttons -->
-    <nav aria-label="Pagination Navigation" :class="mobile ? 'order-1' : ''">
-      <ul class="d-flex align-center justify-center pa-0 ma-0" style="list-style: none; gap: 2px">
+    <!-- Navigation buttons. On desktop the nav fills the row and right-aligns its
+         buttons, so its box doesn't move when page numbers arrive (CLS). -->
+    <nav aria-label="Pagination Navigation" :class="mobile ? 'order-1' : 'flex-grow-1'">
+      <ul
+        class="d-flex align-center pa-0 ma-0"
+        :class="mobile ? 'justify-center' : 'justify-end'"
+        style="list-style: none; gap: 2px"
+      >
         <!-- First page button -->
         <li>
           <v-btn
@@ -285,10 +290,16 @@ const rangeText = computed(() => {
 </script>
 
 <style scoped>
+/* Fixed-width range text: "0-0 of 0" -> "1-10 of 865" must not push the nav */
+.pg-range {
+  min-width: 13ch;
+  font-variant-numeric: tabular-nums;
+}
+
 .app-pagination {
   min-height: 52px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  background: rgba(var(--v-theme-on-surface), 0.02);
 }
 
 .items-per-page-select {

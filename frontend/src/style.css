@@ -3,14 +3,20 @@
 
 body {
   margin: 0;
-  min-width: 320px;
   min-height: 100vh;
   font-family:
-    'Inter',
+    'Inter Variable',
     system-ui,
     -apple-system,
     sans-serif !important;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Vuetify typography (text-h*, buttons, fields) reads these; without them
+   headings fall back to an unloaded Roboto. */
+:root {
+  --v-font-body: 'Inter Variable', system-ui, -apple-system, sans-serif;
+  --v-font-heading: var(--v-font-body);
 }
 
 /* Monospace for data */
@@ -22,28 +28,25 @@ body {
   width: 100%;
 }
 
+/* Reserve the scrollbar track so content doesn't jump sideways when a page
+   grows past the viewport mid-load. */
+html {
+  scrollbar-gutter: stable;
+}
+
 /* ==================== PERFORMANCE OPTIMIZATIONS ==================== */
 
-/* Font-display: swap for Material Design Icons to prevent FOIT
-   This allows text to display immediately while the icon font loads.
-   Lighthouse recommends this for ~790ms FCP improvement.
-   This overrides the @mdi/font CSS which doesn't include font-display. */
+/* Icon font: `block` (not `swap`) so icons stay invisible for the few ms
+   before the font arrives instead of flashing fallback-font tofu boxes.
+   Overrides the @mdi/font @font-face, which declares no font-display. */
 @font-face {
   font-family: 'Material Design Icons';
-  font-display: swap;
+  font-display: block;
   src:
     url('@mdi/font/fonts/materialdesignicons-webfont.woff2') format('woff2'),
     url('@mdi/font/fonts/materialdesignicons-webfont.woff') format('woff');
   font-weight: normal;
   font-style: normal;
-}
-
-/* Content visibility for below-fold sections - skip rendering off-screen content */
-.v-data-table,
-.phenopacket-details,
-.aggregations-dashboard {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 500px;
 }
 
 /* Skip rendering hidden tabs entirely */
@@ -58,20 +61,11 @@ body {
   --v-chip-tonal-opacity: 0.2;
 }
 
-/* Improve muted text readability (increase from 0.6 to 0.7) */
-.text-medium-emphasis {
-  opacity: 0.7;
-}
-
-/* Ensure text-grey has sufficient contrast (WCAG AA requires 4.5:1) */
-.text-grey {
-  color: #616161 !important;
-  /* Darker grey for better contrast */
-}
-
-/* Improve text-caption contrast */
-.text-caption {
-  color: #424242;
+/* Vuetify's text-grey (#9E9E9E) fails AA on white; derive from the theme's
+   on-surface so it passes in light (~7:1) and dark (~8:1) alike. */
+.text-grey,
+.text-grey-darken-1 {
+  color: rgba(var(--v-theme-on-surface), 0.68) !important;
 }
 
 /* Make links distinguishable without color alone */
@@ -168,4 +162,27 @@ a:not(.v-btn):not(.v-chip):not(.v-list-item) {
   .v-application .text-caption {
     font-size: 0.75rem;
   }
+}
+
+/* ==================== LAYOUT STABILITY (CLS) ==================== */
+/* Chip skeletons stand in for size="small" chips (24px); Vuetify's 32px
+   bone made hero rows shrink when the real chips arrived. */
+.v-skeleton-loader__chip {
+  height: 24px;
+  margin: 0;
+  border-radius: 12px;
+}
+
+/* Breadcrumbs stay on one line: the long current item ("Loading..." ->
+   record id) truncates instead of wrapping onto a second line. */
+.v-breadcrumbs {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.v-breadcrumbs-item--disabled {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
 }

@@ -177,7 +177,7 @@ const TYPE_ICONS = {
   Gene: { icon: 'mdi-dna', color: 'primary' },
   'Gene Feature': { icon: 'mdi-creation', color: 'purple' },
   Variant: { icon: 'mdi-flash', color: 'error' },
-  Phenopacket: { icon: 'mdi-account', color: 'teal' },
+  Phenopacket: { icon: 'mdi-account', color: 'primary' },
   Publication: { icon: 'mdi-book-open-page-variant', color: 'orange' },
 };
 const iconFor = (type) => TYPE_ICONS[type] ?? { icon: 'mdi-magnify', color: 'grey' };

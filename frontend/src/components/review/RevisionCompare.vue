@@ -36,7 +36,7 @@
           <v-chip color="primary" size="small" variant="tonal" data-testid="compare-candidate-chip">
             Candidate Revision
           </v-chip>
-          <v-chip color="teal" size="small" variant="tonal">
+          <v-chip color="primary" size="small" variant="tonal">
             {{ changes.length }} change{{ changes.length === 1 ? '' : 's' }}
           </v-chip>
         </div>
@@ -305,11 +305,11 @@ const candidateLines = computed(() =>
 }
 
 .compare-column--baseline {
-  border-left: 3px solid rgb(var(--v-theme-secondary));
+  border-color: rgba(var(--v-theme-secondary), 0.5);
 }
 
 .compare-column--candidate {
-  border-left: 3px solid rgb(var(--v-theme-primary));
+  border-color: rgba(var(--v-theme-primary), 0.6);
 }
 
 .empty-baseline-placeholder {
@@ -341,12 +341,24 @@ const candidateLines = computed(() =>
 
 .json-line--added {
   background-color: rgba(var(--v-theme-success), 0.15);
-  border-left: 3px solid rgb(var(--v-theme-success));
 }
 
 .json-line--removed {
   background-color: rgba(var(--v-theme-error), 0.15);
-  border-left: 3px solid rgb(var(--v-theme-error));
+}
+
+/* Diff marker gutter so added/removed isn't conveyed by colour alone */
+.json-line::before {
+  content: ' ';
+  width: 1ch;
+  margin-right: 0.5ch;
+  flex: none;
+}
+.json-line--added::before {
+  content: '+';
+}
+.json-line--removed::before {
+  content: '\2212';
 }
 
 .json-line__number {

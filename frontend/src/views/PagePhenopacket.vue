@@ -7,7 +7,7 @@
         <v-row justify="center" align="center">
           <v-col cols="12" xl="10">
             <!-- Compact Header with Breadcrumbs + Title + Stats inline -->
-            <div class="d-flex align-center flex-wrap gap-2 mb-2">
+            <div class="d-flex align-center ga-2 mb-2">
               <v-btn
                 icon="mdi-arrow-left"
                 variant="text"
@@ -19,19 +19,21 @@
             </div>
 
             <!-- Title Row with Inline Stats Chips -->
-            <div class="d-flex flex-wrap align-center gap-3">
-              <v-icon color="teal-darken-2" size="large" aria-hidden="true">
-                mdi-account-details
-              </v-icon>
+            <div class="d-flex flex-wrap align-center ga-3">
+              <v-icon color="primary" size="large" aria-hidden="true"> mdi-account-details </v-icon>
               <div class="flex-grow-1">
-                <div class="d-flex flex-wrap align-center gap-2">
-                  <h1 class="text-h6 font-weight-bold text-teal-darken-2 ma-0">
-                    Individual Details
-                  </h1>
-                  <!-- Loading skeleton -->
+                <div class="d-flex flex-wrap align-center ga-2">
+                  <h1 class="text-h6 font-weight-bold text-primary ma-0">Individual Details</h1>
+                  <!-- Mirrors the loaded chip set (id, sex, age, HPO, variant) so the
+                       row wraps the same way and nothing shifts on load. -->
                   <template v-if="loading">
-                    <v-skeleton-loader type="chip" width="80" class="ma-0" />
-                    <v-skeleton-loader type="chip" width="60" class="ma-0" />
+                    <v-skeleton-loader
+                      v-for="(w, i) in [200, 80, 64, 64, 80]"
+                      :key="i"
+                      type="chip"
+                      :width="w"
+                      class="ma-0"
+                    />
                   </template>
                   <!-- Loaded: Inline Stats Chips -->
                   <template v-else-if="phenopacket">
@@ -99,7 +101,7 @@
 
           <!-- Wave 7/D.1: State badge + editing banner + transition menu (curator/admin only) -->
           <template v-if="phenopacketMeta && authStore.isCurator">
-            <div class="d-flex align-center gap-2 mb-3">
+            <div class="d-flex align-center ga-2 mb-3">
               <StateBadge :state="effectiveState" />
               <TransitionMenu
                 v-if="transitionCapabilities.length"
@@ -131,13 +133,11 @@
           <v-card v-if="phenopacket" variant="outlined" class="border-opacity-12" rounded="lg">
             <!-- Action Bar -->
             <div class="d-flex align-center flex-wrap px-4 py-2 bg-grey-lighten-4 border-bottom">
-              <v-icon color="teal-darken-2" class="mr-2" aria-hidden="true">
-                mdi-file-document
-              </v-icon>
+              <v-icon color="primary" class="mr-2" aria-hidden="true"> mdi-file-document </v-icon>
               <span class="text-h6 font-weight-medium">Phenopacket Data</span>
               <v-spacer />
               <v-btn
-                color="teal-darken-2"
+                color="primary"
                 prepend-icon="mdi-download"
                 variant="tonal"
                 size="small"
@@ -162,7 +162,7 @@
               <v-btn
                 v-if="canEdit"
                 data-testid="clone-cohort-btn"
-                color="teal-darken-2"
+                color="primary"
                 prepend-icon="mdi-content-copy"
                 variant="tonal"
                 size="small"
@@ -188,7 +188,7 @@
             <!-- Tabs for different views -->
             <v-tabs
               v-model="activeTab"
-              color="teal-darken-2"
+              color="primary"
               align-tabs="start"
               class="px-4"
               aria-label="Phenopacket data sections"
@@ -264,7 +264,7 @@
                       <v-spacer />
                       <v-btn
                         size="small"
-                        color="teal-darken-2"
+                        color="primary"
                         variant="tonal"
                         prepend-icon="mdi-content-copy"
                         aria-label="Copy JSON to clipboard"
@@ -295,7 +295,7 @@
             <v-card-text class="text-center py-12">
               <v-progress-circular
                 indeterminate
-                color="teal-darken-2"
+                color="primary"
                 size="64"
                 aria-label="Loading phenopacket data"
               />
@@ -1038,23 +1038,15 @@ export default {
   --hero-start: #e0f2f1;
   --hero-mid: #b2dfdb;
   --hero-end: #f5f7fa;
-  --hero-border: rgba(0, 0, 0, 0.05);
+  --hero-border: rgba(var(--v-theme-on-surface), 0.05);
 }
 
 .border-bottom {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
 }
 
 .border-opacity-12 {
-  border-color: rgba(0, 0, 0, 0.12) !important;
-}
-
-.gap-2 {
-  gap: 8px;
-}
-
-.gap-3 {
-  gap: 12px;
+  border-color: rgba(var(--v-theme-on-surface), 0.12) !important;
 }
 
 .json-display {
@@ -1131,7 +1123,7 @@ export default {
    dark mode. teal-lighten-3 against #102a2b yields ~8.4:1 — well above 4.5:1. */
 .v-theme--dark .phenopacket-container .hero-section h1,
 .v-theme--dark .phenopacket-container .hero-section .v-tab,
-.v-theme--dark .phenopacket-container .hero-section .text-teal-darken-2 {
+.v-theme--dark .phenopacket-container .hero-section .text-primary {
   color: rgb(178, 223, 219) !important;
 }
 </style>

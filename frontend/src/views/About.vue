@@ -14,7 +14,7 @@
       <v-col cols="12" md="10" lg="8">
         <!-- Loading State -->
         <div v-if="loading" class="text-center py-12">
-          <v-progress-circular indeterminate color="teal" size="64" />
+          <v-progress-circular indeterminate color="primary" size="64" />
           <p class="mt-4 text-grey-darken-1">Loading content...</p>
         </div>
 
@@ -27,7 +27,7 @@
         <template v-else-if="content">
           <!-- Page Header -->
           <div class="text-center mb-8">
-            <v-avatar color="teal" size="80" class="mb-4">
+            <v-avatar color="primary" size="80" class="mb-4">
               <v-icon size="48" color="white">{{ content.meta.icon }}</v-icon>
             </v-avatar>
             <h1 class="text-h3 font-weight-bold text-grey-darken-3 mb-2">

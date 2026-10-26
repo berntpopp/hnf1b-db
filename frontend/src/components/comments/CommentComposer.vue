@@ -223,7 +223,7 @@ onBeforeUnmount(() => editor.value?.destroy());
 
 <style scoped>
 .composer-editor {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 4px;
   padding: 12px;
   min-height: 120px;

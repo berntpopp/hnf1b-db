@@ -134,7 +134,7 @@
         <v-card-text class="py-2">
           <!-- Log Header -->
           <div class="d-flex align-center justify-space-between mb-1">
-            <div class="d-flex align-center gap-2">
+            <div class="d-flex align-center ga-2">
               <v-chip :color="getLevelColor(log.level)" size="x-small" variant="flat">
                 {{ log.level }}
               </v-chip>
@@ -280,14 +280,10 @@ const hasContext = (item) => {
 .context-data {
   font-size: 0.75rem;
   font-family: 'Courier New', monospace;
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
   padding: 8px;
   border-radius: 4px;
   overflow-x: auto;
   max-height: 200px;
-}
-
-.gap-2 {
-  gap: 8px;
 }
 </style>

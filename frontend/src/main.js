@@ -5,6 +5,11 @@ import { createHead } from '@unhead/vue/client';
 import App from './App.vue';
 import router from './router';
 import vuetify from './plugins/vuetify';
+// Self-hosted fonts: no render-blocking third-party CSS, no visitor IPs sent
+// to Google (GDPR), and compatible with the prod CSP (font-src 'self').
+import '@fontsource-variable/inter';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
 // Import app styles AFTER MDI to allow font-display override
 import './style.css';
 // Dark-theme utility-class overrides (gated by .v-theme--dark, no-op

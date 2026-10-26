@@ -12,7 +12,7 @@
         >
           New phenopacket
         </v-chip>
-        <v-chip v-else color="teal" size="small" variant="tonal">
+        <v-chip v-else color="primary" size="small" variant="tonal">
           {{ changes.length }} change{{ changes.length === 1 ? '' : 's' }} vs public head
         </v-chip>
       </div>

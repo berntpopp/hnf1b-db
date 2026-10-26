@@ -2,7 +2,7 @@
 <template>
   <v-card class="protein-viz-card">
     <v-card-title class="text-h6 bg-grey-lighten-4">
-      <v-icon left color="secondary"> mdi-protein </v-icon>
+      <v-icon left color="secondary"> mdi-hexagon-multiple-outline </v-icon>
       HNF1B Protein Domains (NP_000449.3, 557 aa)
       <v-tooltip location="bottom" aria-label="View protein in UniProt database">
         <template #activator="{ props }">
@@ -878,6 +878,11 @@ export default {
 </script>
 
 <style scoped>
+/* Tonal domain chips: tint carries the domain colour, label stays legible. */
+.domain-chip.v-chip--variant-tonal :deep(.v-chip__content) {
+  color: rgb(var(--v-theme-on-surface));
+}
+
 .protein-viz-card {
   margin-bottom: 16px;
 }

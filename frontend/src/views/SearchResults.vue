@@ -3,8 +3,13 @@
     <!-- Header -->
     <v-row>
       <v-col cols="12">
-        <div class="d-flex align-center gap-4">
-          <v-btn icon="mdi-arrow-left" variant="text" @click="$router.back()" />
+        <div class="d-flex align-center ga-4">
+          <v-btn
+            icon="mdi-arrow-left"
+            variant="text"
+            aria-label="Go back to previous page"
+            @click="$router.back()"
+          />
           <h2 class="text-h4">Results for "{{ searchQuery }}"</h2>
         </div>
 
@@ -75,10 +80,12 @@
               <div v-if="bestMatch" class="text-overline mb-2 text-medium-emphasis">
                 OTHER RESULTS
               </div>
-              <v-list lines="two" bg-color="transparent">
+              <!-- Plain wrapper: the items are links, so list semantics would be invalid -->
+              <div>
                 <v-list-item
                   v-for="item in filteredResults"
                   :key="item.id + item.type"
+                  lines="two"
                   :to="getResultLink(item)"
                   rounded="lg"
                   class="mb-2 elevation-1 bg-surface"
@@ -90,7 +97,7 @@
                     </v-avatar>
                   </template>
                   <v-list-item-title class="font-weight-medium">{{ item.label }}</v-list-item-title>
-                  <v-list-item-subtitle>
+                  <v-list-item-subtitle class="opacity-100">
                     <v-chip size="x-small" label class="mr-2" :color="getTypeColor(item.type)">
                       {{ item.type }}
                     </v-chip>
@@ -102,10 +109,10 @@
                     >
                   </v-list-item-subtitle>
                   <template #append>
-                    <v-icon size="small" color="grey-lighten-1">mdi-chevron-right</v-icon>
+                    <v-icon size="small" class="text-medium-emphasis">mdi-chevron-right</v-icon>
                   </template>
                 </v-list-item>
-              </v-list>
+              </div>
             </div>
           </v-window-item>
 
@@ -115,10 +122,11 @@
             :key="type"
             :value="type"
           >
-            <v-list v-if="results.length > 0" lines="two" bg-color="transparent">
+            <div v-if="results.length > 0">
               <v-list-item
                 v-for="item in results"
                 :key="item.id + item.type"
+                lines="two"
                 :to="getResultLink(item)"
                 rounded="lg"
                 class="mb-2 elevation-1 bg-surface"
@@ -135,7 +143,7 @@
                   <span v-if="item.extra_info"> • {{ item.extra_info }}</span>
                 </v-list-item-subtitle>
               </v-list-item>
-            </v-list>
+            </div>
           </v-window-item>
         </v-window>
 
@@ -144,7 +152,8 @@
           <v-pagination
             v-model="currentPage"
             :length="totalPages"
-            total-visible="7"
+            :total-visible="$vuetify.display.xs ? 3 : 7"
+            :size="$vuetify.display.xs ? 'small' : 'default'"
             rounded="circle"
           />
         </div>
@@ -231,7 +240,7 @@ const getTypeColor = (type) => {
     case 'Variant':
       return 'error';
     case 'Phenopacket':
-      return 'teal';
+      return 'primary';
     case 'Publication':
       return 'orange';
     default:
@@ -296,8 +305,4 @@ watch([() => route.query.q, activeTab], () => {
 onMounted(fetchResults);
 </script>
 
-<style scoped>
-.gap-4 {
-  gap: 16px;
-}
-</style>
+<style scoped></style>

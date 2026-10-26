@@ -6,7 +6,7 @@
       <v-container>
         <v-row justify="center" align="center">
           <v-col cols="12" md="10" lg="8" class="text-center">
-            <h1 class="text-h3 font-weight-bold text-teal-darken-2 mb-2">HNF1B Database</h1>
+            <h1 class="text-h3 font-weight-bold text-primary mb-2">HNF1B Database</h1>
             <p
               class="text-subtitle-1 text-medium-emphasis mb-6"
               style="max-width: 800px; margin: 0 auto"
@@ -36,8 +36,8 @@
                     elevation="2"
                     rounded="lg"
                   >
-                    <v-icon color="teal" size="large" class="mb-2">mdi-account-group</v-icon>
-                    <div class="text-h4 font-weight-bold text-teal mb-0">
+                    <v-icon color="primary" size="large" class="mb-2">mdi-account-group</v-icon>
+                    <div class="text-h4 font-weight-bold text-primary mb-0">
                       <span v-if="!loadingStats">{{ displayStats.individuals }}</span>
                       <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
                     </div>
@@ -78,10 +78,10 @@
                     elevation="2"
                     rounded="lg"
                   >
-                    <v-icon color="cyan-darken-1" size="large" class="mb-2">
+                    <v-icon color="cyan-darken-3" size="large" class="mb-2">
                       mdi-file-document-multiple
                     </v-icon>
-                    <div class="text-h4 font-weight-bold text-cyan-darken-1 mb-0">
+                    <div class="text-h4 font-weight-bold text-cyan-darken-3 mb-0">
                       <span v-if="!loadingStats">{{ displayStats.publications }}</span>
                       <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
                     </div>
@@ -100,8 +100,8 @@
                   elevation="2"
                   rounded="lg"
                 >
-                  <v-icon color="amber-darken-2" size="large" class="mb-2">mdi-medical-bag</v-icon>
-                  <div class="text-h4 font-weight-bold text-amber-darken-2 mb-0">
+                  <v-icon color="orange-darken-4" size="large" class="mb-2">mdi-medical-bag</v-icon>
+                  <div class="text-h4 font-weight-bold text-orange-darken-4 mb-0">
                     <span v-if="!loadingStats">{{ displayStats.total_reports }}</span>
                     <v-skeleton-loader v-else type="text" width="60" class="mx-auto" />
                   </div>
@@ -136,7 +136,7 @@
             <v-card variant="flat" class="pa-4 h-100 feature-card">
               <div class="d-flex align-start">
                 <v-avatar color="teal-lighten-4" size="48" class="mr-4 flex-shrink-0">
-                  <v-icon color="teal-darken-2">mdi-database-search</v-icon>
+                  <v-icon color="primary">mdi-database-search</v-icon>
                 </v-avatar>
                 <div>
                   <h3 class="text-subtitle-1 font-weight-medium mb-1">Comprehensive Data</h3>
@@ -466,7 +466,7 @@ export default {
    teal gradient that keeps the brand hue but works at low luminance. */
 .hero-section {
   background: linear-gradient(135deg, #f5f7fa 0%, #e0f2f1 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.05);
 }
 
 /* Hero on dark — softer gradient (#1A2124 → #16383A) lifted off the
@@ -490,14 +490,14 @@ export default {
 }
 
 .border-bottom {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
 }
 .v-theme--dark .border-bottom {
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .border-opacity-12 {
-  border-color: rgba(0, 0, 0, 0.12) !important;
+  border-color: rgba(var(--v-theme-on-surface), 0.12) !important;
 }
 .v-theme--dark .border-opacity-12 {
   border-color: rgba(255, 255, 255, 0.12) !important;

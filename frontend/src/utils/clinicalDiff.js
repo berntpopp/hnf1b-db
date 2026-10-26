@@ -428,7 +428,7 @@ export function resolveClinicalSummaries(changes = [], baseline = null, candidat
       id: 'subject',
       title: 'Subject / Onset Deltas',
       icon: 'mdi-account-clock-outline',
-      color: 'teal',
+      color: 'primary',
       items: subject,
     });
   }

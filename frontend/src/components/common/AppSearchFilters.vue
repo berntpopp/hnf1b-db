@@ -17,10 +17,13 @@
     class="mb-4 rounded-lg"
     elevation="2"
     variant="outlined"
-    style="border-color: rgba(0, 0, 0, 0.05); background: white"
+    style="
+      border-color: rgba(var(--v-theme-on-surface), 0.05);
+      background: rgb(var(--v-theme-surface));
+    "
   >
     <div class="d-flex align-center px-4 py-3 border-bottom">
-      <div class="text-h6 font-weight-bold text-teal-darken-2">
+      <div class="text-h6 font-weight-bold text-primary">
         {{ title }}
       </div>
     </div>
@@ -377,6 +380,6 @@ function onClearAll() {
 
 <style scoped>
 .border-bottom {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 </style>

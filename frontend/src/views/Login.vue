@@ -66,11 +66,11 @@
                   label="Remember me"
                   density="compact"
                   hide-details
-                  color="teal"
+                  color="primary"
                 />
                 <v-btn
                   variant="text"
-                  color="teal"
+                  color="primary"
                   size="small"
                   class="text-none"
                   @click="handleForgotPassword"
@@ -82,7 +82,7 @@
               <!-- Login Button -->
               <v-btn
                 type="submit"
-                color="teal"
+                color="primary"
                 variant="elevated"
                 size="large"
                 block

@@ -21,11 +21,11 @@
             </v-breadcrumbs>
 
             <!-- Variant Title Row -->
-            <div class="d-flex flex-wrap align-center gap-3 mb-4">
+            <div class="d-flex flex-wrap align-center ga-3 mb-4">
               <v-icon color="pink-darken-2" size="x-large">mdi-dna</v-icon>
               <div>
                 <h1 class="text-h5 font-weight-bold text-pink-darken-2 mb-1">Variant Details</h1>
-                <div v-if="!loading && variant.variant_id" class="d-flex flex-wrap gap-2">
+                <div v-if="!loading && variant.variant_id" class="d-flex flex-wrap ga-2">
                   <v-chip
                     color="pink-lighten-4"
                     size="small"
@@ -47,7 +47,7 @@
                   </v-chip>
                   <v-chip
                     v-if="getVariantType(variant)"
-                    color="purple-lighten-3"
+                    color="purple-lighten-4"
                     size="small"
                     variant="flat"
                   >
@@ -104,8 +104,8 @@
                   elevation="2"
                   rounded="lg"
                 >
-                  <v-icon color="teal" size="large" class="mb-1">mdi-molecule</v-icon>
-                  <div class="text-h6 font-weight-bold text-teal mb-0">
+                  <v-icon color="primary" size="large" class="mb-1">mdi-molecule</v-icon>
+                  <div class="text-h6 font-weight-bold text-primary mb-0">
                     {{ variant.geneSymbol || 'HNF1B' }}
                   </div>
                   <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">
@@ -138,7 +138,7 @@
             <!-- Loading skeleton for stats -->
             <v-row v-else>
               <v-col v-for="i in 4" :key="i" cols="6" sm="3">
-                <v-skeleton-loader type="card" />
+                <v-skeleton-loader type="image" height="110" class="rounded-lg" />
               </v-col>
             </v-row>
           </v-col>
@@ -146,8 +146,15 @@
       </v-container>
     </section>
 
-    <!-- MAIN CONTENT -->
-    <v-container class="pb-12">
+    <!-- MAIN CONTENT — mounted only once data is in, so cards never grow in place -->
+    <v-container v-if="loading" class="pb-12">
+      <v-row justify="center">
+        <v-col cols="12" xl="10">
+          <v-skeleton-loader type="image" height="300" class="rounded-lg" />
+        </v-col>
+      </v-row>
+    </v-container>
+    <v-container v-else class="pb-12">
       <v-row justify="center">
         <v-col cols="12" xl="10">
           <!-- VARIANT DETAILS CARD -->
@@ -178,7 +185,7 @@
                       <v-list-item-title class="text-caption text-medium-emphasis">
                         HG38 Coordinates
                       </v-list-item-title>
-                      <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      <v-list-item-subtitle class="text-body-2 font-weight-medium opacity-100">
                         {{ variant.hg38 }}
                       </v-list-item-subtitle>
                     </v-list-item>
@@ -187,12 +194,12 @@
                     <template v-if="isCNV(variant) && getCNVDetails(variant)">
                       <v-list-item>
                         <template #prepend>
-                          <v-icon color="grey-darken-1" size="small">mdi-chromosome</v-icon>
+                          <v-icon color="grey-darken-1" size="small">mdi-dna</v-icon>
                         </template>
                         <v-list-item-title class="text-caption text-medium-emphasis">
                           Genomic Region
                         </v-list-item-title>
-                        <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                        <v-list-item-subtitle class="text-body-2 font-weight-medium opacity-100">
                           chr{{ getCNVDetails(variant).chromosome }}:{{
                             formatPosition(getCNVDetails(variant).start)
                           }}-{{ formatPosition(getCNVDetails(variant).end) }}
@@ -207,7 +214,7 @@
                       <v-list-item-title class="text-caption text-medium-emphasis">
                         Gene
                       </v-list-item-title>
-                      <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      <v-list-item-subtitle class="text-body-2 font-weight-medium opacity-100">
                         <a
                           :href="`https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/${variant.geneId}`"
                           target="_blank"
@@ -231,7 +238,7 @@
                       <v-list-item-title class="text-caption text-medium-emphasis">
                         Transcript (HGVS c.)
                       </v-list-item-title>
-                      <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      <v-list-item-subtitle class="text-body-2 font-weight-medium opacity-100">
                         <a
                           v-if="extractTranscriptId(variant.transcript)"
                           :href="`https://www.ncbi.nlm.nih.gov/nuccore/${extractTranscriptId(variant.transcript)}`"
@@ -251,12 +258,16 @@
 
                     <v-list-item v-if="variant.protein">
                       <template #prepend>
-                        <v-icon color="grey-darken-1" size="small">mdi-protein</v-icon>
+                        <v-icon
+                          color="grey-darken-1"
+                          size="small"
+                          icon="mdi-hexagon-multiple-outline"
+                        />
                       </template>
                       <v-list-item-title class="text-caption text-medium-emphasis">
                         Protein (HGVS p.)
                       </v-list-item-title>
-                      <v-list-item-subtitle class="text-body-2 font-weight-medium">
+                      <v-list-item-subtitle class="text-body-2 font-weight-medium opacity-100">
                         <a
                           v-if="extractProteinId(variant.protein)"
                           :href="`https://www.ncbi.nlm.nih.gov/protein/${extractProteinId(variant.protein)}`"
@@ -283,7 +294,7 @@
                   >
                     External Resources
                   </div>
-                  <div class="d-flex flex-wrap gap-2">
+                  <div class="d-flex flex-wrap ga-2">
                     <!-- Variant databases -->
                     <v-chip
                       v-if="getClinVarLink(variant)"
@@ -294,7 +305,7 @@
                       size="small"
                       variant="flat"
                       link
-                      aria-label="View on ClinVar (opens in new tab)"
+                      aria-label="ClinVar (opens in new tab)"
                     >
                       ClinVar
                       <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
@@ -308,7 +319,7 @@
                       size="small"
                       variant="flat"
                       link
-                      aria-label="View on dbSNP (opens in new tab)"
+                      aria-label="dbSNP (opens in new tab)"
                     >
                       dbSNP
                       <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
@@ -322,7 +333,7 @@
                       size="small"
                       variant="flat"
                       link
-                      aria-label="View on ClinGen (opens in new tab)"
+                      aria-label="ClinGen (opens in new tab)"
                     >
                       ClinGen
                       <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
@@ -336,7 +347,7 @@
                       size="small"
                       variant="flat"
                       link
-                      aria-label="View on DECIPHER (opens in new tab)"
+                      aria-label="DECIPHER (opens in new tab)"
                     >
                       DECIPHER
                       <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
@@ -350,7 +361,7 @@
                       size="small"
                       variant="flat"
                       link
-                      aria-label="View on UCSC Genome Browser (opens in new tab)"
+                      aria-label="UCSC Browser (opens in new tab)"
                     >
                       UCSC Browser
                       <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
@@ -366,7 +377,7 @@
                       size="small"
                       variant="flat"
                       link
-                      aria-label="View gene on NCBI (opens in new tab)"
+                      aria-label="NCBI Gene (opens in new tab)"
                     >
                       NCBI Gene
                       <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
@@ -380,7 +391,7 @@
                       size="small"
                       variant="flat"
                       link
-                      aria-label="View gene on OMIM (opens in new tab)"
+                      aria-label="OMIM (opens in new tab)"
                     >
                       OMIM
                       <v-icon end size="x-small" aria-hidden="true">mdi-open-in-new</v-icon>
@@ -419,7 +430,7 @@
 
               <!-- Protein View tab (only for SNVs/indels) -->
               <v-tab v-if="!isCNV(variant)" value="protein" class="text-capitalize rounded-t-lg">
-                <v-icon start>mdi-protein</v-icon>
+                <v-icon start>mdi-hexagon-multiple-outline</v-icon>
                 Protein View
               </v-tab>
 
@@ -565,7 +576,7 @@
                       tabindex="0"
                       role="button"
                       class="pheno-count-chip"
-                      :aria-label="`${item.phenotype_count} phenotype(s); activate for details`"
+                      :aria-label="`${item.phenotype_count} phenotype${item.phenotype_count === 1 ? '' : 's'}, activate for details`"
                     >
                       {{ item.phenotype_count }} phenotype{{
                         item.phenotype_count === 1 ? '' : 's'
@@ -1126,28 +1137,20 @@ export default {
 <style scoped>
 .variant-container {
   min-height: 100vh;
-  background-color: #fafafa;
 }
 
+/* Translucent tint (same pattern as PagePublication) works in both themes */
 .hero-section {
-  background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 50%, #f5f7fa 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background: linear-gradient(180deg, rgba(233, 30, 99, 0.07) 0%, transparent 100%);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 
 .border-bottom {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
 }
 
 .border-opacity-12 {
-  border-color: rgba(0, 0, 0, 0.12) !important;
-}
-
-.gap-2 {
-  gap: 8px;
-}
-
-.gap-3 {
-  gap: 12px;
+  border-color: rgba(var(--v-theme-on-surface), 0.12) !important;
 }
 
 .pheno-count-chip {
@@ -1172,7 +1175,7 @@ export default {
   font-size: 11px;
 }
 .pheno-tooltip-id {
-  font-family: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
   font-size: 10px;
   opacity: 0.75;
 }

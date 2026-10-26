@@ -265,7 +265,6 @@ export default {
   font-size: 12px;
   font-weight: 500;
   min-width: 0;
-  transition: width 0.3s ease;
 }
 
 .distance-bar.close {

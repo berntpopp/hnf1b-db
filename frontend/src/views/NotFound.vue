@@ -48,7 +48,7 @@
           </v-list>
 
           <!-- Navigation Buttons -->
-          <div class="d-flex flex-column flex-sm-row justify-center gap-3">
+          <div class="d-flex flex-column flex-sm-row justify-center ga-3">
             <v-btn color="primary" size="large" variant="elevated" :to="{ name: 'Home' }">
               <v-icon left>mdi-home</v-icon>
               Go Home
@@ -64,8 +64,8 @@
 
           <p class="text-caption text-grey">Looking for something specific? Try these:</p>
 
-          <div class="d-flex flex-wrap justify-center gap-2 mt-3">
-            <v-chip :to="{ name: 'Phenopackets' }" color="teal" variant="outlined" size="small">
+          <div class="d-flex flex-wrap justify-center ga-2 mt-3">
+            <v-chip :to="{ name: 'Phenopackets' }" color="primary" variant="outlined" size="small">
               <v-icon left size="small">mdi-card-account-details</v-icon>
               Phenopackets
             </v-chip>
@@ -142,12 +142,4 @@ export default {
 };
 </script>
 
-<style scoped>
-.gap-2 {
-  gap: 8px;
-}
-
-.gap-3 {
-  gap: 12px;
-}
-</style>
+<style scoped></style>

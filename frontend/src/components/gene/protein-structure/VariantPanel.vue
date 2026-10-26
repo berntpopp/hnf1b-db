@@ -223,11 +223,10 @@ export default {
 }
 
 .variant-item-active {
-  background-color: #e3f2fd !important;
-  border-left: 3px solid #1976d2;
+  background-color: rgba(var(--v-theme-primary), 0.14) !important;
 }
 
 .variant-item-hover {
-  background-color: #f5f5f5;
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
 }
 </style>

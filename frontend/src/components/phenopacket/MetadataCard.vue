@@ -341,11 +341,11 @@ export default {
   --font-size-sm: 11px;
   --font-size-base: 12px;
   --font-size-md: 13px;
-  --font-mono: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
 
   /* Color tokens */
-  --color-text-primary: rgba(0, 0, 0, 0.87);
-  --color-text-secondary: rgba(0, 0, 0, 0.6);
+  --color-text-primary: rgba(var(--v-theme-on-surface), 0.87);
+  --color-text-secondary: rgba(var(--v-theme-on-surface), 0.6);
 }
 
 /* Timeline typography standardization */

@@ -52,7 +52,7 @@ const safeHtml = computed(() => sanitizeForComment(md.render(props.bodyMarkdown 
   margin-bottom: 0.5em;
 }
 .comment-body :deep(code) {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(var(--v-theme-on-surface), 0.05);
   padding: 0.1em 0.3em;
   border-radius: 3px;
   font-size: 0.9em;

@@ -45,7 +45,7 @@
         <v-col cols="12" md="4">
           <v-card elevation="2">
             <v-card-text class="text-center">
-              <v-icon size="48" color="teal" class="mb-2">mdi-account-multiple</v-icon>
+              <v-icon size="48" color="primary" class="mb-2">mdi-account-multiple</v-icon>
               <div class="text-h3 font-weight-bold">{{ statistics?.phenopackets?.total || 0 }}</div>
               <div class="text-body-2 text-grey">Phenopackets</div>
               <div
@@ -297,7 +297,7 @@
                         <v-btn-group v-if="!genesSyncInProgress" density="compact">
                           <v-btn
                             size="small"
-                            color="teal"
+                            color="primary"
                             variant="tonal"
                             @click="startGenesSync(false)"
                           >
@@ -309,7 +309,7 @@
                               <v-btn
                                 v-bind="props"
                                 size="small"
-                                color="teal"
+                                color="primary"
                                 variant="tonal"
                                 icon
                                 aria-label="More gene sync options"
@@ -327,7 +327,7 @@
                             </v-list>
                           </v-menu>
                         </v-btn-group>
-                        <v-btn v-else loading size="small" color="teal" variant="tonal" disabled>
+                        <v-btn v-else loading size="small" color="primary" variant="tonal" disabled>
                           Syncing...
                         </v-btn>
                       </template>
@@ -407,7 +407,7 @@
                   </div>
                   <v-progress-linear
                     :model-value="genesSyncTask.progress"
-                    color="teal"
+                    color="primary"
                     height="12"
                     rounded
                     aria-label="chr17q12 genes sync progress"
@@ -481,7 +481,7 @@
                 <v-col cols="12" sm="6" md="4" lg="2">
                   <v-btn
                     block
-                    color="teal"
+                    color="primary"
                     variant="tonal"
                     :disabled="genesSyncInProgress"
                     @click="startGenesSync"

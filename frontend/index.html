@@ -5,10 +5,7 @@
 
     <!-- Primary Meta Tags -->
     <title>HNF1B Database - Clinical Variants & Phenotypes for MODY5/RCAD</title>
-    <meta
-      name="title"
-      content="HNF1B Database - Clinical Variants & Phenotypes for MODY5/RCAD"
-    />
+    <meta name="title" content="HNF1B Database - Clinical Variants & Phenotypes for MODY5/RCAD" />
     <meta
       name="description"
       content="Search 800+ HNF1B clinical cases with phenotypes, genetic variants, and publications. The definitive resource for MODY5 and RCAD research."
@@ -59,11 +56,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
-    <link
-      rel="apple-touch-icon"
-      sizes="180x180"
-      href="/apple-touch-icon.png"
-    />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <!-- Mobile -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -92,14 +85,17 @@
         } catch (e) {
           stored = null;
         }
-        var preference = stored === 'light' || stored === 'dark' || stored === 'system'
-          ? stored
-          : 'light';
+        var preference =
+          stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
         var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         var resolved =
-          preference === 'dark' ? 'dark'
-            : preference === 'light' ? 'light'
-            : (systemDark ? 'dark' : 'light');
+          preference === 'dark'
+            ? 'dark'
+            : preference === 'light'
+              ? 'light'
+              : systemDark
+                ? 'dark'
+                : 'light';
         var el = document.documentElement;
         el.classList.add('hnf1b-theme--' + resolved);
         el.style.colorScheme = resolved;
@@ -109,11 +105,6 @@
     <!-- Preconnect to API for faster first request -->
     <link rel="dns-prefetch" href="//api.hnf1b.org" />
     <link rel="preconnect" href="https://api.hnf1b.org" crossorigin />
-
-    <!-- Google Fonts: Inter (UI) & JetBrains Mono (Data) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- Critical inline CSS for FCP - prevents FOUT/FOIT and CLS -->
     <style>
@@ -131,27 +122,29 @@
          purely a no-FOUC fallback. */
       html.hnf1b-theme--light,
       html.hnf1b-theme--light body {
-        background: #ffffff;
+        background: #f5f7fa;
         color: rgba(0, 0, 0, 0.87);
       }
       html.hnf1b-theme--dark,
       html.hnf1b-theme--dark body {
-        background: #0f1416;
+        background: #121212;
         color: rgba(255, 255, 255, 0.87);
       }
       /* Reserve space for app to prevent CLS during hydration */
-      #app { min-height: 100vh; }
+      #app {
+        min-height: 100vh;
+      }
       /* Hide unhydrated app to prevent FOUC */
-      #app:empty { visibility: hidden; }
+      #app:empty {
+        visibility: hidden;
+      }
       /* Critical above-the-fold styles for faster FCP */
       body {
         margin: 0;
-        /* System-font fallback chain first, then Inter. If Google Fonts
-           CDN is blocked (ad blockers, enterprise DNS), the system font
-           stack renders sensibly instead of dropping all the way to a
-           generic serif. */
+        /* Self-hosted Inter (bundled via @fontsource) with a system
+           fallback chain while it loads. */
         font-family:
-          'Inter',
+          'Inter Variable',
           -apple-system,
           BlinkMacSystemFont,
           'Segoe UI',
@@ -163,16 +156,27 @@
         -moz-osx-font-smoothing: grayscale;
       }
       /* App bar placeholder to prevent CLS */
-      .v-app-bar { height: 64px; }
+      .v-app-bar {
+        height: 64px;
+      }
       /* Skeleton loading states */
       .v-skeleton-loader__bone {
-        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background: linear-gradient(
+          90deg,
+          rgba(var(--v-theme-on-surface), 0.06) 25%,
+          rgba(var(--v-theme-on-surface), 0.12) 50%,
+          rgba(var(--v-theme-on-surface), 0.06) 75%
+        );
         background-size: 200% 100%;
         animation: skeleton-loading 1.5s infinite;
       }
       @keyframes skeleton-loading {
-        0% { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
       }
     </style>
 
@@ -269,14 +273,7 @@
         "description": "Collection of 864 GA4GH Phenopackets containing clinical phenotype and genetic variant data for HNF1B-related disorders",
         "url": "https://hnf1b.org/phenopackets",
         "identifier": "hnf1b-phenopackets-v2",
-        "keywords": [
-          "HNF1B",
-          "MODY5",
-          "renal cysts",
-          "diabetes",
-          "phenopackets",
-          "rare disease"
-        ],
+        "keywords": ["HNF1B", "MODY5", "renal cysts", "diabetes", "phenopackets", "rare disease"],
         "license": "https://creativecommons.org/licenses/by/4.0/",
         "creator": {
           "@id": "https://hnf1b.org/#organization"
@@ -360,7 +357,12 @@
         "@type": "MedicalCondition",
         "@id": "https://hnf1b.org/#condition-rcad",
         "name": "Renal cysts and diabetes syndrome",
-        "alternateName": ["RCAD", "MODY5", "Maturity-onset diabetes of the young type 5", "HNF1B-related disorder"],
+        "alternateName": [
+          "RCAD",
+          "MODY5",
+          "Maturity-onset diabetes of the young type 5",
+          "HNF1B-related disorder"
+        ],
         "description": "A rare genetic condition caused by mutations in the HNF1B gene, characterized by renal cysts, diabetes mellitus, and other developmental abnormalities of the kidneys, liver, and pancreas.",
         "code": [
           {

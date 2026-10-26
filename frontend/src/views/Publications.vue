@@ -22,6 +22,7 @@
       :custom-sort="customSort"
       hide-default-footer
       title="Publications Registry"
+      :row-height="55"
       row-class="clickable-row"
       @update:options="onOptionsUpdate"
       @click:row="handleRowClick"
@@ -68,6 +69,11 @@
       </template>
 
       <!-- Render PMID as internal navigation chip (links to our detail page) -->
+      <!-- Clamp to 2 lines (full title on hover) so every row has the same height -->
+      <template #item.title="{ item }">
+        <span class="pub-title" :title="item.title">{{ item.title }}</span>
+      </template>
+
       <template #item.pmid="{ item }">
         <v-chip
           v-if="item.pmid"
@@ -615,6 +621,15 @@ export default {
 </script>
 
 <style scoped>
+.pub-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  min-height: 2lh;
+}
+
 /* Clickable row styling for publication navigation */
 :deep(.clickable-row) {
   cursor: pointer;

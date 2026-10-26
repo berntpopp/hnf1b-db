@@ -67,7 +67,7 @@
             @click="$emit('edit', item)"
           >
             <v-icon size="small">mdi-pencil</v-icon>
-            <v-tooltip activator="parent" location="top">Edit</v-tooltip>
+            <v-tooltip activator="parent" location="top" aria-label="Edit">Edit</v-tooltip>
           </v-btn>
           <v-btn
             v-if="isLocked(item)"
@@ -79,7 +79,7 @@
             @click="$emit('unlock', item)"
           >
             <v-icon size="small">mdi-lock-open</v-icon>
-            <v-tooltip activator="parent" location="top">Unlock</v-tooltip>
+            <v-tooltip activator="parent" location="top" aria-label="Unlock">Unlock</v-tooltip>
           </v-btn>
           <v-btn
             icon
@@ -90,7 +90,7 @@
             @click="$emit('delete', item)"
           >
             <v-icon size="small">mdi-delete</v-icon>
-            <v-tooltip activator="parent" location="top">Delete</v-tooltip>
+            <v-tooltip activator="parent" location="top" aria-label="Delete">Delete</v-tooltip>
           </v-btn>
         </template>
       </v-data-table>

@@ -143,7 +143,11 @@
             </v-tooltip>
 
             <!-- View variant button -->
-            <v-tooltip location="top" text="Open full variant details">
+            <v-tooltip
+              location="top"
+              text="Open full variant details"
+              aria-label="Open full variant details"
+            >
               <template #activator="{ props }">
                 <v-btn
                   v-if="getVariantId(interpretation)"
@@ -154,7 +158,7 @@
                   size="small"
                   prepend-icon="mdi-arrow-right"
                   class="ml-1"
-                  aria-label="View full variant details"
+                  aria-label="View variant details"
                 >
                   View variant
                 </v-btn>
@@ -541,22 +545,30 @@ export default {
   --font-size-xs: 10px;
   --font-size-sm: 11px;
   --font-size-md: 13px;
-  --font-mono: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
 
   /* Color tokens */
-  --color-text-primary: rgba(0, 0, 0, 0.87);
-  --color-text-secondary: rgba(0, 0, 0, 0.6);
-  --color-gene: rgb(var(--v-theme-deep-purple));
-  --color-c-notation: rgb(var(--v-theme-blue-darken-2));
-  --color-p-notation: rgb(var(--v-theme-green-darken-2));
-  --color-bg-code: rgba(0, 0, 0, 0.06);
+  --color-text-primary: rgba(var(--v-theme-on-surface), 0.87);
+  --color-text-secondary: rgba(var(--v-theme-on-surface), 0.6);
+  /* Palette shades are not theme tokens; set literal light values and
+     lift them for dark below. */
+  --color-gene: #512da8;
+  --color-c-notation: #1565c0;
+  --color-p-notation: #2e7d32;
+  --color-bg-code: rgba(var(--v-theme-on-surface), 0.06);
   --color-bg-c-notation: rgba(33, 150, 243, 0.1);
   --color-bg-p-notation: rgba(76, 175, 80, 0.1);
-  --color-accent: rgb(var(--v-theme-deep-purple));
+  --color-accent: var(--color-gene);
 
   height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+.v-theme--dark .interpretation-card {
+  --color-gene: #b39ddb;
+  --color-c-notation: #90caf9;
+  --color-p-notation: #a5d6a7;
 }
 
 .variants-container {
