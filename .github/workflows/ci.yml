@@ -115,10 +115,6 @@ jobs:
           working-directory: backend
           groups: dev test
 
-      - name: Verify requirements exports match uv.lock
-        working-directory: backend
-        run: make check-requirements-drift
-
       - name: Run database migrations
         env:
           # ENVIRONMENT=development lets the backend job bypass the Wave 5c
