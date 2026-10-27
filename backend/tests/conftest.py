@@ -154,11 +154,21 @@ async def _truncate_mutable_tables() -> None:
     in lock-step.
     """
     async with engine.begin() as conn:
-        joined = ", ".join(_MUTABLE_TABLES)
+        # TRUNCATE rewrites every table and index file (~1 s for all of them),
+        # and most tests write nothing, so only wipe the tables that hold rows.
+        probe = " UNION ALL ".join(
+            f"SELECT '{t}' FROM (SELECT 1 FROM {t} LIMIT 1) AS s"
+            for t in _MUTABLE_TABLES
+        )
+        dirty = [row[0] for row in await conn.execute(text(probe))]
+        if not dirty:
+            return
+        joined = ", ".join(dirty)
         await conn.execute(text(f"TRUNCATE TABLE {joined} RESTART IDENTITY CASCADE"))
-        # TRUNCATE clears pg_stat_user_tables timestamps; keep index/statistics
-        # assertions deterministic after the isolation cleanup.
-        await conn.execute(text("ANALYZE phenopackets"))
+        if "phenopackets" in dirty:
+            # TRUNCATE clears pg_stat_user_tables timestamps; keep index/statistics
+            # assertions deterministic after the isolation cleanup.
+            await conn.execute(text("ANALYZE phenopackets"))
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)

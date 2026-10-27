@@ -5,6 +5,13 @@ on:
     branches: [main]
     tags: ['v*.*.*']
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  # Pushes get a group of their own: a queued main run that is dropped would
+  # skip publishing an image only that commit changed.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -15,6 +22,7 @@ env:
 jobs:
   changes:
     name: Detect changed images
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -24,6 +32,10 @@ jobs:
       docker_frontend: ${{ steps.filter.outputs.docker_frontend }}
       docker_mcp: ${{ steps.filter.outputs.docker_mcp }}
       docker_config: ${{ steps.filter.outputs.docker_config }}
+      build_backend: ${{ steps.filter.outputs.build_backend }}
+      build_frontend: ${{ steps.filter.outputs.build_frontend }}
+      build_mcp: ${{ steps.filter.outputs.build_mcp }}
+      workflow: ${{ steps.filter.outputs.workflow }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4
@@ -39,6 +51,27 @@ jobs:
             docker_config:
               - 'docker/**'
               - '.env.docker.example'
+            # PR validation only rebuilds when an image's build inputs change;
+            # source changes are already built and tested by ci.yml, and main
+            # still publishes on any source change (docker_* above).
+            build_backend:
+              - 'backend/Dockerfile*'
+              - 'backend/.dockerignore'
+              - 'backend/pyproject.toml'
+              - 'backend/uv.lock'
+              - 'backend/docker-entrypoint.sh'
+            build_frontend:
+              - 'frontend/Dockerfile*'
+              - 'frontend/.dockerignore'
+              - 'frontend/package*.json'
+              - 'frontend/nginx/**'
+            build_mcp:
+              - 'mcp/Dockerfile*'
+              - 'mcp/.dockerignore'
+              - 'mcp/pyproject.toml'
+              - 'mcp/uv.lock'
+            workflow:
+              - '.github/workflows/docker.yml'
 
   # PR validation: build only, read-only token, no GHCR login, no push.
   # permissions cannot be expressions, so PR-read-only vs publish-write is split
@@ -70,7 +103,7 @@ jobs:
         id: gate
         # matrix + needs are available at step level (not at job-level if:).
         run: |
-          echo "build=${{ needs.changes.outputs.docker_config == 'true' || needs.changes.outputs[format('docker_{0}', matrix.image)] == 'true' }}" >> "$GITHUB_OUTPUT"
+          echo "build=${{ needs.changes.outputs.docker_config == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs[format('build_{0}', matrix.image)] == 'true' }}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata
         id: meta

@@ -3,7 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
+  # Drafts run nothing (verify locally with `make ci-static`, which the
+  # pre-push hook runs); ready_for_review starts the full gate, and drafts
+  # cannot merge, so no unverified head lands.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -15,6 +19,7 @@ permissions:
 jobs:
   changes:
     name: Detect changed paths
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -124,17 +129,8 @@ jobs:
         working-directory: backend
         run: uv run alembic check
 
-      - name: Run linting (ruff check)
-        working-directory: backend
-        run: uv run ruff check .
-
-      - name: Run format check (ruff format)
-        working-directory: backend
-        run: uv run ruff format --check .
-
-      - name: Run type checking (mypy)
-        working-directory: backend
-        run: uv run mypy app/ migration/
+      - name: Lint, format check, typecheck (same target as local pre-push)
+        run: make ci-backend-static
 
       - name: Run tests (pytest, coverage, no network)
         env:
@@ -191,20 +187,8 @@ jobs:
         working-directory: frontend
         run: npm run check:dependencies
 
-      - name: Run tests with coverage (vitest)
-        working-directory: frontend
-        run: npm run test:coverage
-
-      - name: Run linting (eslint)
-        working-directory: frontend
-        run: npm run lint:check
-
-      - name: Run format check (prettier, src + tests)
-        # Covers BOTH src/ and tests/ — the frontend package.json format:check
-        # script is src-only, so this explicit invocation closes the tests/
-        # Prettier coverage gap previously owned by the pre-commit job.
-        working-directory: frontend
-        run: npx prettier --check "{src,tests}/**/*.{js,jsx,vue,json,css,scss,md}"
+      - name: Lint, format check, unit tests + coverage (same target as local pre-push)
+        run: make ci-frontend-static
 
       - name: Build production bundle
         working-directory: frontend
@@ -238,21 +222,9 @@ jobs:
           working-directory: mcp
           groups: dev
 
-      - name: Run linting (ruff check)
-        working-directory: mcp
-        run: uv run ruff check .
-
-      - name: Run type checking (mypy)
-        working-directory: mcp
-        run: uv run mypy src/
-
-      - name: Run unit tests (pytest, no smoke/live)
-        # 'live' golden tests require a running API+DB stack; 'smoke' needs the
-        # full server. Both are excluded from unit CI. An explicit -m here
-        # overrides pyproject addopts, so both exclusions are spelled out.
-        working-directory: mcp
-        # -n auto: mcp tests are isolated (no shared DB), so xdist is a free win.
-        run: uv run pytest -n auto --cov=hnf1b_mcp -m "not smoke and not live"
+      - name: Lint, format check, typecheck, unit tests (same target as local pre-push)
+        # Unit tests exclude 'live' (needs API+DB) and 'smoke' (needs the server).
+        run: make ci-mcp
 
       - name: Contract drift guard (paths + enums)
         # Regenerate the deterministic, zero-dependency contract artifacts and
@@ -264,11 +236,17 @@ jobs:
           git diff --exit-code -- src/hnf1b_mcp/contract/_generated_paths.py src/hnf1b_mcp/contract/_generated_enums.py
 
   e2e:
-    name: E2E tests (Playwright)
+    name: E2E tests (Playwright ${{ matrix.shard }}/2)
     needs: changes
     if: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    # E2E is the critical path and runs one worker against one shared DB, so
+    # parallelism comes from separate runners, each with its own stack.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     services:
       postgres:
@@ -380,13 +358,13 @@ jobs:
           E2E_REVIEWER_USERNAME: dev-curator
           E2E_REVIEWER_PASSWORD: DevCurator!2026
         working-directory: frontend
-        run: npx playwright test
+        run: npx playwright test --shard=${{ matrix.shard }}/2
 
       - name: Upload backend log on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
-          name: backend-log
+          name: backend-log-${{ matrix.shard }}
           path: /tmp/backend.log
           if-no-files-found: ignore
 
@@ -394,7 +372,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: frontend/playwright-report/
           if-no-files-found: ignore
           retention-days: 7
@@ -430,28 +408,17 @@ jobs:
 
   hygiene:
     name: Hygiene (pre-commit upstream hooks + grep guards)
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
-        with:
-          python-version: '3.12'
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
 
-      - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Run pre-commit (skip heavy lint/typecheck — covered by backend/frontend jobs)
-        # The five language:system hooks below need the uv/node toolchains and
-        # duplicate coverage now owned by the backend job (ruff check, ruff
-        # format --check, mypy) and the frontend job (eslint, prettier over
-        # src+tests). SKIP keeps this job a no-bootstrap hygiene gate that still
-        # runs the upstream pre-commit-hooks and the local grep guards.
-        env:
-          SKIP: backend-ruff-check,backend-ruff-format,backend-mypy,frontend-eslint,frontend-prettier
-        run: pre-commit run --all-files --show-diff-on-failure --config .pre-commit-config.yaml
+      - name: Run pre-commit hygiene hooks (same target as local pre-push)
+        run: make ci-hygiene
 
   ci-gate:
     name: CI gate

@@ -8,7 +8,7 @@
         publications-backfill publications-backfill-dry publications-backfill-test publications-backfill-embeddings \
         variants-sync variants-sync-dry variants-sync-test docker-variants-sync \
         reference-init reference-init-docker genes-sync genes-sync-dry genes-sync-test docker-genes-sync \
-        dev-seed-users openapi-types
+        dev-seed-users openapi-types ci ci-static ci-hygiene ci-backend-static ci-mcp ci-frontend-static
 
 # Detect docker compose command
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; else echo "docker compose"; fi)
@@ -44,6 +44,8 @@ help:  ## Show this help message
 	@echo "  make format          - Format backend code"
 	@echo "  make typecheck       - Run type checking"
 	@echo "  make check           - Run all checks (lint + typecheck + test)"
+	@echo "  make ci-static       - All static CI gates, ~30 s (also the pre-push hook)"
+	@echo "  make ci              - ci-static + backend tests (needs hybrid-up)"
 	@echo ""
 	@echo "🗄️ DATABASE:"
 	@echo "  make db-init         - Initialize database (migrations + admin user)"
@@ -236,6 +238,30 @@ genes-sync-test:  ## Sync first 10 genes (for testing)
 	cd backend && uv run python scripts/sync_reference_data.py --genes --limit 10
 
 check: lint typecheck test  ## Run all checks (lint, typecheck, test)
+
+# --- Local-first gates -------------------------------------------------------
+# CI calls these same targets, so a green `make ci-static` locally means the
+# static CI steps pass. The pre-push hook runs ci-static (bypass: --no-verify).
+ci-static:  ## Every static CI gate for backend, mcp, frontend + hygiene (~30 s, no DB)
+	$(MAKE) -j4 --output-sync=target ci-hygiene ci-backend-static ci-mcp ci-frontend-static
+
+ci: ci-static  ## ci-static + backend test suite (needs `make hybrid-up`); E2E/Docker stay in CI
+	cd backend && uv run pytest -n auto --dist loadgroup -m "not benchmark and not network"
+
+ci-hygiene:
+	uvx pre-commit run --all-files --show-diff-on-failure
+
+ci-backend-static:
+	cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy app/ migration/
+
+ci-mcp:
+	cd mcp && uv run ruff check . && uv run ruff format --check . && uv run mypy src/ \
+	  && uv run pytest -n auto -q -m "not smoke and not live"
+
+ci-frontend-static:
+	cd frontend && npm run lint:check \
+	  && npx prettier --check "{src,tests}/**/*.{js,jsx,vue,json,css,scss,md}" \
+	  && npx vitest run --coverage --maxWorkers=4
 
 clean:  ## Remove virtual environment and cache
 	cd backend && rm -rf .venv

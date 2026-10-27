@@ -1,0 +1,6 @@
+#!/bin/sh
+# Run the same static gates CI runs (~30 s) so lint/format/type/unit failures
+# never cost a CI round-trip. Bypass for a deliberate WIP push: git push --no-verify
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+exec make -C "$(git rev-parse --show-toplevel)" ci-static
