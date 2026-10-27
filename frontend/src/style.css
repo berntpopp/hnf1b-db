@@ -173,6 +173,17 @@ a:not(.v-btn):not(.v-chip):not(.v-list-item) {
   border-radius: 12px;
 }
 
+/* Skeletons keep their space at once but only become visible after 300ms,
+   so a fast response swaps straight to content instead of flashing grey. */
+.v-skeleton-loader {
+  animation: skeleton-reveal 0s 300ms both;
+}
+@keyframes skeleton-reveal {
+  from {
+    visibility: hidden;
+  }
+}
+
 /* Breadcrumbs stay on one line: the long current item ("Loading..." ->
    record id) truncates instead of wrapping onto a second line. */
 .v-breadcrumbs {

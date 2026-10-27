@@ -60,7 +60,7 @@
 
     <!-- Mobile -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1976D2" />
+    <meta name="theme-color" content="#00796B" />
 
     <!-- The app supports both light and dark themes via the
          ThemeSwitcher component. Advertise both schemes so the browser
@@ -108,6 +108,14 @@
 
     <!-- Critical inline CSS for FCP - prevents FOUT/FOIT and CLS -->
     <style>
+      /* Pin Vuetify's cascade-layer order before any stylesheet loads. Layer
+         order is set by first appearance, and the build links the vue-stack
+         CSS (components) ahead of index CSS (core reset), which otherwise
+         lets the reset's `button { font: inherit }` beat every component. */
+      @layer vuetify-core.reset, vuetify-core.base, vuetify-components, vuetify-overrides,
+        vuetify-utilities.theme-base, vuetify-utilities.typography, vuetify-utilities.helpers,
+        vuetify-utilities.theme-background, vuetify-utilities.theme-foreground,
+        vuetify-final.transitions, vuetify-final.trumps;
       /* Note: previously set `forced-color-adjust: none` on <html> here.
          Removed because it disables Windows High Contrast mode globally,
          which is an accessibility regression for users who rely on it
@@ -134,9 +142,38 @@
       #app {
         min-height: 100vh;
       }
-      /* Hide unhydrated app to prevent FOUC */
-      #app:empty {
-        visibility: hidden;
+      /* Static app bar painted before the JS bundle runs, so first paint is
+         the real layout instead of a blank page. Vue replaces it on mount;
+         sizes mirror AppBar.vue (logo 184/160/120px at md/sm/xs). */
+      .boot-shell {
+        display: flex;
+        align-items: center;
+        height: 64px;
+        padding-left: 16px;
+        background: #00796b;
+        box-shadow:
+          rgba(0, 0, 0, 0.3) 0 1px 2px 0,
+          rgba(0, 0, 0, 0.15) 0 2px 6px 2px;
+      }
+      .boot-shell img {
+        width: 184px;
+        height: auto;
+      }
+      @media (max-width: 959.98px) {
+        .boot-shell {
+          padding-left: 72px;
+        }
+        .boot-shell img {
+          width: 160px;
+        }
+      }
+      @media (max-width: 599.98px) {
+        .boot-shell {
+          padding-left: 60px;
+        }
+        .boot-shell img {
+          width: 120px;
+        }
       }
       /* Critical above-the-fold styles for faster FCP */
       body {
@@ -158,25 +195,6 @@
       /* App bar placeholder to prevent CLS */
       .v-app-bar {
         height: 64px;
-      }
-      /* Skeleton loading states */
-      .v-skeleton-loader__bone {
-        background: linear-gradient(
-          90deg,
-          rgba(var(--v-theme-on-surface), 0.06) 25%,
-          rgba(var(--v-theme-on-surface), 0.12) 50%,
-          rgba(var(--v-theme-on-surface), 0.06) 75%
-        );
-        background-size: 200% 100%;
-        animation: skeleton-loading 1.5s infinite;
-      }
-      @keyframes skeleton-loading {
-        0% {
-          background-position: 200% 0;
-        }
-        100% {
-          background-position: -200% 0;
-        }
       }
     </style>
 
@@ -470,7 +488,11 @@
     </script>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="boot-shell" aria-hidden="true">
+        <img src="/HNF1B-db_logo.svg" alt="" width="184" height="40" />
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

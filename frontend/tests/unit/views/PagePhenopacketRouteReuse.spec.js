@@ -4,6 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PagePhenopacket from '@/views/PagePhenopacket.vue';
 
+// The curator tabs are async components; mock them so their lazy import
+// resolves inside the test instead of after the runner closes.
+vi.mock('@/components/phenopacket/HistoryTab.vue', () => ({
+  default: { name: 'HistoryTab', render: () => null },
+}));
+vi.mock('@/components/comments/DiscussionTab.vue', () => ({
+  default: { name: 'DiscussionTab', render: () => null },
+}));
 vi.mock('@/api', () => ({
   getPhenopacket: vi.fn(),
   deletePhenopacket: vi.fn(),

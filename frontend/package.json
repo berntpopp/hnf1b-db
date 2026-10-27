@@ -1,7 +1,7 @@
 {
   "name": "hnf1b-db-frontend",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -70,6 +70,7 @@
     "prettier": "^3.9.9",
     "rollup-plugin-visualizer": "^7.1.1",
     "sass": "^1.105.1",
+    "subset-font": "^2.9.0",
     "terser": "^5.51.2",
     "vite": "^8.3.4",
     "vite-plugin-compression": "^0.5.1",

@@ -344,7 +344,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, defineAsyncComponent } from 'vue';
 import { useRoute } from 'vue-router';
 import { getPhenopacket, deletePhenopacket, exportPhenopacket } from '@/api';
 import { getReviewContext } from '@/api/domain/reviews';
@@ -364,8 +364,10 @@ import EditingBanner from '@/components/state/EditingBanner.vue';
 import TransitionMenu from '@/components/state/TransitionMenu.vue';
 import TransitionModal from '@/components/state/TransitionModal.vue';
 import { usePhenopacketState, effectiveStateOf } from '@/composables/usePhenopacketState';
-import DiscussionTab from '@/components/comments/DiscussionTab.vue';
-import HistoryTab from '@/components/phenopacket/HistoryTab.vue';
+// Curator-only tabs pull in the comment editor and markdown renderer;
+// load them on demand so public visitors never download that code.
+const DiscussionTab = defineAsyncComponent(() => import('@/components/comments/DiscussionTab.vue'));
+const HistoryTab = defineAsyncComponent(() => import('@/components/phenopacket/HistoryTab.vue'));
 
 export default {
   name: 'PagePhenopacket',

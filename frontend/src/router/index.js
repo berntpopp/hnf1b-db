@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { navigating } from './navigating';
 import { updatePageTitle } from '@/composables/usePageTitle';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -259,15 +260,43 @@ export async function resolveRouteAccess(to, from, authStore) {
 // Uses the modern return-value signature (Vue Router 4.1+) instead of next()
 // callbacks to eliminate the deprecation warning (Copilot review #254 comment #10).
 router.beforeEach(async (to, from) => {
+  navigating.value = true;
   return resolveRouteAccess(to, from, useAuthStore());
+});
+router.onError(() => {
+  navigating.value = false;
 });
 
 // Global navigation guard to update page title dynamically
 // Uses afterEach to avoid blocking navigation and ensure the route has changed
 router.afterEach((to) => {
+  navigating.value = false;
   // Get the title from route meta, or use empty string for default
   const pageTitle = to.meta?.title || '';
   updatePageTitle(pageTitle);
+});
+
+// Download the main pages' chunks once the first page is idle, so the first
+// click on a nav link does not wait on the network. Skipped on Save-Data.
+const PREFETCH_ROUTES = [
+  'Phenopackets',
+  'Variants',
+  'Publications',
+  'Aggregations',
+  'PagePhenopacket',
+  'PageVariant',
+  'PagePublication',
+];
+router.isReady().then(() => {
+  if (navigator.connection?.saveData) return;
+  const whenIdle = window.requestIdleCallback || ((cb) => setTimeout(cb, 2000));
+  whenIdle(() => {
+    for (const r of router.getRoutes()) {
+      const load = r.components?.default;
+      // Already-visited routes hold the resolved component, not the loader.
+      if (PREFETCH_ROUTES.includes(r.name) && typeof load === 'function') load().catch(() => {});
+    }
+  });
 });
 
 export default router;
