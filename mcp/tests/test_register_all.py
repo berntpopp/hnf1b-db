@@ -27,6 +27,6 @@ async def test_all_tools_registered():
     for t in tools:
         # Every tool is a read-only, idempotent, closed-world query: safe to
         # retry and to cache (Anthropic/MCP tool-annotation best practice).
-        assert t.annotations.readOnlyHint is True
-        assert t.annotations.idempotentHint is True
-        assert t.annotations.openWorldHint is False
+        assert t.annotations.read_only_hint is True
+        assert t.annotations.idempotent_hint is True
+        assert t.annotations.open_world_hint is False

@@ -45,6 +45,10 @@ updates:
     commit-message:
       prefix: "chore(backend)"
       include: "scope"
+    ignore:
+      # pronto (HPO parser) caps python-dateutil <3; lift once pronto allows 3.x.
+      - dependency-name: "python-dateutil"
+        update-types: ["version-update:semver-major"]
     groups:
       # Group patch and minor updates
       python-dependencies:

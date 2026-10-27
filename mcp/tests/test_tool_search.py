@@ -44,7 +44,7 @@ async def test_registered_readonly():
     register(mcp, None)
     tools = await mcp.list_tools()
     tool = next(t for t in tools if t.name == "hnf1b_search")
-    assert tool.annotations.readOnlyHint is True
+    assert tool.annotations.read_only_hint is True
 
 
 @pytest.mark.asyncio
@@ -53,7 +53,7 @@ async def test_registered_not_open_world():
     register(mcp, None)
     tools = await mcp.list_tools()
     tool = next(t for t in tools if t.name == "hnf1b_search")
-    assert tool.annotations.openWorldHint is False
+    assert tool.annotations.open_world_hint is False
 
 
 @pytest.mark.asyncio
