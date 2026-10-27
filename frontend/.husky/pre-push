@@ -3,4 +3,6 @@
 # never cost a CI round-trip. Bypass for a deliberate WIP push: git push --no-verify
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-exec make -C "$(git rev-parse --show-toplevel)" ci-static
+# Skip pushes that only delete refs (local sha is all zeros on every line).
+grep -qv '^[^ ]* 0\{40\} ' && exec make -C "$(git rev-parse --show-toplevel)" ci-static
+exit 0
