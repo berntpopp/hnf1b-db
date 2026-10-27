@@ -27,6 +27,7 @@
 - Prefer root `make` targets first for setup, running, and verification.
 - Keep git worktrees as sibling directories, never nested inside the repo.
 - Before committing or merging, run the relevant repo checks for the code you changed.
+- Local first: `make ci-static` (~30 s: lint, format, types, unit tests and hygiene for backend, mcp and frontend) runs as the pre-push hook and is the same target CI calls; `make ci` adds the backend suite (needs `make hybrid-up`). CI skips draft PRs, so iterate as a draft and mark it ready once local gates pass.
 - Before calling work complete or opening/updating a PR, verify the relevant local checks pass and inspect the PR's GitHub Actions status; if Actions fail, investigate, fix, and re-run until the PR is green or a deliberate blocker is documented.
 - Do not ignore failing tests, lint errors, or type errors; fix them or document a deliberate exception.
 

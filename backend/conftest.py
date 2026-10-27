@@ -96,9 +96,12 @@ def _sync_dsn_for_admin(async_url: str, database: str) -> str:
     return urlunparse(parsed._replace(scheme=scheme, path=f"/{database}"))
 
 
-def _create_worker_database_if_missing(worker_url: str) -> None:
-    """Create the per-worker database if it does not already exist.
+def _recreate_worker_database(worker_url: str) -> None:
+    """Drop and recreate the per-worker database so every run starts clean.
 
+    Reusing a worker DB across runs let one test's damage to migration-seeded
+    reference data (e.g. ``hpo_terms_lookup``) leak into every later run on
+    that worker; a fresh migrate costs ~2 s and makes local runs match CI.
     Connects to the ``postgres`` maintenance database with psycopg2 in
     autocommit mode (``CREATE DATABASE`` cannot run inside a transaction).
     """
@@ -111,11 +114,10 @@ def _create_worker_database_if_missing(worker_url: str) -> None:
     try:
         conn.autocommit = True
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (target_db,))
-            if cur.fetchone() is None:
-                # Identifier is derived from our own worker id + the
-                # CI-provided base name, not user input; quote defensively.
-                cur.execute(f'CREATE DATABASE "{target_db}"')
+            # Identifier is derived from our own worker id + the CI-provided
+            # base name (already checked to contain "test"); quote defensively.
+            cur.execute(f'DROP DATABASE IF EXISTS "{target_db}" WITH (FORCE)')
+            cur.execute(f'CREATE DATABASE "{target_db}"')
     finally:
         conn.close()
 
@@ -186,7 +188,7 @@ def _ensure_test_database_url() -> None:
     # BEFORE app.database builds the engine in tests/conftest.py. Without this,
     # the worker DB would not exist (only the base DB is migrated by CI).
     if _xdist_worker_id():
-        _create_worker_database_if_missing(resolved)
+        _recreate_worker_database(resolved)
         _alembic_upgrade(resolved)
         _maybe_set_worker_redis_url()
 

@@ -4,8 +4,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "UTC"
     open-pull-requests-limit: 5
@@ -17,27 +16,20 @@ updates:
     commit-message:
       prefix: "chore(frontend)"
       include: "scope"
+    # One PR per ecosystem per month for every non-major update (each PR costs a
+    # full CI run); security updates still open immediately.
     groups:
-      # Group patch and minor updates for devDependencies
-      dev-dependencies:
+      npm-minor-patch:
         applies-to: version-updates
-        dependency-type: "development"
         update-types:
           - "minor"
-          - "patch"
-      # Group patch updates for production dependencies
-      production-dependencies:
-        applies-to: version-updates
-        dependency-type: "production"
-        update-types:
           - "patch"
 
   # Backend Python dependencies (managed by uv)
   - package-ecosystem: "uv"
     directory: "/backend"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "UTC"
     open-pull-requests-limit: 5
@@ -61,8 +53,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "UTC"
     open-pull-requests-limit: 3
@@ -74,3 +65,7 @@ updates:
     commit-message:
       prefix: "chore(ci)"
       include: "scope"
+    groups:
+      actions:
+        patterns:
+          - "*"
