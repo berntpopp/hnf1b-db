@@ -110,3 +110,25 @@ describe('ProteinStructure3D.vue (characterization)', () => {
     expect(wrapper.props('showAllVariants')).toBe(true);
   });
 });
+
+describe('ProteinStructure3D.vue variant search', () => {
+  it('filters the in-structure variants by protein, transcript or id', async () => {
+    const variants = [
+      { variant_id: 'V1', simple_id: 'Var1', protein: 'p.Arg177Gln', transcript: 'c.530G>A' },
+      { variant_id: 'V2', simple_id: 'Var2', protein: 'p.Lys200Asn', transcript: 'c.600G>C' },
+    ];
+    const wrapper = await mountViewer({ variants, showAllVariants: true });
+    wrapper.vm.clearFilters(); // widen past the missense-only default
+    const ids = () => wrapper.vm.filteredAndSortedVariants.map((v) => v.variant_id);
+
+    expect(ids()).toEqual(['V1', 'V2']);
+    wrapper.vm.search = 'arg177';
+    expect(ids()).toEqual(['V1']);
+    wrapper.vm.search = ' c.600 ';
+    expect(ids()).toEqual(['V2']);
+    wrapper.vm.search = 'var1';
+    expect(ids()).toEqual(['V1']);
+    wrapper.vm.clearFilters();
+    expect(wrapper.vm.search).toBe('');
+  });
+});

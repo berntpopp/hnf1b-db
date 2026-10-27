@@ -1,6 +1,6 @@
 [project]
 name = "hnf1b-mcp"
-version = "0.4.2"
+version = "0.4.3"
 description = "Read-only MCP server exposing HNF1B-db public data to LLMs"
 requires-python = ">=3.11"
 dependencies = [

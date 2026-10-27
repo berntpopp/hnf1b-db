@@ -13,6 +13,18 @@
 
     <!-- Filter and Sort Controls -->
     <div class="variant-panel-controls">
+      <v-text-field
+        :model-value="search"
+        label="Search variants"
+        placeholder="p.Arg177, c.544, Var12…"
+        prepend-inner-icon="mdi-magnify"
+        density="compact"
+        hide-details
+        variant="outlined"
+        clearable
+        @update:model-value="$emit('update:search', $event || '')"
+      />
+
       <!-- Sort Control -->
       <v-select
         :model-value="sortBy"
@@ -127,13 +139,25 @@ export default {
       type: String,
       default: null,
     },
+    search: {
+      type: String,
+      default: '',
+    },
     // Colour-by mode shared with the unified controls (classification | consequence).
     coloringMode: {
       type: String,
       default: 'classification',
     },
   },
-  emits: ['select', 'hover', 'unhover', 'clear-filters', 'update:sortBy', 'update:filterDistance'],
+  emits: [
+    'select',
+    'hover',
+    'unhover',
+    'clear-filters',
+    'update:sortBy',
+    'update:filterDistance',
+    'update:search',
+  ],
   data() {
     return {
       sortOptions: [
@@ -186,26 +210,26 @@ export default {
 /* Variant panel styles */
 .variant-panel {
   height: 500px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-left: none;
   border-radius: 0 4px 4px 0;
-  background-color: #fafafa;
+  background-color: rgb(var(--v-theme-surface));
   display: flex;
   flex-direction: column;
 }
 
 .variant-panel-header {
   padding: 12px;
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   display: flex;
   align-items: center;
 }
 
 .variant-panel-controls {
   padding: 8px 12px;
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   display: flex;
   flex-direction: column;
   gap: 8px;

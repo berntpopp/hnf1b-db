@@ -21,6 +21,7 @@
 
 <script>
 import { markRaw } from 'vue';
+import { useTheme } from 'vuetify';
 import { getReferenceGeneStructureUrl } from '@/api';
 import {
   DNADistanceCalculator,
@@ -44,6 +45,15 @@ let distanceCalculator = null;
 
 // Color for linker regions (between domains)
 const LINKER_COLOR = 0x9e9e9e; // Grey
+
+// NGL draws labels on a canvas with this CSS font string; same face as the UI.
+const LABEL_FONT = '"Inter Variable", Inter, sans-serif';
+
+/** '#rrggbb' -> [r, g, b] in 0..1, the colour form NGL.Shape expects. */
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return [0, 2, 4].map((i) => parseInt(h.substring(i, i + 2), 16) / 255);
+}
 
 export default {
   name: 'StructureViewer',
@@ -97,6 +107,9 @@ export default {
     'distances-calculated',
     'reset-distance-line',
   ],
+  setup() {
+    return { theme: useTheme() };
+  },
   data() {
     return {
       loading: true,
@@ -104,7 +117,23 @@ export default {
       structureLoaded: false,
     };
   },
+  computed: {
+    // Canvas colours follow the app theme (surface / on-surface tokens).
+    viewerColors() {
+      const colors = this.theme.current.value.colors;
+      return { background: colors.surface, text: colors['on-surface'] };
+    },
+  },
   watch: {
+    viewerColors() {
+      if (!nglStage) return;
+      nglStage.setParameters({ backgroundColor: this.viewerColors.background });
+      this.addVariantLabel();
+      if (nglDistanceShape) {
+        this.removeDistanceLine();
+        this.addDistanceLine();
+      }
+    },
     representation() {
       this.updateRepresentation();
     },
@@ -190,6 +219,8 @@ export default {
         if (!NGL) {
           NGL = await import('ngl');
         }
+        // The label atlas is rasterised once, so the font must be loaded first.
+        await document.fonts?.load(`bold 36px ${LABEL_FONT}`);
 
         // Initialize NGL Stage
         // Temporarily suppress Three.js useLegacyLights deprecation warning
@@ -202,7 +233,7 @@ export default {
 
         nglStage = markRaw(
           new NGL.Stage(this.$refs.nglContainer, {
-            backgroundColor: 'white',
+            backgroundColor: this.viewerColors.background,
             quality: 'medium',
             impostor: true,
             workerDefault: true,
@@ -404,6 +435,21 @@ export default {
         scale: 1.2,
       });
 
+      this.addVariantLabel();
+
+      // Focus on the variant
+      nglStructureComponent.autoView(`${pdbPosition}`, 1000);
+    },
+
+    addVariantLabel() {
+      if (nglLabelRepresentation) {
+        nglStructureComponent.removeRepresentation(nglLabelRepresentation);
+        nglLabelRepresentation = null;
+      }
+      if (!nglStructureComponent || !this.activeVariant || !this.activeVariantInStructure) return;
+
+      const pdbPosition = this.activeVariantAAPosition;
+      const { background, text } = this.viewerColors;
       // Add label using format string for better reliability
       const variantLabel = this.getVariantLabel(this.activeVariant);
       nglLabelRepresentation = nglStructureComponent.addRepresentation('label', {
@@ -411,8 +457,8 @@ export default {
         labelType: 'format',
         labelFormat: variantLabel,
         labelGrouping: 'residue',
-        color: 0x000000,
-        fontFamily: 'sans-serif',
+        color: text,
+        fontFamily: LABEL_FONT,
         fontWeight: 'bold',
         fontSize: 16,
         xOffset: 0,
@@ -421,15 +467,12 @@ export default {
         fixedSize: true,
         attachment: 'middle-center',
         showBackground: true,
-        backgroundColor: 0xffffff,
+        backgroundColor: background,
         backgroundOpacity: 0.9,
         backgroundMargin: 4,
-        borderColor: 0x000000,
+        borderColor: text,
         borderWidth: 1,
       });
-
-      // Focus on the variant
-      nglStructureComponent.autoView(`${pdbPosition}`, 1000);
     },
 
     calculateActiveVariantDistance() {
@@ -475,17 +518,11 @@ export default {
       // Create distance line using shape
       const shape = new NGL.Shape('distance-line');
 
-      // Convert hex color string to RGB array
-      const colorHex = lineCoords.color.replace('#', '');
-      const r = parseInt(colorHex.substring(0, 2), 16) / 255;
-      const g = parseInt(colorHex.substring(2, 4), 16) / 255;
-      const b = parseInt(colorHex.substring(4, 6), 16) / 255;
-
       // Add cylinder for the line
       shape.addCylinder(
         [lineCoords.start.x, lineCoords.start.y, lineCoords.start.z],
         [lineCoords.end.x, lineCoords.end.y, lineCoords.end.z],
-        [r, g, b],
+        hexToRgb(lineCoords.color),
         0.15
       );
 
@@ -494,7 +531,12 @@ export default {
       const midY = (lineCoords.start.y + lineCoords.end.y) / 2;
       const midZ = (lineCoords.start.z + lineCoords.end.z) / 2;
 
-      shape.addText([midX, midY + 1, midZ], [0, 0, 0], 2, `${lineCoords.distanceFormatted} Å`);
+      shape.addText(
+        [midX, midY + 1, midZ],
+        hexToRgb(this.viewerColors.text),
+        2,
+        `${lineCoords.distanceFormatted} Å`
+      );
 
       nglDistanceShape = nglStage.addComponentFromObject(shape);
       nglDistanceShape.addRepresentation('buffer');
@@ -574,8 +616,8 @@ export default {
 .ngl-viewport {
   width: 100%;
   height: 500px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 4px;
-  background-color: white;
+  background-color: rgb(var(--v-theme-surface));
 }
 </style>
