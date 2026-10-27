@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { navigating } from './navigating';
+import Home from '../views/Home.vue';
 import { updatePageTitle } from '@/composables/usePageTitle';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -18,7 +19,8 @@ export const routes = [
   {
     path: '/',
     name: 'Home',
-    component: () => import(/* webpackChunkName: "home" */ '../views/Home.vue'),
+    // Static: the landing page renders without waiting on a second request.
+    component: Home,
     meta: { title: 'Home' },
   },
   {

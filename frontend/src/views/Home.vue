@@ -374,30 +374,6 @@ export default {
     const snvVariantsLoaded = computed(() => variantStore.hasPathogenic);
     const cnvVariantsLoaded = computed(() => variantStore.cnvVariants.length > 0);
 
-    // ==================== STATS ANIMATION ====================
-
-    function animateCount(prop, targetValue, duration = 1500) {
-      const startTime = performance.now();
-      const startValue = 0;
-
-      const animate = () => {
-        const now = performance.now();
-        const progress = Math.min((now - startTime) / duration, 1);
-
-        // Easing function (easeOutExpo)
-        const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-
-        displayStats.value[prop] = Math.floor(startValue + (targetValue - startValue) * ease);
-
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        } else {
-          displayStats.value[prop] = targetValue;
-        }
-      };
-      requestAnimationFrame(animate);
-    }
-
     const fetchStats = async () => {
       loadingStats.value = true;
       try {
@@ -406,12 +382,14 @@ export default {
 
         window.logService.info('Summary statistics loaded', data);
 
-        // Start animation
+        // Shown as-is: a count-up animation delayed real numbers by 1.5 s.
+        displayStats.value = {
+          individuals: data.total_phenopackets || 0,
+          variants: data.distinct_variants || 0,
+          total_reports: data.distinct_hpo_terms || 0,
+          publications: data.distinct_publications || 0,
+        };
         loadingStats.value = false;
-        animateCount('individuals', data.total_phenopackets || 0);
-        animateCount('variants', data.distinct_variants || 0);
-        animateCount('total_reports', data.distinct_hpo_terms || 0);
-        animateCount('publications', data.distinct_publications || 0);
       } catch (error) {
         window.logService.error('Failed to fetch summary statistics', {
           error: error.message,
