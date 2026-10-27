@@ -96,6 +96,7 @@
             :hovered-variant-id="hoveredVariantId"
             :sort-by="sortBy"
             :filter-distance="filterDistance"
+            :search="search"
             :coloring-mode="filterState.coloringMode"
             @select="selectVariant"
             @hover="hoverVariant"
@@ -103,6 +104,7 @@
             @clear-filters="clearFilters"
             @update:sort-by="sortBy = $event"
             @update:filter-distance="filterDistance = $event"
+            @update:search="search = $event"
           />
         </v-col>
       </v-row>
@@ -273,6 +275,7 @@ export default {
       sortBy: 'position',
       filterState: withOnlyConsequence(createDefaultFilterState(), 'missense'),
       filterDistance: null,
+      search: '',
       // Cache for variant distances (built by the viewer, keyed by variant_id)
       variantDistanceCache: {},
     };
@@ -351,6 +354,16 @@ export default {
         });
       }
 
+      // Free-text search over the identifiers a user would type.
+      const query = this.search.trim().toLowerCase();
+      if (query) {
+        variants = variants.filter((v) =>
+          [v.protein, v.transcript, v.hg38, v.simple_id, v.variant_id, v.label]
+            .filter(Boolean)
+            .some((field) => field.toLowerCase().includes(query))
+        );
+      }
+
       // Apply sorting
       variants.sort((a, b) => {
         if (this.sortBy === 'position') {
@@ -415,6 +428,7 @@ export default {
       // clear the distance filter.
       this.filterState = createDefaultFilterState();
       this.filterDistance = null;
+      this.search = '';
     },
 
     onReset() {
