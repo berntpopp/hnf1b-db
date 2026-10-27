@@ -78,3 +78,34 @@ export const getReferenceGenomicRegion = (region, genomeBuild = 'GRCh38') =>
   apiClient.get(`/reference/regions/${region}`, {
     params: { genome_build: genomeBuild },
   });
+
+/**
+ * URL of the gene's experimental structure (mmCIF), for 3D viewers that fetch
+ * by URL. Served by the API with a 24 h Cache-Control.
+ * @param {string} symbol - Gene symbol (e.g., "HNF1B")
+ * @returns {string} Absolute or base-relative URL
+ */
+export const getReferenceGeneStructureUrl = (symbol) =>
+  `${apiClient.defaults.baseURL}/reference/genes/${symbol}/structure`;
+
+const dnaDistanceRequests = new Map();
+
+/**
+ * Per-residue distance to DNA in the gene's experimental structure.
+ * Static reference data, so one request per session per gene; a failed
+ * request is dropped from the cache so the next call retries.
+ * @param {string} symbol - Gene symbol (e.g., "HNF1B")
+ * @returns {Promise} Axios promise with { gene, pdb_id, method, residues: [{residue, distance}] }
+ */
+export const getReferenceGeneDnaDistances = (symbol) => {
+  if (!dnaDistanceRequests.has(symbol)) {
+    const request = apiClient
+      .get(`/reference/genes/${symbol}/structure/dna-distances`)
+      .catch((error) => {
+        dnaDistanceRequests.delete(symbol);
+        throw error;
+      });
+    dnaDistanceRequests.set(symbol, request);
+  }
+  return dnaDistanceRequests.get(symbol);
+};

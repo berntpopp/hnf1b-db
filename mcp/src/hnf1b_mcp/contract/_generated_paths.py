@@ -134,6 +134,10 @@ PUBLICATIONS_SYNC = "/publications/sync"
 REFERENCE_GENES = "/reference/genes"
 REFERENCE_GENES_BY_SYMBOL = "/reference/genes/{symbol}"
 REFERENCE_GENES_BY_SYMBOL_DOMAINS = "/reference/genes/{symbol}/domains"
+REFERENCE_GENES_BY_SYMBOL_STRUCTURE = "/reference/genes/{symbol}/structure"
+REFERENCE_GENES_BY_SYMBOL_STRUCTURE_DNA_DISTANCES = (
+    "/reference/genes/{symbol}/structure/dna-distances"
+)
 REFERENCE_GENES_BY_SYMBOL_TRANSCRIPTS = "/reference/genes/{symbol}/transcripts"
 REFERENCE_GENOMES = "/reference/genomes"
 REFERENCE_REGIONS_BY_REGION = "/reference/regions/{region}"
@@ -255,6 +259,8 @@ ALL_PATHS: tuple[str, ...] = (
     REFERENCE_GENES,
     REFERENCE_GENES_BY_SYMBOL,
     REFERENCE_GENES_BY_SYMBOL_DOMAINS,
+    REFERENCE_GENES_BY_SYMBOL_STRUCTURE,
+    REFERENCE_GENES_BY_SYMBOL_STRUCTURE_DNA_DISTANCES,
     REFERENCE_GENES_BY_SYMBOL_TRANSCRIPTS,
     REFERENCE_GENOMES,
     REFERENCE_REGIONS_BY_REGION,

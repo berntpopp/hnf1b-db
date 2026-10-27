@@ -2739,6 +2739,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/reference/genes/{symbol}/structure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gene Structure
+         * @description Download the gene's experimental structure (mmCIF) for 3D viewers.
+         *
+         *     Example:
+         *         GET /api/v2/reference/genes/HNF1B/structure
+         */
+        get: operations["get_gene_structure_api_v2_reference_genes__symbol__structure_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reference/genes/{symbol}/structure/dna-distances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gene Structure Dna Distances
+         * @description Per-residue distance to DNA in the gene's experimental structure.
+         *
+         *     Example:
+         *         GET /api/v2/reference/genes/HNF1B/structure/dna-distances
+         */
+        get: operations["get_gene_structure_dna_distances_api_v2_reference_genes__symbol__structure_dna_distances_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/reference/genes/{symbol}/transcripts": {
         parameters: {
             query?: never;
@@ -5483,6 +5529,22 @@ export interface components {
             revision?: number | null;
         };
         /**
+         * ResidueDnaDistance
+         * @description Distance from one protein residue to the DNA in the structure.
+         */
+        ResidueDnaDistance: {
+            /**
+             * Distance
+             * @description Closest-atom distance to DNA (Å)
+             */
+            distance: number;
+            /**
+             * Residue
+             * @description Residue number (UniProt numbering)
+             */
+            residue: number;
+        };
+        /**
          * ResolutionAppendRequest
          * @description Client-controlled portion of a new append-only resolution.
          */
@@ -5905,6 +5967,32 @@ export interface components {
              * @default 0
              */
             in_review: number;
+        };
+        /**
+         * StructureDnaDistancesResponse
+         * @description Per-residue distance to DNA in the gene's experimental structure.
+         */
+        StructureDnaDistancesResponse: {
+            /**
+             * Gene
+             * @description Gene symbol
+             */
+            gene: string;
+            /**
+             * Method
+             * @description How each distance is measured
+             */
+            method: string;
+            /**
+             * Pdb Id
+             * @description PDB entry the distances come from
+             */
+            pdb_id: string;
+            /**
+             * Residues
+             * @description Every residue resolved in the structure, ascending
+             */
+            residues: components["schemas"]["ResidueDnaDistance"][];
         };
         /**
          * SubjectObservation
@@ -10369,6 +10457,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProteinDomainsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_structure_api_v2_reference_genes__symbol__structure_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "chemical/x-mmcif": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gene_structure_dna_distances_api_v2_reference_genes__symbol__structure_dna_distances_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StructureDnaDistancesResponse"];
                 };
             };
             /** @description Validation Error */

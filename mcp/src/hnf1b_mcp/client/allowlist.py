@@ -33,6 +33,8 @@ _RULES: list[tuple[re.Pattern[str], bool]] = [
     (re.compile(r"^/reference/genes$"), False),
     (re.compile(r"^/reference/genes/[^/]+$"), False),
     (re.compile(r"^/reference/genes/[^/]+/(domains|transcripts)$"), False),
+    # Per-residue distance to DNA in the experimental structure (PDB 2H8R).
+    (re.compile(r"^/reference/genes/[^/]+/structure/dna-distances$"), False),
     (re.compile(r"^/reference/regions/[^/]+$"), False),
     (re.compile(r"^/publications/?$"), False),
     # Read-only hybrid passage retrieval over license-gated open-access full text.
@@ -58,6 +60,8 @@ _DENY = [
         # Privileged / side-effecting (original guards).
         r"^/publications/[^/]+/metadata$",
         r"^/admin",
+        # Raw mmCIF download for 3D viewers: binary-ish, ~550 KB, no use to an agent.
+        r"^/reference/genes/[^/]+/structure$",
         r"^/auth",
         r"^/dev",
         # Live PubMed fetch + DB write.

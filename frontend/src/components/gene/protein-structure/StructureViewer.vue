@@ -21,6 +21,7 @@
 
 <script>
 import { markRaw } from 'vue';
+import { getReferenceGeneStructureUrl } from '@/api';
 import {
   DNADistanceCalculator,
   STRUCTURE_START,
@@ -211,11 +212,10 @@ export default {
         // Restore original console.warn
         console.warn = originalWarn;
 
-        // Load PDB structure 2H8R (HNF1B DNA-binding domain)
-        // Served locally to reduce network dependency and improve load times
+        // Load PDB structure 2H8R (HNF1B DNA-binding domain) from our API
         window.logService.info('Loading PDB structure 2H8R');
         nglStructureComponent = markRaw(
-          await nglStage.loadFile('/2h8r.cif', {
+          await nglStage.loadFile(getReferenceGeneStructureUrl('HNF1B'), {
             defaultRepresentation: false,
             ext: 'cif',
           })

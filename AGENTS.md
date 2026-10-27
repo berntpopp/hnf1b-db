@@ -46,6 +46,8 @@
 - Never use `console.log()` in frontend code; use `window.logService`.
 - Keep pagination and sorting server-side; do not reintroduce client-side table sorting/pagination.
 - `AppDataTable` is the standard table wrapper and should remain server-driven by default.
+- Domain data (structures, lookup tables, precomputed results) comes from the API, never from JSON/CSV/structure files in `frontend/src` or `frontend/public`; cache API responses on the client if needed. The `no-domain-data-in-frontend` pre-commit hook enforces this (site copy in `frontend/public/config/` is the only exception).
+- Chart text and strokes must use theme tokens (`rgb(var(--v-theme-on-surface))` etc.), never fixed colours like `#333` or `black`, so plots stay readable in dark mode.
 
 ## Testing
 

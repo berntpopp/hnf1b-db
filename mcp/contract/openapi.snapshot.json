@@ -4148,6 +4148,27 @@
         "title": "ReportPatchRequest",
         "type": "object"
       },
+      "ResidueDnaDistance": {
+        "description": "Distance from one protein residue to the DNA in the structure.",
+        "properties": {
+          "distance": {
+            "description": "Closest-atom distance to DNA (\u00c5)",
+            "title": "Distance",
+            "type": "number"
+          },
+          "residue": {
+            "description": "Residue number (UniProt numbering)",
+            "title": "Residue",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "residue",
+          "distance"
+        ],
+        "title": "ResidueDnaDistance",
+        "type": "object"
+      },
       "ResolutionAppendRequest": {
         "additionalProperties": false,
         "description": "Client-controlled portion of a new append-only resolution.",
@@ -5286,6 +5307,42 @@
           }
         },
         "title": "StateCounts",
+        "type": "object"
+      },
+      "StructureDnaDistancesResponse": {
+        "description": "Per-residue distance to DNA in the gene's experimental structure.",
+        "properties": {
+          "gene": {
+            "description": "Gene symbol",
+            "title": "Gene",
+            "type": "string"
+          },
+          "method": {
+            "description": "How each distance is measured",
+            "title": "Method",
+            "type": "string"
+          },
+          "pdb_id": {
+            "description": "PDB entry the distances come from",
+            "title": "Pdb Id",
+            "type": "string"
+          },
+          "residues": {
+            "description": "Every residue resolved in the structure, ascending",
+            "items": {
+              "$ref": "#/components/schemas/ResidueDnaDistance"
+            },
+            "title": "Residues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "gene",
+          "pdb_id",
+          "method",
+          "residues"
+        ],
+        "title": "StructureDnaDistancesResponse",
         "type": "object"
       },
       "SubjectObservation": {
@@ -13391,6 +13448,88 @@
           }
         },
         "summary": "Get Gene Domains",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/v2/reference/genes/{symbol}/structure": {
+      "get": {
+        "description": "Download the gene's experimental structure (mmCIF) for 3D viewers.\n\nExample:\n    GET /api/v2/reference/genes/HNF1B/structure",
+        "operationId": "get_gene_structure_api_v2_reference_genes__symbol__structure_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "chemical/x-mmcif": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Gene Structure",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/v2/reference/genes/{symbol}/structure/dna-distances": {
+      "get": {
+        "description": "Per-residue distance to DNA in the gene's experimental structure.\n\nExample:\n    GET /api/v2/reference/genes/HNF1B/structure/dna-distances",
+        "operationId": "get_gene_structure_dna_distances_api_v2_reference_genes__symbol__structure_dna_distances_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructureDnaDistancesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Gene Structure Dna Distances",
         "tags": [
           "reference"
         ]

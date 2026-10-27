@@ -14,11 +14,13 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.reference import structure
 from app.reference.models import (
     Gene,
     ReferenceGenome,
@@ -30,6 +32,8 @@ from app.reference.schemas import (
     GenomicRegionResponse,
     ProteinDomainsResponse,
     ReferenceGenomeSchema,
+    ResidueDnaDistance,
+    StructureDnaDistancesResponse,
     TranscriptDetailSchema,
 )
 
@@ -331,6 +335,58 @@ async def get_gene_domains(
         domains=list(canonical.protein_domains),  # type: ignore[arg-type]
         genome_build=genome.name,
         updated_at=gene.updated_at,
+    )
+
+
+def _require_structure_gene(symbol: str) -> None:
+    if symbol.upper() != structure.GENE:
+        raise HTTPException(
+            status_code=404, detail=f"No experimental structure for gene {symbol}"
+        )
+
+
+@router.get(
+    "/genes/{symbol}/structure",
+    response_class=FileResponse,
+    responses={200: {"content": {"chemical/x-mmcif": {}}}},
+)
+def get_gene_structure(symbol: str) -> FileResponse:
+    """Download the gene's experimental structure (mmCIF) for 3D viewers.
+
+    Example:
+        GET /api/v2/reference/genes/HNF1B/structure
+    """
+    _require_structure_gene(symbol)
+    return FileResponse(
+        structure.STRUCTURE_FILE,
+        media_type="chemical/x-mmcif",
+        filename=f"{structure.PDB_ID.lower()}.cif",
+        headers={"Cache-Control": f"public, max-age={CACHE_MAX_AGE}"},
+    )
+
+
+@router.get(
+    "/genes/{symbol}/structure/dna-distances",
+    response_model=StructureDnaDistancesResponse,
+)
+def get_gene_structure_dna_distances(
+    symbol: str, response: Response
+) -> StructureDnaDistancesResponse:
+    """Per-residue distance to DNA in the gene's experimental structure.
+
+    Example:
+        GET /api/v2/reference/genes/HNF1B/structure/dna-distances
+    """
+    _require_structure_gene(symbol)
+    response.headers["Cache-Control"] = f"public, max-age={CACHE_MAX_AGE}"
+    return StructureDnaDistancesResponse(
+        gene=structure.GENE,
+        pdb_id=structure.PDB_ID,
+        method=structure.DISTANCE_METHOD,
+        residues=[
+            ResidueDnaDistance(residue=residue, distance=distance)
+            for residue, distance in structure.residue_dna_distances().items()
+        ],
     )
 
 
