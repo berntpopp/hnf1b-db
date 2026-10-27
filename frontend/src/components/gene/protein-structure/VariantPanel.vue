@@ -9,6 +9,36 @@
         {{ variants.length }}
         <template v-if="variants.length !== totalInStructure"> / {{ totalInStructure }} </template>
       </v-chip>
+      <v-spacer />
+      <v-tooltip text="Show all listed variants in 3D" location="top">
+        <template #activator="{ props: tip }">
+          <v-btn
+            v-bind="tip"
+            icon="mdi-eye-plus-outline"
+            size="x-small"
+            variant="text"
+            :disabled="variants.length === 0"
+            aria-label="Show all listed variants in 3D"
+            @click="$emit('show-all')"
+          />
+        </template>
+      </v-tooltip>
+      <v-tooltip v-if="shownVariantIds.length" text="Hide all pinned variants" location="top">
+        <template #activator="{ props: tip }">
+          <v-chip
+            v-bind="tip"
+            size="x-small"
+            color="primary"
+            variant="outlined"
+            closable
+            close-label="Hide all pinned variants in 3D"
+            prepend-icon="mdi-eye"
+            @click:close="$emit('clear-shown')"
+          >
+            {{ shownVariantIds.length }}
+          </v-chip>
+        </template>
+      </v-tooltip>
     </div>
 
     <!-- Filter and Sort Controls -->
@@ -82,6 +112,18 @@
             {{ getVariantDistanceFormatted(variant) }}
           </v-chip>
         </v-list-item-subtitle>
+        <template #append>
+          <v-btn
+            :icon="isShown(variant) ? 'mdi-eye' : 'mdi-eye-off-outline'"
+            :color="isShown(variant) ? 'primary' : undefined"
+            size="x-small"
+            density="comfortable"
+            variant="text"
+            :aria-pressed="isShown(variant)"
+            :aria-label="`${isShown(variant) ? 'Hide' : 'Show'} ${getVariantLabel(variant)} in 3D`"
+            @click.stop="$emit('toggle-shown', variant)"
+          />
+        </template>
       </v-list-item>
     </v-list>
     <div v-if="variants.length === 0" class="text-center py-4 text-grey">
@@ -143,6 +185,11 @@ export default {
       type: String,
       default: '',
     },
+    // Variants pinned in the 3D view (independent of the single selected variant).
+    shownVariantIds: {
+      type: Array,
+      default: () => [],
+    },
     // Colour-by mode shared with the unified controls (classification | consequence).
     coloringMode: {
       type: String,
@@ -157,6 +204,9 @@ export default {
     'update:sortBy',
     'update:filterDistance',
     'update:search',
+    'toggle-shown',
+    'show-all',
+    'clear-shown',
   ],
   data() {
     return {
@@ -173,6 +223,10 @@ export default {
     };
   },
   methods: {
+    isShown(variant) {
+      return this.shownVariantIds.includes(variant.variant_id);
+    },
+
     extractAAPosition(variant) {
       return extractAAPositionUtil(variant);
     },

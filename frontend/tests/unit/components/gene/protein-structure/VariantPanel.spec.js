@@ -93,3 +93,21 @@ describe('VariantPanel', () => {
     expect(clearBtn).toBeUndefined();
   });
 });
+
+describe('VariantPanel pinned variants', () => {
+  it('emits toggle-shown from the eye button without selecting the row', async () => {
+    const wrapper = mountPanel();
+    await wrapper.find('[aria-label="Show p.Arg100Gly in 3D"]').trigger('click');
+    expect(wrapper.emitted('toggle-shown')[0][0].variant_id).toBe('V1');
+    expect(wrapper.emitted('select')).toBeFalsy();
+  });
+
+  it('marks pinned rows and shows a closable pinned-count chip', async () => {
+    const wrapper = mountPanel({ shownVariantIds: ['V2'] });
+    const pinned = wrapper.find('[aria-label="Hide p.Lys200Asn in 3D"]');
+    expect(pinned.attributes('aria-pressed')).toBe('true');
+    expect(wrapper.find('.v-chip--variant-outlined').text()).toContain('1');
+    await wrapper.find('[aria-label="Hide all pinned variants in 3D"]').trigger('click');
+    expect(wrapper.emitted('clear-shown')).toBeTruthy();
+  });
+});

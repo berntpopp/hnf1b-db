@@ -132,3 +132,19 @@ describe('ProteinStructure3D.vue variant search', () => {
     expect(wrapper.vm.search).toBe('');
   });
 });
+
+describe('ProteinStructure3D.vue pinned variants', () => {
+  it('toggles pinned variants and only passes in-structure ones to the viewer', async () => {
+    const variants = [
+      { variant_id: 'V1', protein: 'p.Arg177Gln' },
+      { variant_id: 'V2', protein: 'p.Lys200Asn' },
+      { variant_id: 'V3', protein: 'p.Gln10Ter' }, // outside 90-308
+    ];
+    const wrapper = await mountViewer({ variants, showAllVariants: true });
+    wrapper.vm.toggleShown(variants[0]);
+    wrapper.vm.toggleShown(variants[2]);
+    expect(wrapper.vm.shownVariants.map((v) => v.variant_id)).toEqual(['V1']);
+    wrapper.vm.toggleShown(variants[0]);
+    expect(wrapper.vm.shownVariantIds).toEqual(['V3']);
+  });
+});

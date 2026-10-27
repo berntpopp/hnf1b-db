@@ -78,6 +78,7 @@
             :variants="variants"
             :show-all-variants="showAllVariants"
             :coloring-mode="filterState.coloringMode"
+            :shown-variants="shownVariants"
             @loading="loading = $event"
             @loaded="structureLoaded = true"
             @error="error = $event"
@@ -97,6 +98,7 @@
             :sort-by="sortBy"
             :filter-distance="filterDistance"
             :search="search"
+            :shown-variant-ids="shownVariantIds"
             :coloring-mode="filterState.coloringMode"
             @select="selectVariant"
             @hover="hoverVariant"
@@ -105,6 +107,9 @@
             @update:sort-by="sortBy = $event"
             @update:filter-distance="filterDistance = $event"
             @update:search="search = $event"
+            @toggle-shown="toggleShown"
+            @show-all="shownVariantIds = filteredAndSortedVariants.map((v) => v.variant_id)"
+            @clear-shown="shownVariantIds = []"
           />
         </v-col>
       </v-row>
@@ -276,6 +281,8 @@ export default {
       filterState: withOnlyConsequence(createDefaultFilterState(), 'missense'),
       filterDistance: null,
       search: '',
+      // Variants pinned in 3D; kept when filters change so a comparison set survives.
+      shownVariantIds: [],
       // Cache for variant distances (built by the viewer, keyed by variant_id)
       variantDistanceCache: {},
     };
@@ -301,6 +308,10 @@ export default {
         const pos = this.extractAAPosition(v);
         return pos && this.isPositionInStructure(pos);
       });
+    },
+    shownVariants() {
+      const ids = new Set(this.shownVariantIds);
+      return this.variantsInStructure.filter((v) => ids.has(v.variant_id));
     },
     selectedVariant() {
       if (!this.selectedVariantId) return null;
@@ -407,6 +418,13 @@ export default {
     },
 
     // Variant selection methods for showAllVariants mode
+    toggleShown(variant) {
+      const id = variant.variant_id;
+      this.shownVariantIds = this.shownVariantIds.includes(id)
+        ? this.shownVariantIds.filter((x) => x !== id)
+        : [...this.shownVariantIds, id];
+    },
+
     selectVariant(variant) {
       this.selectedVariantId = variant.variant_id;
     },
