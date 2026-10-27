@@ -61,8 +61,8 @@ async def test_search_variants_registers_with_readonly_hint():
     register(mcp, None)
     tools = await mcp.list_tools()
     t = next(t for t in tools if t.name == "hnf1b_search_variants")
-    assert t.annotations.readOnlyHint is True
-    assert t.annotations.openWorldHint is False
+    assert t.annotations.read_only_hint is True
+    assert t.annotations.open_world_hint is False
 
 
 @pytest.mark.asyncio
@@ -72,8 +72,8 @@ async def test_get_variant_registers_with_readonly_hint():
     register(mcp, None)
     tools = await mcp.list_tools()
     t = next(t for t in tools if t.name == "hnf1b_get_variant")
-    assert t.annotations.readOnlyHint is True
-    assert t.annotations.openWorldHint is False
+    assert t.annotations.read_only_hint is True
+    assert t.annotations.open_world_hint is False
 
 
 # ---------------------------------------------------------------------------

@@ -131,8 +131,8 @@ async def test_get_individual_has_readonly_hint():
     register(mcp, None)
     tools = await mcp.list_tools()
     t = next(t for t in tools if t.name == "hnf1b_get_individual")
-    assert t.annotations.readOnlyHint is True
-    assert t.annotations.openWorldHint is False
+    assert t.annotations.read_only_hint is True
+    assert t.annotations.open_world_hint is False
 
 
 @pytest.mark.asyncio
@@ -141,8 +141,8 @@ async def test_get_individuals_has_readonly_hint():
     register(mcp, None)
     tools = await mcp.list_tools()
     t = next(t for t in tools if t.name == "hnf1b_get_individuals")
-    assert t.annotations.readOnlyHint is True
-    assert t.annotations.openWorldHint is False
+    assert t.annotations.read_only_hint is True
+    assert t.annotations.open_world_hint is False
 
 
 @pytest.mark.asyncio
@@ -151,8 +151,8 @@ async def test_find_individuals_by_phenotype_has_readonly_hint():
     register(mcp, None)
     tools = await mcp.list_tools()
     t = next(t for t in tools if t.name == "hnf1b_find_individuals_by_phenotype")
-    assert t.annotations.readOnlyHint is True
-    assert t.annotations.openWorldHint is False
+    assert t.annotations.read_only_hint is True
+    assert t.annotations.open_world_hint is False
 
 
 # ---------------------------------------------------------------------------

@@ -117,8 +117,8 @@ async def test_registers_with_readonly_hint() -> None:
     register(mcp, None)
     tools = await mcp.list_tools()
     t = next(t for t in tools if t.name == "hnf1b_get_gene_context")
-    assert t.annotations.readOnlyHint is True
-    assert t.annotations.openWorldHint is False
+    assert t.annotations.read_only_hint is True
+    assert t.annotations.open_world_hint is False
 
 
 @pytest.mark.asyncio

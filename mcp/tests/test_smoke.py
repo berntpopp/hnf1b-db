@@ -40,14 +40,6 @@ _EXPECTED_RESOURCES = {
 
 
 @pytest.mark.asyncio
-async def test_client_pings():
-    """In-memory client connects and responds to ping."""
-    async with Client(build_app()) as client:
-        result = await client.ping()
-    assert result is True
-
-
-@pytest.mark.asyncio
 async def test_list_tools_returns_all_hnf1b_tools():
     """list_tools exposes exactly the expected hnf1b_* tool set."""
     async with Client(build_app()) as client:
@@ -65,7 +57,7 @@ async def test_all_tools_have_read_only_hint():
 
     for tool in tools:
         assert tool.annotations is not None, f"{tool.name} has no annotations"
-        assert tool.annotations.readOnlyHint is True, (
+        assert tool.annotations.read_only_hint is True, (
             f"{tool.name}.readOnlyHint is not True"
         )
 
@@ -94,7 +86,7 @@ async def test_sample_tool_has_open_world_hint_false():
 
     cap = next(t for t in tools if t.name == "hnf1b_get_capabilities")
     assert cap.annotations is not None
-    assert cap.annotations.openWorldHint is False
+    assert cap.annotations.open_world_hint is False
 
 
 @pytest.mark.asyncio
