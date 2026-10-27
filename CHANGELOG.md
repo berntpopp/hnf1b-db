@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-10-27
+
+### Added
+
+- Variants in Structure (3D viewer): free-text search over protein, transcript, genomic and variant ids.
+
+### Fixed
+
+- 3D structure viewer in dark mode: the canvas, residue labels and distance text follow the theme instead of staying white, and the variant list is readable (it rendered white text on a light background). Residue labels use Inter instead of a generic sans-serif.
+
+### Security
+
+- Dependency updates clearing all 20 open Dependabot alerts (#584).
+
 ## [0.4.2] - 2026-10-27
 
 ### Added
