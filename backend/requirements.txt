@@ -162,7 +162,7 @@ pydantic-settings==2.15.0
     # via hnf1b-api
 pyjwt==2.15.1
     # via hnf1b-api
-python-dateutil==2.9.0.post0
+python-dateutil==3.0.0
     # via
     #   pandas
     #   pronto
