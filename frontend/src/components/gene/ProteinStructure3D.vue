@@ -167,7 +167,7 @@
         <div class="d-flex align-center flex-wrap ga-2">
           <span> <strong>Selected:</strong> {{ getVariantLabel(selectedVariant) }} </span>
           <v-chip size="x-small" :color="getVariantChipColor(selectedVariant)">
-            {{ selectedVariant.classificationVerdict || 'Unknown' }}
+            {{ classificationLabel(selectedVariant) }}
           </v-chip>
           <v-spacer />
           <v-btn
@@ -198,6 +198,7 @@ import { extractPNotation } from '@/utils/hgvs';
 import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomains';
 import StructureViewer from '@/components/gene/protein-structure/StructureViewer.vue';
 import StructureControls from '@/components/gene/protein-structure/StructureControls.vue';
+import { INTERPRETATION_STATUS_LABELS } from '@/utils/cardStyles';
 import VariantPanel from '@/components/gene/protein-structure/VariantPanel.vue';
 import DistanceStatsCard from '@/components/gene/protein-structure/DistanceStatsCard.vue';
 import VariantPlotControls from '@/components/gene/VariantPlotControls.vue';
@@ -418,6 +419,11 @@ export default {
     },
 
     // Variant selection methods for showAllVariants mode
+    classificationLabel(variant) {
+      const verdict = variant.classificationVerdict;
+      return INTERPRETATION_STATUS_LABELS[verdict] || verdict || 'Unknown';
+    },
+
     toggleShown(variant) {
       const id = variant.variant_id;
       this.shownVariantIds = this.shownVariantIds.includes(id)

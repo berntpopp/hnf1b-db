@@ -102,7 +102,7 @@
           {{ getVariantLabel(variant) }}
         </v-list-item-title>
         <v-list-item-subtitle class="text-caption d-flex align-center">
-          <span>{{ variant.classificationVerdict || 'Unknown' }}</span>
+          <span>{{ classificationLabel(variant) }}</span>
           <v-chip
             v-if="getVariantDistanceCategory(variant)"
             size="x-small"
@@ -149,6 +149,7 @@
 
 <script>
 import { extractPNotation } from '@/utils/hgvs';
+import { INTERPRETATION_STATUS_LABELS } from '@/utils/cardStyles';
 import { getVariantColorByMode } from '@/utils/variantFilters';
 import { extractAAPosition as extractAAPositionUtil } from '@/utils/proteinDomains';
 
@@ -223,6 +224,11 @@ export default {
     };
   },
   methods: {
+    classificationLabel(variant) {
+      const verdict = variant.classificationVerdict;
+      return INTERPRETATION_STATUS_LABELS[verdict] || verdict || 'Unknown';
+    },
+
     isShown(variant) {
       return this.shownVariantIds.includes(variant.variant_id);
     },

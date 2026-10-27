@@ -401,28 +401,26 @@ export default {
         );
       }
 
-      // Short label per residue on the first chain's CA only (2H8R is a dimer).
-      // The selected residue already carries the large label.
+      // Short label per residue; the selected residue already carries the large label.
       if (byPosition.size > MAX_PINNED_LABELS) return;
-      const labelText = {};
-      const labelled = new Set([this.activeVariantAAPosition]);
-      nglStructureComponent.structure.eachAtom(
-        (atom) => {
-          if (labelled.has(atom.resno)) return;
-          labelled.add(atom.resno);
-          const group = byPosition.get(atom.resno);
-          // ASCII only: NGL's glyph atlas has no "×".
-          labelText[atom.index] =
-            group.length > 1
-              ? `${atom.resno} (${group.length})`
-              : this.getVariantLabel(group[0]).replace(/^p\./, '');
-        },
-        new NGL.Selection(`(${[...byPosition.keys()].join(' or ')}) and .CA`)
+      const labelPositions = [...byPosition.keys()].filter(
+        (pos) => pos !== this.activeVariantAAPosition
       );
+      if (labelPositions.length === 0) return;
+      const sele = this.labelSele(labelPositions);
+      const labelText = {};
+      nglStructureComponent.structure.eachAtom((atom) => {
+        const group = byPosition.get(atom.resno);
+        // ASCII only: NGL's glyph atlas has no "×".
+        labelText[atom.index] =
+          group.length > 1
+            ? `${atom.resno} (${group.length})`
+            : this.getVariantLabel(group[0]).replace(/^p\./, '');
+      }, new NGL.Selection(sele));
       const { background, text } = this.viewerColors;
       nglShownRepresentations.push(
         nglStructureComponent.addRepresentation('label', {
-          sele: `(${[...byPosition.keys()].join(' or ')}) and .CA`,
+          sele,
           labelType: 'text',
           labelText,
           color: text,
@@ -430,6 +428,7 @@ export default {
           fontWeight: 'normal',
           fontSize: 12,
           yOffset: 2,
+          zOffset: 4, // pull toward the camera so ribbons don't hide it
           fixedSize: true,
           attachment: 'middle-center',
           showBackground: true,
@@ -438,6 +437,16 @@ export default {
           backgroundMargin: 2,
         })
       );
+    },
+
+    // CA atoms of these residues on the first protein chain only: 2H8R holds two
+    // copies of the protein, and labelling both draws every label twice.
+    labelSele(positions) {
+      let chain = null;
+      nglStructureComponent.structure.eachAtom((atom) => {
+        chain ??= atom.chainname;
+      }, new NGL.Selection('protein and .CA'));
+      return `(${positions.join(' or ')}) and .CA and :${chain}`;
     },
 
     addDomainColoredRepresentations() {
@@ -542,7 +551,7 @@ export default {
       // Add label using format string for better reliability
       const variantLabel = this.getVariantLabel(this.activeVariant);
       nglLabelRepresentation = nglStructureComponent.addRepresentation('label', {
-        sele: `${pdbPosition} and .CA`,
+        sele: this.labelSele([pdbPosition]),
         labelType: 'format',
         labelFormat: variantLabel,
         labelGrouping: 'residue',
@@ -552,7 +561,7 @@ export default {
         fontSize: 16,
         xOffset: 0,
         yOffset: 3,
-        zOffset: 0,
+        zOffset: 4,
         fixedSize: true,
         attachment: 'middle-center',
         showBackground: true,
