@@ -42,6 +42,10 @@ let nglVariantBallStickRepresentation = null;
 let nglLabelRepresentation = null;
 let nglDistanceShape = null;
 let distanceCalculator = null;
+// Pinned ("shown") variants: one bead representation per colour + one label representation.
+let nglShownRepresentations = [];
+// Above this many pinned residues the labels become clutter; beads alone stay readable.
+const MAX_PINNED_LABELS = 10;
 
 // Color for linker regions (between domains)
 const LINKER_COLOR = 0x9e9e9e; // Grey
@@ -98,6 +102,11 @@ export default {
       type: String,
       default: 'classification',
     },
+    // Variants pinned in the panel; drawn as coloured beads with short labels.
+    shownVariants: {
+      type: Array,
+      default: () => [],
+    },
   },
   emits: [
     'loading',
@@ -129,6 +138,7 @@ export default {
       if (!nglStage) return;
       nglStage.setParameters({ backgroundColor: this.viewerColors.background });
       this.addVariantLabel();
+      this.renderShownVariants();
       if (nglDistanceShape) {
         this.removeDistanceLine();
         this.addDistanceLine();
@@ -146,9 +156,14 @@ export default {
     coloringMode() {
       // Recolour the highlighted variant when the colour-by mode changes.
       this.highlightActiveVariant();
+      this.renderShownVariants();
+    },
+    shownVariants() {
+      this.renderShownVariants();
     },
     activeVariant() {
       this.highlightActiveVariant();
+      this.renderShownVariants();
       this.calculateActiveVariantDistance();
     },
     showDistanceLine(value) {
@@ -347,8 +362,91 @@ export default {
         });
       }
 
-      // Re-highlight active variant
+      // Re-highlight active variant (removeAllRepresentations dropped the pinned ones too)
+      nglShownRepresentations = [];
       this.highlightActiveVariant();
+      this.renderShownVariants();
+    },
+
+    renderShownVariants() {
+      if (!nglStructureComponent) return;
+      nglShownRepresentations.forEach((r) => nglStructureComponent.removeRepresentation(r));
+      nglShownRepresentations = [];
+
+      // Group by residue: variants at one position share a bead, coloured by the first.
+      const byPosition = new Map();
+      for (const variant of this.shownVariants) {
+        const pos = this.extractAAPosition(variant);
+        if (!pos || !this.isPositionInStructure(pos)) continue;
+        if (!byPosition.has(pos)) byPosition.set(pos, []);
+        byPosition.get(pos).push(variant);
+      }
+      if (byPosition.size === 0) return;
+
+      const byColor = new Map();
+      for (const [pos, group] of byPosition) {
+        const color = this.getVariantColor(group[0]);
+        if (!byColor.has(color)) byColor.set(color, []);
+        byColor.get(color).push(pos);
+      }
+      for (const [color, positions] of byColor) {
+        nglShownRepresentations.push(
+          nglStructureComponent.addRepresentation('spacefill', {
+            sele: `(${positions.join(' or ')}) and .CA`,
+            color,
+            radiusType: 'size',
+            radiusSize: 1.6,
+            opacity: 0.85,
+          })
+        );
+      }
+
+      // Short label per residue; the selected residue already carries the large label.
+      if (byPosition.size > MAX_PINNED_LABELS) return;
+      const labelPositions = [...byPosition.keys()].filter(
+        (pos) => pos !== this.activeVariantAAPosition
+      );
+      if (labelPositions.length === 0) return;
+      const sele = this.labelSele(labelPositions);
+      const labelText = {};
+      nglStructureComponent.structure.eachAtom((atom) => {
+        const group = byPosition.get(atom.resno);
+        // ASCII only: NGL's glyph atlas has no "×".
+        labelText[atom.index] =
+          group.length > 1
+            ? `${atom.resno} (${group.length})`
+            : this.getVariantLabel(group[0]).replace(/^p\./, '');
+      }, new NGL.Selection(sele));
+      const { background, text } = this.viewerColors;
+      nglShownRepresentations.push(
+        nglStructureComponent.addRepresentation('label', {
+          sele,
+          labelType: 'text',
+          labelText,
+          color: text,
+          fontFamily: LABEL_FONT,
+          fontWeight: 'normal',
+          fontSize: 12,
+          yOffset: 2,
+          zOffset: 4, // pull toward the camera so ribbons don't hide it
+          fixedSize: true,
+          attachment: 'middle-center',
+          showBackground: true,
+          backgroundColor: background,
+          backgroundOpacity: 0.7,
+          backgroundMargin: 2,
+        })
+      );
+    },
+
+    // CA atoms of these residues on the first protein chain only: 2H8R holds two
+    // copies of the protein, and labelling both draws every label twice.
+    labelSele(positions) {
+      let chain = null;
+      nglStructureComponent.structure.eachAtom((atom) => {
+        chain ??= atom.chainname;
+      }, new NGL.Selection('protein and .CA'));
+      return `(${positions.join(' or ')}) and .CA and :${chain}`;
     },
 
     addDomainColoredRepresentations() {
@@ -453,7 +551,7 @@ export default {
       // Add label using format string for better reliability
       const variantLabel = this.getVariantLabel(this.activeVariant);
       nglLabelRepresentation = nglStructureComponent.addRepresentation('label', {
-        sele: `${pdbPosition} and .CA`,
+        sele: this.labelSele([pdbPosition]),
         labelType: 'format',
         labelFormat: variantLabel,
         labelGrouping: 'residue',
@@ -463,7 +561,7 @@ export default {
         fontSize: 16,
         xOffset: 0,
         yOffset: 3,
-        zOffset: 0,
+        zOffset: 4,
         fixedSize: true,
         attachment: 'middle-center',
         showBackground: true,
