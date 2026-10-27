@@ -2,11 +2,10 @@
 <template>
   <v-container fluid>
     <!-- Loading state -->
-    <v-row v-if="loading" class="pa-3">
+    <v-row v-if="loading" class="pa-3 analysis-loading reveal-delayed">
       <v-col cols="12" class="text-center">
         <v-progress-circular indeterminate color="primary" size="64" />
-        <p class="mt-4">Loading 3D structure and calculating distances...</p>
-        <p class="text-caption text-grey">This may take a few seconds</p>
+        <p class="mt-4">Calculating distances…</p>
       </v-col>
     </v-row>
 
@@ -82,12 +81,11 @@
 </template>
 
 <script>
-import * as NGL from 'ngl';
-import { markRaw } from 'vue';
-import { getVariants } from '@/api';
+import { getVariants, getReferenceGeneDnaDistances } from '@/api';
 import { extractPNotation, extractCNotation } from '@/utils/hgvs';
 import {
-  DNADistanceCalculator,
+  categorizeDistance,
+  isPositionInStructure,
   STRUCTURE_START,
   STRUCTURE_END,
 } from '@/utils/dnaDistanceCalculator';
@@ -97,11 +95,6 @@ import BoxPlotChart from './BoxPlotChart.vue';
 import DistanceStatsSummary from './DistanceStatsSummary.vue';
 import DistanceCategoryBreakdown from './DistanceCategoryBreakdown.vue';
 import StatisticalDetailsPanel from './StatisticalDetailsPanel.vue';
-
-// Store NGL objects outside Vue's reactivity system
-let nglStage = null;
-let nglStructureComponent = null;
-let distanceCalculator = null;
 
 export default {
   name: 'DNADistanceAnalysis',
@@ -145,35 +138,29 @@ export default {
   mounted() {
     this.loadData();
   },
-  beforeUnmount() {
-    // Clean up NGL stage
-    if (nglStage) {
-      nglStage.dispose();
-      nglStage = null;
-      nglStructureComponent = null;
-      distanceCalculator = null;
-    }
-  },
   methods: {
     async loadData() {
       try {
         this.loading = true;
         this.error = null;
 
-        // 1. Load variants from API (max page size is 500)
-        const response = await getVariants({ page: 1, pageSize: 500 });
-        this.variants = response.data || [];
+        // 1. Load variants (max page size is 500) and the per-residue DNA
+        //    distances of the HNF1B structure from the API, in parallel.
+        const [variantsResponse, distancesResponse] = await Promise.all([
+          getVariants({ page: 1, pageSize: 500 }),
+          getReferenceGeneDnaDistances('HNF1B'),
+        ]);
+        this.variants = variantsResponse.data || [];
 
-        // 2. Initialize NGL and load structure (hidden, just for calculation)
-        await this.initializeNGL();
+        // 2. Calculate distances
+        this.calculateDistances(
+          new Map(distancesResponse.data.residues.map((r) => [r.residue, r.distance]))
+        );
 
-        // 3. Calculate distances
-        this.calculateDistances();
-
-        // 4. Perform statistical analysis
+        // 3. Perform statistical analysis
         this.performStatisticalAnalysis();
 
-        // 5. Mark loading complete
+        // 4. Mark loading complete
         this.loading = false;
 
         window.logService.info('DNA distance analysis complete (missense only)', {
@@ -189,35 +176,7 @@ export default {
       }
     },
 
-    async initializeNGL() {
-      // Create a hidden container for NGL
-      const container = document.createElement('div');
-      container.style.width = '1px';
-      container.style.height = '1px';
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      document.body.appendChild(container);
-
-      nglStage = markRaw(
-        new NGL.Stage(container, {
-          backgroundColor: 'white',
-        })
-      );
-
-      // Load PDB structure (served locally for performance)
-      nglStructureComponent = markRaw(
-        await nglStage.loadFile('/2h8r.cif', {
-          defaultRepresentation: false,
-          ext: 'cif',
-        })
-      );
-
-      // Initialize distance calculator
-      distanceCalculator = new DNADistanceCalculator();
-      distanceCalculator.initialize(nglStructureComponent);
-    },
-
-    calculateDistances() {
+    calculateDistances(residueDistances) {
       const variantsWithDistances = [];
       let missenseCount = 0;
       let inRangeCount = 0;
@@ -240,8 +199,10 @@ export default {
         }
         inRangeCount++;
 
-        const distanceInfo = distanceCalculator.calculateResidueToHelixDistance(aaPosition, true);
-        if (!distanceInfo) {
+        const distance = isPositionInStructure(aaPosition)
+          ? residueDistances.get(aaPosition)
+          : undefined;
+        if (distance === undefined) {
           window.logService.debug('No distance info for position', {
             aaPosition,
             variant: variant.protein,
@@ -253,8 +214,8 @@ export default {
         variantsWithDistances.push({
           ...variant,
           aaPosition,
-          distance: distanceInfo.distance,
-          category: distanceInfo.category,
+          distance,
+          category: categorizeDistance(distance),
         });
       }
 
@@ -391,3 +352,11 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+/* Hold roughly the result's height while loading (stat cards + charts). */
+.analysis-loading {
+  min-height: 640px;
+  align-content: center;
+}
+</style>

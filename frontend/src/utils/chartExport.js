@@ -76,13 +76,31 @@ function inlineComputedStyles(liveRoot, clonedRoot) {
 }
 
 /**
+ * Colour actually painted behind an element (first opaque ancestor background).
+ * The PNG copies on-screen text colours, so it must also copy the background:
+ * on the dark theme a white canvas would hide the near-white text.
+ * @param {Element} el
+ * @returns {string} CSS colour
+ */
+export function backgroundBehind(el) {
+  for (let node = el; node instanceof Element; node = node.parentElement) {
+    const color = window.getComputedStyle(node).backgroundColor;
+    if (color && color !== 'transparent' && !/,\s*0\)$/.test(color)) return color;
+  }
+  return '#ffffff';
+}
+
+/**
  * Export an SVG element as a PNG via canvas. No external dependencies for
  * rasterization; uses file-saver for the download trigger.
  * @param {SVGElement} svgEl
  * @param {{filename:string, scale?:number, background?:string}} options
  * @returns {Promise<void>}
  */
-export function exportSvgAsPng(svgEl, { filename, scale = 2, background = '#ffffff' }) {
+export function exportSvgAsPng(
+  svgEl,
+  { filename, scale = 2, background = backgroundBehind(svgEl) }
+) {
   return new Promise((resolve, reject) => {
     const bbox = {
       width: parseFloat(svgEl.getAttribute('width')) || svgEl.clientWidth,

@@ -226,6 +226,17 @@ export function formatPValue(pValue) {
 }
 
 /**
+ * P-value as a label: "p < 0.0001" or "p = 0.012" (never "p = < 0.0001").
+ *
+ * @param {number} pValue - P-value
+ * @returns {string} Label text
+ */
+export function formatPLabel(pValue) {
+  const value = formatPValue(pValue);
+  return value.startsWith('<') ? `p ${value}` : `p = ${value}`;
+}
+
+/**
  * Get color for rank-biserial correlation effect size.
  *
  * @param {number} r - Rank-biserial correlation coefficient

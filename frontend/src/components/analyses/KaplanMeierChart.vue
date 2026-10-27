@@ -150,7 +150,7 @@ export default {
           .append('div')
           .style('text-align', 'center')
           .style('padding', '40px')
-          .style('color', '#666')
+          .style('opacity', 0.7)
           .text('No survival data available');
         return;
       }
@@ -193,7 +193,8 @@ export default {
         .attr('class', 'grid')
         .call(d3.axisLeft(y).ticks(10).tickSize(-svgWidth).tickFormat(''))
         .selectAll('line')
-        .style('stroke', '#e0e0e0')
+        .style('stroke', 'currentColor')
+        .style('stroke-opacity', 0.15)
         .style('stroke-dasharray', '2,2');
 
       // Vertical grid lines (for time points)
@@ -203,7 +204,8 @@ export default {
         .attr('transform', `translate(0,${svgHeight})`)
         .call(d3.axisBottom(x).ticks(10).tickSize(-svgHeight).tickFormat(''))
         .selectAll('line')
-        .style('stroke', '#e0e0e0')
+        .style('stroke', 'currentColor')
+        .style('stroke-opacity', 0.15)
         .style('stroke-dasharray', '2,2');
 
       // Draw survival curves for each group
@@ -316,20 +318,24 @@ export default {
             .attr('cy', y(0.5))
             .attr('r', 4)
             .attr('fill', color)
-            .attr('stroke', '#fff')
+            .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
             .attr('stroke-width', 1.5)
             .attr('opacity', 0.8);
 
-          // Add text label showing the median time (positioned above the point)
+          // Median time label above the point; stacked per group so close
+          // medians don't overlap, with a surface halo to stay legible on curves.
           svg
             .append('text')
             .attr('class', `median-label-${groupIndex}`)
             .attr('x', x(medianTime))
-            .attr('y', y(0.5) - 10)
+            .attr('y', y(0.5) - 10 - groupIndex * 14)
             .attr('text-anchor', 'middle')
             .attr('font-size', '11px')
             .attr('font-weight', 'bold')
             .attr('fill', color)
+            .style('paint-order', 'stroke')
+            .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
+            .style('stroke-width', 3)
             .text(`${medianTime.toFixed(1)}y`);
         }
       });
@@ -344,7 +350,7 @@ export default {
           .attr('cy', y(d.survival_probability))
           .attr('r', 4)
           .attr('fill', color)
-          .attr('stroke', '#fff')
+          .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
           .attr('stroke-width', 1.5)
           .style('cursor', 'pointer')
           .on('mouseover', function (_event) {
@@ -364,7 +370,7 @@ export default {
               .attr('y', y(d.survival_probability) - 10)
               .text(tooltipText)
               .attr('font-size', '12px')
-              .attr('fill', '#333')
+              .attr('fill', 'currentColor')
               .attr('font-weight', 'bold');
           })
           .on('mouseout', function () {
@@ -432,7 +438,8 @@ export default {
         .attr('y', -20)
         .attr('text-anchor', 'middle')
         .style('font-size', '13px')
-        .style('fill', '#666')
+        .style('fill', 'currentColor')
+        .style('fill-opacity', 0.7)
         .text(`Endpoint: ${this.survivalData.endpoint}`);
 
       // Legend with group names and sample sizes (positioned inside chart in upper right)
@@ -448,9 +455,10 @@ export default {
         .attr('y', -5)
         .attr('width', 270)
         .attr('height', legendHeight)
-        .attr('fill', 'white')
+        .style('fill', 'rgb(var(--v-theme-surface, 255, 255, 255))')
         .attr('fill-opacity', 0.9)
-        .attr('stroke', '#ddd')
+        .attr('stroke', 'currentColor')
+        .attr('stroke-opacity', 0.2)
         .attr('stroke-width', 1)
         .attr('rx', 4);
 

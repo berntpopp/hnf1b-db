@@ -193,3 +193,20 @@ describe('exportSvgAsPng', () => {
     canvasSpy.mockRestore();
   });
 });
+
+describe('backgroundBehind', () => {
+  it('returns the first opaque ancestor background, else white', async () => {
+    const { backgroundBehind } = await import('@/utils/chartExport');
+    const card = document.createElement('div');
+    card.style.backgroundColor = 'rgb(30, 30, 30)';
+    const wrapper = document.createElement('div');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    wrapper.appendChild(svg);
+    card.appendChild(wrapper);
+    document.body.appendChild(card);
+
+    expect(backgroundBehind(svg)).toBe('rgb(30, 30, 30)');
+    expect(backgroundBehind(document.createElement('div'))).toBe('#ffffff');
+    card.remove();
+  });
+});

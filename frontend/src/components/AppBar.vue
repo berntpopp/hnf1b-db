@@ -170,6 +170,15 @@
         </v-tooltip>
       </div>
     </v-container>
+    <v-progress-linear
+      v-if="navigating"
+      class="nav-progress"
+      indeterminate
+      absolute
+      location="bottom"
+      color="teal-lighten-3"
+      aria-label="Loading page"
+    />
   </v-app-bar>
 </template>
 
@@ -180,6 +189,7 @@ import { useDisplay } from 'vuetify';
 import { useAuthStore } from '@/stores/authStore';
 import { navigationItems } from '@/config/navigationItems';
 import ThemeSwitcher from '@/components/ThemeSwitcher.vue';
+import { navigating } from '@/router/navigating';
 
 // Emit toggle-drawer event for mobile menu
 defineEmits(['toggle-drawer']);
@@ -299,6 +309,16 @@ const handleLogout = async () => {
 </script>
 
 <style scoped>
+/* Only show for navigations that take noticeably long. */
+.nav-progress {
+  animation: nav-progress-reveal 0s 150ms both;
+}
+@keyframes nav-progress-reveal {
+  from {
+    visibility: hidden;
+  }
+}
+
 /* Logo container - prevents flex shrinking and ensures visibility */
 .logo-container {
   flex-shrink: 0;

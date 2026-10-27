@@ -51,4 +51,11 @@ authStore.initialize().catch((err) => {
 app.use(router);
 app.use(vuetify);
 app.use(head); // Enable per-page meta tags with useHead()
-app.mount('#app');
+// Mount once the first route has resolved: mounting earlier paints the app
+// bar and footer with an empty page between them, then the page pushes the
+// footer down. The static shell in index.html covers the wait. A failed first
+// navigation (router.onError logs it) must still mount, or the page stays blank.
+router
+  .isReady()
+  .catch(() => {})
+  .then(() => app.mount('#app'));

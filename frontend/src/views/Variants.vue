@@ -4,6 +4,7 @@
     <!-- Unified Table with Column-Based Filtering -->
     <AppDataTable
       v-model:options="options"
+      class="table-fixed"
       :headers="displayHeaders"
       :items="variants"
       :loading="loading"
@@ -263,20 +264,22 @@ export default {
         'BENIGN',
       ],
 
-      // Table configuration
+      // Table configuration (widths sum to the narrowest desktop table, 975px, in
+      // the proportions auto layout chose; the table uses fixed layout so columns
+      // don't jump when rows load)
       // All sortable columns are server-side sorted via JSON:API sort parameter
       headers: [
         { title: 'Variant ID', value: 'simple_id', sortable: true, width: '100px' },
-        { title: 'Transcript (c.)', value: 'transcript', sortable: true, width: '160px' },
-        { title: 'Protein (p.)', value: 'protein', sortable: true, width: '140px' },
-        { title: 'Type', value: 'variant_type', sortable: true, width: '100px' },
-        { title: 'HG38', value: 'hg38', sortable: true, width: '200px' },
-        { title: 'Classification', value: 'classificationVerdict', sortable: true, width: '140px' },
+        { title: 'Transcript (c.)', value: 'transcript', sortable: true, width: '150px' },
+        { title: 'Protein (p.)', value: 'protein', sortable: true, width: '135px' },
+        { title: 'Type', value: 'variant_type', sortable: true, width: '95px' },
+        { title: 'HG38', value: 'hg38', sortable: true, width: '190px' },
+        { title: 'Classification', value: 'classificationVerdict', sortable: true, width: '175px' },
         {
           title: 'Individuals',
           value: 'individualCount',
           sortable: true,
-          width: '90px',
+          width: '125px',
           align: 'center',
         },
       ],

@@ -6,15 +6,20 @@ import vuetify from 'vite-plugin-vuetify';
 import { visualizer } from 'rollup-plugin-visualizer';
 import compression from 'vite-plugin-compression';
 import fs from 'fs';
+import { createHash } from 'crypto';
+import subsetFont from 'subset-font';
 
 // Build-only: strip the ~7,400 unused `.mdi-*::before` rules from the
 // render-blocking MDI stylesheet, keeping only names referenced in src/,
-// public/config/ and Vuetify's own mdi aliases.
+// public/config/ and Vuetify's own mdi aliases, and cut the icon font down
+// to those glyphs (403 KB -> ~20 KB). Both fonts are preloaded so icons and
+// text paint with the app instead of popping in afterwards.
 // ponytail: icon names built at runtime (e.g. `mdi-${x}`) would be dropped;
 // none exist today. Switch to @mdi/js SVG icons if that ever changes.
 function mdiSubset() {
   const roots = ['src', 'public/config', 'node_modules/vuetify/lib/iconsets/mdi.js'];
   const used = new Set();
+  const codepoints = [];
   const scan = (p) => {
     if (fs.statSync(p).isDirectory()) {
       for (const f of fs.readdirSync(p)) scan(path.join(p, f));
@@ -34,9 +39,49 @@ function mdiSubset() {
     transform(code, id) {
       if (!id.includes('materialdesignicons.css')) return null;
       return code.replace(
-        /\.(mdi-[a-z0-9-]+)::before \{\s*content: "[^"]+";\s*\}\s*/g,
-        (rule, name) => (used.has(name) ? rule : '')
+        /\.(mdi-[a-z0-9-]+)::before \{\s*content: "\\([0-9A-F]+)";\s*\}\s*/g,
+        (rule, name, hex) => {
+          if (!used.has(name)) return '';
+          codepoints.push(parseInt(hex, 16));
+          return rule;
+        }
       );
+    },
+    async generateBundle(_, bundle) {
+      const font = Object.values(bundle).find((f) =>
+        /materialdesignicons-webfont.*\.woff2$/.test(f.fileName)
+      );
+      if (!font) this.error('mdi-subset: icon font not found in bundle');
+      const subset = await subsetFont(
+        Buffer.from(font.source),
+        String.fromCodePoint(...codepoints),
+        {
+          targetFormat: 'woff2',
+        }
+      );
+      // Rename by the subset's own hash: the original name would serve a stale
+      // cached subset after icons are added.
+      const hash = createHash('sha256').update(subset).digest('base64url').slice(0, 8);
+      const fileName = font.fileName.replace(/-[\w-]{8}\.woff2$/, `-${hash}.woff2`);
+      for (const f of Object.values(bundle)) {
+        if (f.fileName.endsWith('.css'))
+          f.source = String(f.source).replaceAll(font.fileName, fileName);
+      }
+      delete bundle[font.fileName];
+      this.emitFile({ type: 'asset', fileName, source: subset });
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, { bundle }) {
+        const fonts = Object.keys(bundle || {}).filter((f) =>
+          /(materialdesignicons-webfont|inter-latin-wght-normal).*\.woff2$/.test(f)
+        );
+        return fonts.map((f) => ({
+          tag: 'link',
+          attrs: { rel: 'preload', as: 'font', type: 'font/woff2', crossorigin: '', href: `/${f}` },
+          injectTo: 'head',
+        }));
+      },
     },
   };
 }
@@ -103,12 +148,9 @@ export default defineConfig({
     // Significantly improves first-page load time
     // Proven optimization from agde-frontend
     warmup: {
-      clientFiles: [
-        './src/views/Home.vue',
-        './src/views/PageVariant.vue',
-        './src/components/gene/HNF1BGeneVisualization.vue',
-        './src/components/gene/HNF1BProteinVisualization.vue',
-      ],
+      // Every route view (and its imports), so the first visit to a page in
+      // dev does not wait on on-demand transforms.
+      clientFiles: ['./src/main.js', './src/views/*.vue'],
     },
 
     // Proxy target: only the origin portion of VITE_API_URL.

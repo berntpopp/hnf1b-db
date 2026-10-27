@@ -154,6 +154,17 @@ repos:
         always_run: true
         verbose: true
 
+      # Domain data (variant tables, structures, precomputed results) is served
+      # by the API so the web app, MCP and API users share one source. Site
+      # copy under frontend/public/config/ is the only allowed data file.
+      - id: no-domain-data-in-frontend
+        name: no-domain-data-in-frontend (serve it from the API)
+        entry: bash -c 'f=$(git ls-files frontend/src frontend/public | grep -E "\.(json|csv|tsv|cif|mmcif|pdb)$" | grep -v "^frontend/public/config/"); if [ -n "$f" ]; then echo "Data files in the frontend; serve them from the API instead:"; echo "$f"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+        verbose: true
+
       - id: detect-non-deterministic-hash
         name: detect-non-deterministic-hash
         entry: bash -c 'if grep -r "abs(hash(" --include="*.py" backend/ 2>/dev/null; then echo "Found non-deterministic abs(hash(...)) usage!"; exit 1; fi'

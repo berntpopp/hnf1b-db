@@ -151,6 +151,24 @@ class ProteinDomainsResponse(BaseModel):
     )
 
 
+class ResidueDnaDistance(BaseModel):
+    """Distance from one protein residue to the DNA in the structure."""
+
+    residue: int = Field(..., description="Residue number (UniProt numbering)")
+    distance: float = Field(..., description="Closest-atom distance to DNA (Å)")
+
+
+class StructureDnaDistancesResponse(BaseModel):
+    """Per-residue distance to DNA in the gene's experimental structure."""
+
+    gene: str = Field(..., description="Gene symbol")
+    pdb_id: str = Field(..., description="PDB entry the distances come from")
+    method: str = Field(..., description="How each distance is measured")
+    residues: List[ResidueDnaDistance] = Field(
+        ..., description="Every residue resolved in the structure, ascending"
+    )
+
+
 class GenomicRegionResponse(BaseModel):
     """Response schema for genomic region query."""
 

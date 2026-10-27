@@ -31,7 +31,7 @@
 <script>
 import * as d3 from 'd3';
 import { ref, computed } from 'vue';
-import { formatPValue } from '@/utils/statistics';
+import { formatPLabel } from '@/utils/statistics';
 import ChartExportMenu from '@/components/analyses/ChartExportMenu.vue';
 import { useChartAccessibility } from '@/composables/useChartAccessibility';
 
@@ -162,8 +162,18 @@ export default {
   },
   mounted() {
     this.renderChart();
+    // The chart is drawn at its container's pixel width; redraw when that
+    // width changes (tab shown, rotation, window resize) instead of clipping.
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        const width = this.$refs.chartContainer?.clientWidth;
+        if (width && width !== this.renderedWidth) this.renderChart();
+      });
+      this.resizeObserver.observe(this.$refs.chartContainer);
+    }
   },
   beforeUnmount() {
+    this.resizeObserver?.disconnect();
     // Clean up tooltip
     d3.select('body').select('.dna-distance-tooltip').remove();
   },
@@ -186,8 +196,13 @@ export default {
       if (!containerWidth || containerWidth < 100) {
         containerWidth = this.width;
       }
+      this.renderedWidth = containerWidth;
 
-      const margin = { top: 50, right: 40, bottom: 60, left: 70 };
+      // Phone widths: tighter margins leave room for the violins.
+      const margin =
+        containerWidth < 420
+          ? { top: 50, right: 12, bottom: 60, left: 56 }
+          : { top: 50, right: 40, bottom: 60, left: 70 };
       const width = containerWidth - margin.left - margin.right;
       const height = this.height - margin.top - margin.bottom;
 
@@ -268,7 +283,12 @@ export default {
         .attr('text-anchor', 'middle')
         .style('font-size', '14px')
         .style('font-weight', 'bold')
-        .text('DNA Distance by Pathogenicity Classification');
+        // The full title is wider than a phone-width plot.
+        .text(
+          containerWidth < 420
+            ? 'DNA Distance by Classification'
+            : 'DNA Distance by Pathogenicity Classification'
+        );
     },
 
     getOrCreateTooltip() {
@@ -361,7 +381,7 @@ export default {
         .attr('x2', centerX + innerBoxWidth / 2)
         .attr('y1', y(median))
         .attr('y2', y(median))
-        .attr('stroke', 'white')
+        .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
         .attr('stroke-width', 2);
 
       // Whiskers
@@ -401,7 +421,7 @@ export default {
         .attr('r', 4)
         .attr('fill', group.color)
         .attr('fill-opacity', 0.7)
-        .attr('stroke', 'white')
+        .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
         .attr('stroke-width', 1.5)
         .style('cursor', 'pointer')
         .on('mouseover', (event, d) => {
@@ -447,7 +467,7 @@ export default {
         .attr('x2', x('VUS') + x.bandwidth() / 2)
         .attr('y1', bracketY)
         .attr('y2', bracketY)
-        .attr('stroke', '#333')
+        .attr('stroke', 'currentColor')
         .attr('stroke-width', 1.5);
 
       g.append('line')
@@ -455,7 +475,7 @@ export default {
         .attr('x2', x('P/LP') + x.bandwidth() / 2)
         .attr('y1', bracketY)
         .attr('y2', bracketY + 8)
-        .attr('stroke', '#333')
+        .attr('stroke', 'currentColor')
         .attr('stroke-width', 1.5);
 
       g.append('line')
@@ -463,7 +483,7 @@ export default {
         .attr('x2', x('VUS') + x.bandwidth() / 2)
         .attr('y1', bracketY)
         .attr('y2', bracketY + 8)
-        .attr('stroke', '#333')
+        .attr('stroke', 'currentColor')
         .attr('stroke-width', 1.5);
 
       g.append('text')
@@ -472,7 +492,7 @@ export default {
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
         .style('font-weight', 'bold')
-        .text(`p = ${formatPValue(this.mannWhitneyResult.pValue)}`);
+        .text(formatPLabel(this.mannWhitneyResult.pValue));
     },
 
     kernelDensityEstimator(kernel, X) {

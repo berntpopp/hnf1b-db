@@ -14,6 +14,7 @@
     <!-- Unified Table with Integrated Search Toolbar -->
     <AppDataTable
       v-model:options="options"
+      class="table-fixed"
       :headers="displayHeaders"
       :items="phenopackets"
       :loading="loading"

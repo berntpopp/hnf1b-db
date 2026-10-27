@@ -153,8 +153,9 @@ export default {
         .attr('class', 'tooltip')
         .style('opacity', 0)
         .style('position', 'absolute')
-        .style('background-color', 'white')
-        .style('border', '1px solid #ccc')
+        .style('background-color', 'rgb(var(--v-theme-surface))')
+        .style('color', 'rgb(var(--v-theme-on-surface))')
+        .style('border', '1px solid rgba(var(--v-theme-on-surface), 0.2)')
         .style('padding', '8px')
         .style('border-radius', '4px');
 
@@ -202,11 +203,11 @@ export default {
         .attr('class', 'slice')
         .attr('d', arc)
         .attr('fill', (d) => color(d.data[0]))
-        .attr('stroke', 'white')
+        .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
         .style('stroke-width', '2px')
         .style('opacity', 0.7)
         .on('mouseover', (event, d) => {
-          d3.select(event.currentTarget).style('stroke', 'black');
+          d3.select(event.currentTarget).style('stroke', 'currentColor');
           tooltip.transition().duration(200).style('opacity', 1);
           tooltip.html(
             `Group: <strong>${d.data[0]}</strong><br>Count: <strong>${d.data[1]}</strong>`
@@ -220,7 +221,10 @@ export default {
             .style('top', event.clientY - rect.top + 5 + 'px');
         })
         .on('mouseout', (event) => {
-          d3.select(event.currentTarget).style('stroke', 'white');
+          d3.select(event.currentTarget).style(
+            'stroke',
+            'rgb(var(--v-theme-surface, 255, 255, 255))'
+          );
           tooltip.transition().duration(200).style('opacity', 0);
         });
 

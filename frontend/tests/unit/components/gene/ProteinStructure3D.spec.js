@@ -17,7 +17,7 @@
  *   - variants: Array (default: [])
  *   - currentVariantId: String (default: null)
  *   - showAllVariants: Boolean (default: false)
- * There is no pdbId prop; the PDB file path (/2h8r.cif) is hardcoded.
+ * There is no pdbId prop; the structure is loaded from GET /reference/genes/HNF1B/structure.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';

@@ -90,7 +90,7 @@ export default {
     },
     margin: {
       type: Object,
-      default: () => ({ top: 40, right: 150, bottom: 200, left: 300 }),
+      default: () => ({ top: 40, right: 150, bottom: 60, left: 300 }),
     },
     // Color palette for the subgroups: Present, Absent, Not Reported
     colorRange: {
@@ -229,12 +229,18 @@ export default {
       // Remove any existing chart content.
       d3.select(this.$refs.chart).selectAll('*').remove();
 
-      if (!this.chartData || this.chartData.length === 0) {
+      // Not loaded yet: hold the chart's box so nothing below it moves.
+      d3.select(this.$refs.chart)
+        .style('aspect-ratio', this.chartData ? null : `${this.width} / ${this.height}`)
+        .style('max-width', this.chartData ? null : `${this.width}px`);
+      if (!this.chartData) return;
+
+      if (this.chartData.length === 0) {
         d3.select(this.$refs.chart)
           .append('div')
           .style('text-align', 'center')
           .style('padding', '40px')
-          .style('color', '#666')
+          .style('opacity', 0.7)
           .text('No data available');
         return;
       }
@@ -286,11 +292,11 @@ export default {
       // Add Y axis (phenotype labels)
       const yAxis = svg.append('g').call(d3.axisLeft(y));
 
-      // Wrap long phenotype labels and set font size
+      // Fit long phenotype labels and set font size
       yAxis
         .selectAll('text')
         .style('font-size', '13px')
-        .call(this.wrapText, margin.left - 10);
+        .call(this.truncateText, margin.left - 10);
 
       // Add X axis (counts)
       svg
@@ -300,7 +306,7 @@ export default {
         .append('text')
         .attr('x', svgWidth / 2)
         .attr('y', 40)
-        .attr('fill', 'black')
+        .attr('fill', 'currentColor')
         .attr('text-anchor', 'middle')
         .style('font-weight', 'bold')
         .text('Number of Phenopackets');
@@ -318,8 +324,9 @@ export default {
         .attr('class', 'tooltip')
         .style('opacity', 0)
         .style('position', 'absolute')
-        .style('background-color', 'white')
-        .style('border', '1px solid #ccc')
+        .style('background-color', 'rgb(var(--v-theme-surface))')
+        .style('color', 'rgb(var(--v-theme-on-surface))')
+        .style('border', '1px solid rgba(var(--v-theme-on-surface), 0.2)')
         .style('padding', '10px')
         .style('border-radius', '5px')
         .style('pointer-events', 'none')
@@ -340,7 +347,7 @@ export default {
         .attr('x', (d) => x(d[0]))
         .attr('width', (d) => x(d[1]) - x(d[0]))
         .attr('height', y.bandwidth())
-        .attr('stroke', 'white')
+        .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
         .attr('stroke-width', 1)
         .on('mouseover', function (event, d) {
           const subgroupName = d3.select(this.parentNode).datum().key;
@@ -361,7 +368,7 @@ export default {
             .transition()
             .duration(200)
             .style('opacity', 1);
-          d3.select(this).style('stroke', 'black').style('stroke-width', 2);
+          d3.select(this).style('stroke', 'currentColor').style('stroke-width', 2);
         })
         .on('mousemove', (event) => {
           const rect = this.$refs.chart.getBoundingClientRect();
@@ -371,7 +378,9 @@ export default {
         })
         .on('mouseleave', function () {
           tooltip.transition().duration(200).style('opacity', 0);
-          d3.select(this).style('stroke', 'white').style('stroke-width', 1);
+          d3.select(this)
+            .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
+            .style('stroke-width', 1);
         });
 
       // Add legend
@@ -395,7 +404,7 @@ export default {
         .attr('width', 18)
         .attr('height', 18)
         .attr('fill', (d) => color(d.key))
-        .attr('stroke', 'white')
+        .style('stroke', 'rgb(var(--v-theme-surface, 255, 255, 255))')
         .attr('stroke-width', 1);
 
       legendItems
@@ -408,40 +417,19 @@ export default {
     },
 
     /**
-     * Wrap long text labels to fit within a specified width
+     * Keep each label on one line: wrapped lines collided with the next bar.
+     * Over-long labels end in an ellipsis; the full name shows on hover.
      */
-    wrapText(text, width) {
+    truncateText(text, width) {
       text.each(function () {
-        const textElement = d3.select(this);
-        const words = textElement.text().split(/\s+/).reverse();
-        let word;
-        let line = [];
-        let lineNumber = 0;
-        const lineHeight = 1.1;
-        const y = textElement.attr('y');
-        const dy = parseFloat(textElement.attr('dy') || 0);
-        let tspan = textElement
-          .text(null)
-          .append('tspan')
-          .attr('x', -10)
-          .attr('y', y)
-          .attr('dy', dy + 'em');
-
-        while ((word = words.pop())) {
-          line.push(word);
-          tspan.text(line.join(' '));
-          if (tspan.node().getComputedTextLength() > width) {
-            line.pop();
-            tspan.text(line.join(' '));
-            line = [word];
-            tspan = textElement
-              .append('tspan')
-              .attr('x', -10)
-              .attr('y', y)
-              .attr('dy', ++lineNumber * lineHeight + dy + 'em')
-              .text(word);
-          }
+        const label = d3.select(this);
+        const full = label.text();
+        let shown = full;
+        while (shown.length > 1 && this.getComputedTextLength() > width) {
+          shown = shown.slice(0, -1);
+          label.text(`${shown.trimEnd()}…`);
         }
+        if (shown !== full) label.append('title').text(full);
       });
     },
   },

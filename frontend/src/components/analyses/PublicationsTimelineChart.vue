@@ -1,6 +1,6 @@
 <template>
   <v-card flat v-bind="ariaProps">
-    <v-card-title class="text-h6 d-flex align-center justify-space-between">
+    <v-card-title class="text-h6 text-wrap d-flex align-center justify-space-between">
       <div :id="titleId" class="d-flex align-center">
         <v-icon class="mr-2">mdi-chart-line</v-icon>
         Publications by Type Over Years
@@ -42,7 +42,11 @@
 
     <v-card-text>
       <!-- Loading State -->
-      <div v-if="loading" class="d-flex justify-center align-center" style="min-height: 400px">
+      <div
+        v-if="loading"
+        class="d-flex justify-center align-center reveal-delayed"
+        style="min-height: 400px"
+      >
         <v-progress-circular indeterminate color="primary" size="64" />
       </div>
 

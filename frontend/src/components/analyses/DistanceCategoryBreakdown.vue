@@ -69,9 +69,8 @@
           to DNA, while VUS have a median of
           <strong>{{ vusStats.median.toFixed(1) }} &Aring;</strong>.
           <span v-if="pValueSignificant">
-            This difference is statistically significant (p =
-            {{ formatPValueDisplay(mannWhitneyPValue) }}), suggesting that proximity to DNA may
-            correlate with pathogenicity.
+            This difference is statistically significant ({{ formatPLabel(mannWhitneyPValue) }}),
+            suggesting that proximity to DNA may correlate with pathogenicity.
           </span>
           <span v-else> This difference is not statistically significant at p &lt; 0.05. </span>
         </div>
@@ -81,7 +80,7 @@
 </template>
 
 <script>
-import { formatPValue } from '@/utils/statistics';
+import { formatPLabel } from '@/utils/statistics';
 
 export default {
   name: 'DistanceCategoryBreakdown',
@@ -158,7 +157,7 @@ export default {
     <rect x="${xOffset}" y="0" width="${catWidth}" height="${barHeight}" fill="${colors[cat]}"/>`;
           if (this.pathogenicCategories[cat] > 0 && catWidth > 20) {
             svg += `
-    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="white">${this.pathogenicCategories[cat]}</text>`;
+    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="${cat === 'close' ? 'white' : 'black'}">${this.pathogenicCategories[cat]}</text>`;
           }
           xOffset += catWidth;
         }
@@ -184,7 +183,7 @@ export default {
     <rect x="${xOffset}" y="0" width="${catWidth}" height="${barHeight}" fill="${colors[cat]}"/>`;
           if (this.vusCategories[cat] > 0 && catWidth > 20) {
             svg += `
-    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="white">${this.vusCategories[cat]}</text>`;
+    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="${cat === 'close' ? 'white' : 'black'}">${this.vusCategories[cat]}</text>`;
           }
           xOffset += catWidth;
         }
@@ -238,9 +237,7 @@ export default {
       if (category === 'medium') return 'Medium (5-10Å)';
       return 'Far (≥10Å)';
     },
-    formatPValueDisplay(pValue) {
-      return formatPValue(pValue);
-    },
+    formatPLabel,
   },
 };
 </script>
@@ -277,6 +274,12 @@ export default {
 
 .distance-bar.far {
   background-color: #4caf50;
+}
+
+/* White on orange/green is 2.2-2.8:1; dark text passes AA (7.6-9.7:1). */
+.distance-bar.medium,
+.distance-bar.far {
+  color: rgba(0, 0, 0, 0.87);
 }
 
 .legend-dot {

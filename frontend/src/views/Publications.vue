@@ -15,6 +15,7 @@
     <AppDataTable
       v-if="!$vuetify.display.smAndDown"
       v-model:options="options"
+      class="table-fixed"
       :headers="headers"
       :items="publications"
       :loading="loading"
