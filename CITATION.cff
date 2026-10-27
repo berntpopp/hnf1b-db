@@ -5,7 +5,7 @@ authors:
     given-names: "Bernt"
     orcid: "https://orcid.org/0000-0002-3679-1081"
 title: "hnf1b-db: HNF1B Database and Curation Platform"
-version: 0.4.3
+version: 0.4.4
 date-released: 2026-10-27
 url: "https://github.com/berntpopp/hnf1b-db"
 repository-code: "https://github.com/berntpopp/hnf1b-db"

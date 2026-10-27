@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-10-27
+
+### Added
+
+- 3D structure viewer: pin several variants at once. Each row in Variants in Structure has an eye toggle, and "show all listed" pins everything the current search and filters list; pinned variants appear as coloured beads (labelled while ten or fewer residues are pinned), and the clicked variant keeps its focus and large label.
+
+### Changed
+
+- Variants in Structure rows and the selected-variant chip show short classifications (VUS, Likely Path.) instead of raw values such as `UNCERTAIN_SIGNIFICANCE`.
+
+### Fixed
+
+- 3D residue labels were drawn twice (PDB 2H8R contains two copies of the protein); they now appear once, slightly in front of the ribbon.
+
 ## [0.4.3] - 2026-10-27
 
 ### Added
