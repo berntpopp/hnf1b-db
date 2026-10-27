@@ -36,7 +36,11 @@
             <v-card-text>
               <v-tabs-window v-model="activeTabLabel">
                 <!-- Donut Chart Tab -->
-                <v-tabs-window-item value="Donut Chart">
+                <v-tabs-window-item
+                  value="Donut Chart"
+                  :transition="false"
+                  :reverse-transition="false"
+                >
                   <v-row class="pa-3">
                     <v-col
                       cols="12"
@@ -88,7 +92,11 @@
                 </v-tabs-window-item>
 
                 <!-- Stacked Bar Chart Tab -->
-                <v-tabs-window-item value="Stacked Bar Chart">
+                <v-tabs-window-item
+                  value="Stacked Bar Chart"
+                  :transition="false"
+                  :reverse-transition="false"
+                >
                   <v-row class="pa-3">
                     <v-col cols="12" md="6">
                       <v-select
@@ -102,7 +110,8 @@
                   </v-row>
 
                   <!-- Summary Statistics Panel -->
-                  <v-row v-if="stackedBarStats" class="pa-3 pt-0">
+                  <!-- Always rendered (dashes while loading) so the chart below does not jump -->
+                  <v-row class="pa-3 pt-0">
                     <v-col cols="12">
                       <v-card outlined>
                         <v-card-title class="text-subtitle-1 py-2 bg-blue-lighten-5">
@@ -113,25 +122,29 @@
                           <v-row density="comfortable">
                             <v-col cols="6" sm="3">
                               <div class="text-caption text-grey">Total Features</div>
-                              <div class="text-h6">{{ stackedBarStats.totalFeatures }}</div>
+                              <div class="text-h6">{{ stackedBarStats?.totalFeatures ?? '—' }}</div>
                             </v-col>
                             <v-col cols="6" sm="3">
                               <div class="text-caption text-grey">Most Common</div>
                               <div class="text-body-2">
-                                {{ stackedBarStats.mostCommon.label }}
+                                {{ stackedBarStats?.mostCommon.label ?? '—' }}
                               </div>
                               <div class="text-caption">
-                                {{ stackedBarStats.mostCommon.penetrance }}% penetrance
+                                {{ stackedBarStats?.mostCommon.penetrance ?? '—' }}% penetrance
                               </div>
                             </v-col>
                             <v-col cols="6" sm="3">
                               <div class="text-caption text-grey">Avg. Penetrance</div>
-                              <div class="text-h6">{{ stackedBarStats.avgPenetrance }}%</div>
+                              <div class="text-h6">
+                                {{ stackedBarStats?.avgPenetrance ?? '—' }}%
+                              </div>
                               <div class="text-caption">(when reported)</div>
                             </v-col>
                             <v-col cols="6" sm="3">
                               <div class="text-caption text-grey">Data Completeness</div>
-                              <div class="text-h6">{{ stackedBarStats.reportingRate }}%</div>
+                              <div class="text-h6">
+                                {{ stackedBarStats?.reportingRate ?? '—' }}%
+                              </div>
                               <div class="text-caption">reporting rate</div>
                             </v-col>
                           </v-row>
@@ -151,12 +164,20 @@
                 </v-tabs-window-item>
 
                 <!-- Publications Timeline Tab -->
-                <v-tabs-window-item value="Publications Timeline">
+                <v-tabs-window-item
+                  value="Publications Timeline"
+                  :transition="false"
+                  :reverse-transition="false"
+                >
                   <PublicationsTimelineChart v-model:mode="timelineMode" />
                 </v-tabs-window-item>
 
                 <!-- Variant Comparison Tab -->
-                <v-tabs-window-item value="Variant Comparison">
+                <v-tabs-window-item
+                  value="Variant Comparison"
+                  :transition="false"
+                  :reverse-transition="false"
+                >
                   <v-row class="pa-3">
                     <v-col cols="12" md="4">
                       <v-select
@@ -190,7 +211,7 @@
                   </v-row>
 
                   <!-- Loading indicator -->
-                  <v-row v-if="comparisonLoading" class="pa-3">
+                  <v-row v-if="comparisonLoading" class="pa-3 tab-loading reveal-delayed">
                     <v-col cols="12" class="text-center">
                       <v-progress-circular indeterminate color="primary" />
                       <p class="mt-2">Loading comparison data...</p>
@@ -219,7 +240,11 @@
                 </v-tabs-window-item>
 
                 <!-- Survival Curves Tab -->
-                <v-tabs-window-item value="Survival Curves">
+                <v-tabs-window-item
+                  value="Survival Curves"
+                  :transition="false"
+                  :reverse-transition="false"
+                >
                   <v-row class="pa-3">
                     <v-col cols="12" md="6">
                       <v-select
@@ -262,7 +287,7 @@
                   </v-row>
 
                   <!-- Loading indicator -->
-                  <v-row v-if="survivalLoading" class="pa-3">
+                  <v-row v-if="survivalLoading" class="pa-3 tab-loading reveal-delayed">
                     <v-col cols="12" class="text-center">
                       <v-progress-circular indeterminate color="primary" />
                       <p class="mt-2">Loading survival data...</p>
@@ -292,7 +317,11 @@
                 </v-tabs-window-item>
 
                 <!-- DNA Distance Analysis Tab -->
-                <v-tabs-window-item value="DNA Distance Analysis">
+                <v-tabs-window-item
+                  value="DNA Distance Analysis"
+                  :transition="false"
+                  :reverse-transition="false"
+                >
                   <DNADistanceAnalysis :width="1200" :height="450" />
                 </v-tabs-window-item>
               </v-tabs-window>
@@ -518,7 +547,8 @@ const survivalEndpointOptions = SURVIVAL_ENDPOINT_OPTIONS;
 // Reactive data
 const pageError = ref(null);
 const chartData = ref({});
-const stackedBarChartData = ref([]);
+// null until loaded: the chart reserves its box instead of saying "No data".
+const stackedBarChartData = ref(null);
 const comparisonData = ref(null);
 const comparisonLoading = ref(false);
 const comparisonError = ref(null);
@@ -576,7 +606,7 @@ const currentColorMap = computed(() => {
 });
 
 const displayLimitOptions = computed(() => {
-  const totalFeatures = stackedBarChartData.value.length;
+  const totalFeatures = stackedBarChartData.value?.length ?? 0;
   return DISPLAY_LIMIT_OPTIONS.filter((option) => {
     if (option.threshold === 0) return true;
     return totalFeatures > option.threshold;
@@ -584,7 +614,7 @@ const displayLimitOptions = computed(() => {
 });
 
 const stackedBarStats = computed(() => {
-  return calculateStackedBarStats(stackedBarChartData.value);
+  return calculateStackedBarStats(stackedBarChartData.value || []);
 });
 
 // Methods
@@ -874,6 +904,12 @@ onMounted(() => {
   if (tab.value === 'survival') {
     fetchSurvivalData();
   }
+  // Load the other API-backed tabs once idle, so switching to them is instant.
+  const whenIdle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1000));
+  whenIdle(() => {
+    if (!comparisonData.value && !comparisonLoading.value) fetchComparisonData();
+    if (!survivalData.value && !survivalLoading.value) fetchSurvivalData();
+  });
 
   // Measure the chart for whichever tab we land on (deep-link / refresh) so it
   // is sized correctly from the first paint, not just after a tab switch.
@@ -882,6 +918,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Hold roughly the chart's height while a tab loads, so the card does not
+   grow from a spinner row to a full chart in view. */
+.tab-loading {
+  min-height: 560px;
+  align-content: center;
+}
+
 /* Measured container for each responsive D3 chart. Full width so the
    ResizeObserver reads the real available width; overflow hidden so a chart
    can never force horizontal scroll on the page at narrow (mobile) widths. */

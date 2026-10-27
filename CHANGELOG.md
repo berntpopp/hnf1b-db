@@ -13,10 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Curator-only History and Discussion tabs load on demand; the public phenopacket page drops from 237 KB to 11 KB gzipped.
 - The icon font is subset at build time to the icons in use (403 KB → 14 KB); icon and text fonts are preloaded.
 - Loading skeletons appear only after 300 ms, so fast responses go straight to content.
+- Aggregations: DNA distance analysis uses precomputed per-residue distances instead of loading the 3D viewer and structure file; the Variant Comparison and Survival data load in the background; tabs switch without animation, hold their height while loading and no longer show spinners for fast responses.
 
 ### Fixed
 - Production builds loaded Vuetify's stylesheets in an order that let its reset beat component styles (e.g. small buttons rendered at 16 px). The cascade-layer order is now pinned.
 - Table skeletons rendered as stacked dark-grey blocks.
+- Aggregations: the Stacked Bar tab jumped (CLS 0.33) and briefly showed "No data available" while loading; distance-category bars had white text below WCAG AA contrast.
 
 ## [0.4.1] - 2026-10-26
 

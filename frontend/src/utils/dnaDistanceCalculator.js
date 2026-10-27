@@ -38,6 +38,8 @@ export const DISTANCE_COLORS = {
 };
 
 // DNA residue names
+import PRECOMPUTED_2H8R from './dnaDistances2h8r.json';
+
 const DNA_RESIDUES = ['DA', 'DT', 'DG', 'DC'];
 
 /**
@@ -94,6 +96,20 @@ export function isPositionInStructure(position) {
 /**
  * Distance Calculator class for NGL structure components
  */
+/**
+ * Closest-atom distance (Å) from each residue to the DNA in PDB 2H8R, as
+ * `calculateResidueToHelixDistance(resNo, true)` returns it. Precomputed
+ * because the structure is static: the analysis tab no longer has to load
+ * NGL and the 550 KB CIF just to read 175 numbers. Regenerate by running that
+ * method over STRUCTURE_START..STRUCTURE_END if the structure file changes.
+ * @param {number} residueNumber
+ * @returns {{distance: number, category: string}|null}
+ */
+export function precomputedResidueDistance(residueNumber) {
+  const distance = PRECOMPUTED_2H8R[residueNumber];
+  return distance === undefined ? null : { distance, category: categorizeDistance(distance) };
+}
+
 export class DNADistanceCalculator {
   constructor() {
     this.structureComponent = null;

@@ -229,7 +229,13 @@ export default {
       // Remove any existing chart content.
       d3.select(this.$refs.chart).selectAll('*').remove();
 
-      if (!this.chartData || this.chartData.length === 0) {
+      // Not loaded yet: hold the chart's box so nothing below it moves.
+      d3.select(this.$refs.chart)
+        .style('aspect-ratio', this.chartData ? null : `${this.width} / ${this.height}`)
+        .style('max-width', this.chartData ? null : `${this.width}px`);
+      if (!this.chartData) return;
+
+      if (this.chartData.length === 0) {
         d3.select(this.$refs.chart)
           .append('div')
           .style('text-align', 'center')

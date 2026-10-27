@@ -173,12 +173,14 @@ a:not(.v-btn):not(.v-chip):not(.v-list-item) {
   border-radius: 12px;
 }
 
-/* Skeletons keep their space at once but only become visible after 300ms,
-   so a fast response swaps straight to content instead of flashing grey. */
-.v-skeleton-loader {
-  animation: skeleton-reveal 0s 300ms both;
+/* Loading placeholders keep their space at once but only become visible
+   after 300ms, so a fast response swaps straight to content instead of
+   flashing a skeleton or spinner. */
+.v-skeleton-loader,
+.reveal-delayed {
+  animation: reveal-delayed 0s 300ms both;
 }
-@keyframes skeleton-reveal {
+@keyframes reveal-delayed {
   from {
     visibility: hidden;
   }

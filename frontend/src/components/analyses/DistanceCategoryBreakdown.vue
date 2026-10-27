@@ -158,7 +158,7 @@ export default {
     <rect x="${xOffset}" y="0" width="${catWidth}" height="${barHeight}" fill="${colors[cat]}"/>`;
           if (this.pathogenicCategories[cat] > 0 && catWidth > 20) {
             svg += `
-    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="white">${this.pathogenicCategories[cat]}</text>`;
+    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="${cat === 'close' ? 'white' : 'black'}">${this.pathogenicCategories[cat]}</text>`;
           }
           xOffset += catWidth;
         }
@@ -184,7 +184,7 @@ export default {
     <rect x="${xOffset}" y="0" width="${catWidth}" height="${barHeight}" fill="${colors[cat]}"/>`;
           if (this.vusCategories[cat] > 0 && catWidth > 20) {
             svg += `
-    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="white">${this.vusCategories[cat]}</text>`;
+    <text x="${xOffset + catWidth / 2}" y="${barHeight / 2 + 4}" text-anchor="middle" font-size="11" font-weight="500" fill="${cat === 'close' ? 'white' : 'black'}">${this.vusCategories[cat]}</text>`;
           }
           xOffset += catWidth;
         }
@@ -277,6 +277,12 @@ export default {
 
 .distance-bar.far {
   background-color: #4caf50;
+}
+
+/* White on orange/green is 2.2-2.8:1; dark text passes AA (7.6-9.7:1). */
+.distance-bar.medium,
+.distance-bar.far {
+  color: rgba(0, 0, 0, 0.87);
 }
 
 .legend-dot {
