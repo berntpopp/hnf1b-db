@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const TIPTAP_VERSION = '3.31.4';
+const TIPTAP_VERSION = '3.32.0';
 const TIPTAP_PACKAGES = [
   '@tiptap/core',
   '@tiptap/extension-link',

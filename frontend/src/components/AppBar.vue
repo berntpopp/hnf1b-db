@@ -110,7 +110,12 @@
       <div v-if="authStore.isAuthenticated" class="ml-4">
         <v-menu location="bottom">
           <template #activator="{ props }">
-            <v-btn icon v-bind="props" aria-label="User menu">
+            <!-- The name includes the visible initials (WCAG 2.5.3 label in name). -->
+            <v-btn
+              icon
+              v-bind="props"
+              :aria-label="authStore.user ? `User menu, ${getUserInitials}` : 'User menu'"
+            >
               <v-avatar v-if="authStore.user" color="primary-darken-2" size="small">
                 <span class="text-white">{{ getUserInitials }}</span>
               </v-avatar>

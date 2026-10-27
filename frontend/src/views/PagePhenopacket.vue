@@ -167,7 +167,6 @@
                 variant="tonal"
                 size="small"
                 class="mr-2"
-                aria-label="Clone this phenopacket as sibling or cohort template"
                 @click="navigateToClone"
               >
                 Clone Cohort / Sibling Template

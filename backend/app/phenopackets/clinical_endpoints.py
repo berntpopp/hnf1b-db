@@ -65,7 +65,9 @@ async def get_renal_insufficiency_cases(
 @router.get("/genital-abnormalities")
 async def get_genital_abnormalities(
     sex_filter: Optional[str] = Query(
-        None, enum=["FEMALE", "MALE"], description="Filter by sex"
+        None,
+        json_schema_extra={"enum": ["FEMALE", "MALE"]},
+        description="Filter by sex",
     ),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -114,7 +116,7 @@ async def get_genital_abnormalities(
 async def get_diabetes_cases(
     diabetes_type: Optional[str] = Query(
         None,
-        enum=["Type 1", "Type 2", "MODY"],
+        json_schema_extra={"enum": ["Type 1", "Type 2", "MODY"]},
         description="Filter by diabetes type",
     ),
     with_complications: Optional[bool] = Query(
