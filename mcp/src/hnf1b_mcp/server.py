@@ -8,6 +8,7 @@ from typing import Any
 
 import mcp.types as mt
 from fastmcp import FastMCP
+from fastmcp.exceptions import ValidationError as FastMCPValidationError
 from fastmcp.server.middleware import (
     CallNext,
     MiddlewareContext,
@@ -232,8 +233,13 @@ class ErrorEnvelopeMiddleware(FastMCPMiddleware):
         """
         try:
             return await call_next(context)
-        except ValidationError as exc:
-            envelope = _validation_error_envelope(exc, context.message.name)
+        except (ValidationError, FastMCPValidationError) as exc:
+            # fastmcp >= 3.4 wraps the pydantic argument error in its own
+            # ValidationError; the field details live on __cause__.
+            cause = exc if isinstance(exc, ValidationError) else exc.__cause__
+            if not isinstance(cause, ValidationError):
+                raise
+            envelope = _validation_error_envelope(cause, context.message.name)
             # Must be structured_content (not content): the tools declare an
             # output schema, so an envelope returned as bare content fails
             # FastMCP output validation and surfaces the opaque "outputSchema

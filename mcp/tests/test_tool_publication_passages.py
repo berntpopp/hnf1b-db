@@ -248,11 +248,12 @@ async def test_invalid_mode_rejected_by_schema_enum() -> None:
     validation (naming the allowed values), instead of forwarding it to the
     service guard — the whole point of promoting the param to an enum.
     """
-    import pydantic_core
+    from fastmcp.exceptions import ValidationError
 
     _mock_both()
     mcp, client = _make_mcp_and_client()
-    with pytest.raises(pydantic_core.ValidationError) as excinfo:
+    # fastmcp >= 3.4 wraps the pydantic error in its own ValidationError.
+    with pytest.raises(ValidationError) as excinfo:
         await mcp.call_tool(
             "hnf1b_get_publication_passages", {"query": "x", "mode": "bogus"}
         )
