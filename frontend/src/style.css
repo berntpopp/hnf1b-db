@@ -193,6 +193,16 @@ a:not(.v-btn):not(.v-chip):not(.v-list-item) {
   fill: currentColor;
 }
 
+/* Registry tables: columns sized from the header widths, not from the rows,
+   so they don't jump sideways when the first page of data arrives. */
+.table-fixed table {
+  table-layout: fixed;
+}
+.table-fixed td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Breadcrumbs stay on one line: the long current item ("Loading..." ->
    record id) truncates instead of wrapping onto a second line. */
 .v-breadcrumbs {

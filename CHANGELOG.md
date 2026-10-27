@@ -20,12 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The icon font is subset at build time to the icons in use (403 KB → 14 KB); icon and text fonts are preloaded.
 - Loading skeletons appear only after 300 ms, so fast responses go straight to content.
 - Home: the landing page is part of the main bundle, and the headline numbers show as soon as they load instead of counting up for 1.5 s.
+- The app mounts once the first route has resolved, so the app bar, page and footer appear together instead of the footer showing under the app bar and jumping down.
 - Aggregations: DNA distance analysis fetches per-residue distances from the API instead of loading the 3D viewer and structure file in the browser; the Variant Comparison and Survival data load in the background; tabs switch without animation, hold their height while loading and no longer show spinners for fast responses.
 
 ### Fixed
 
 - Production builds loaded Vuetify's stylesheets in an order that let its reset beat component styles (e.g. small buttons rendered at 16 px). The cascade-layer order is now pinned.
 - Table skeletons rendered as stacked dark-grey blocks.
+- Registry tables (phenopackets, variants, publications) use fixed column widths, so columns no longer jump sideways when rows load.
 - Aggregations: the Stacked Bar tab jumped (CLS 0.33) and briefly showed "No data available" while loading; distance-category bars had white text below WCAG AA contrast.
 - Charts in dark mode: titles, axis labels, legends, gridlines and tooltips used fixed black/white/grey and were unreadable; they now follow the theme. PNG export uses the chart's own background so dark-mode exports stay legible.
 - Charts on phones: dense charts (survival, stacked bar, variant comparison) scroll sideways at a readable size instead of shrinking text to a few pixels; the distance box plot redraws to its container instead of being clipped; long stacked-bar labels no longer overlap the next row; median labels on survival curves no longer overlap; "p = < 0.0001" reads "p < 0.0001".

@@ -496,6 +496,11 @@ export default {
 }
 
 /* Base stat card transition */
+.stat-card .text-h4 {
+  /* Number line keeps its height while the skeleton stands in (CLS). */
+  min-height: 2.5rem;
+}
+
 .stat-card {
   transition:
     transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
