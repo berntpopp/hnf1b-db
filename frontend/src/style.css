@@ -186,6 +186,13 @@ a:not(.v-btn):not(.v-chip):not(.v-list-item) {
   }
 }
 
+/* SVG text with no fill of its own defaults to black, which disappears on the
+   dark theme. Chart titles/labels inherit the theme text colour instead;
+   anything that sets its own fill (attribute or style) keeps it. */
+.v-application svg text:not([fill]) {
+  fill: currentColor;
+}
+
 /* Breadcrumbs stay on one line: the long current item ("Loading..." ->
    record id) truncates instead of wrapping onto a second line. */
 .v-breadcrumbs {

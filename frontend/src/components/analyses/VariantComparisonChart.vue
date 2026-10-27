@@ -234,7 +234,7 @@ export default {
           .append('div')
           .style('text-align', 'center')
           .style('padding', '40px')
-          .style('color', '#666')
+          .style('opacity', 0.7)
           .text('No comparison data available');
         return;
       }
@@ -270,7 +270,7 @@ export default {
           .append('div')
           .style('text-align', 'center')
           .style('padding', '40px')
-          .style('color', '#666')
+          .style('opacity', 0.7)
           .text(`No phenotypes found for ${this.organSystemFilter} organ system`);
         return;
       }
@@ -284,8 +284,9 @@ export default {
         .append('div')
         .attr('class', 'variant-comparison-tooltip')
         .style('position', 'fixed')
-        .style('background-color', 'white')
-        .style('border', '1px solid #ddd')
+        .style('background-color', 'rgb(var(--v-theme-surface))')
+        .style('color', 'rgb(var(--v-theme-on-surface))')
+        .style('border', '1px solid rgba(var(--v-theme-on-surface), 0.2)')
         .style('border-radius', '4px')
         .style('padding', '8px')
         .style('pointer-events', 'none')
@@ -532,7 +533,7 @@ export default {
             .attr('y', -20)
             .attr('text-anchor', 'middle')
             .attr('font-size', '10px')
-            .attr('fill', d.significant ? '#D32F2F' : '#666')
+            .attr('fill', d.significant ? '#D32F2F' : 'currentColor')
             .attr('font-weight', d.significant ? 'bold' : 'normal')
             .text(pValueText);
 
@@ -546,7 +547,8 @@ export default {
               .attr('y', -8)
               .attr('text-anchor', 'middle')
               .attr('font-size', '9px')
-              .attr('fill', '#666')
+              .attr('fill', 'currentColor')
+              .attr('fill-opacity', 0.7)
               .text(`h=${h.toFixed(2)} (${label})`);
           }
         }
@@ -595,7 +597,8 @@ export default {
         .attr('y', -70)
         .attr('text-anchor', 'middle')
         .style('font-size', '14px')
-        .style('fill', '#666')
+        .style('fill', 'currentColor')
+        .style('fill-opacity', 0.7)
         .text(
           `${group1Name}: n=${this.comparisonData.group1_count} | ${group2Name}: n=${this.comparisonData.group2_count}`
         );
@@ -641,7 +644,8 @@ export default {
         .attr('x', 200)
         .attr('y', 11)
         .style('font-size', '11px')
-        .style('fill', '#666')
+        .style('fill', 'currentColor')
+        .style('fill-opacity', 0.7)
         .text(`${shortLabels.group1} = ${group1Name}  |  ${shortLabels.group2} = ${group2Name}`);
     },
   },

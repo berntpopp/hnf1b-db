@@ -69,9 +69,8 @@
           to DNA, while VUS have a median of
           <strong>{{ vusStats.median.toFixed(1) }} &Aring;</strong>.
           <span v-if="pValueSignificant">
-            This difference is statistically significant (p =
-            {{ formatPValueDisplay(mannWhitneyPValue) }}), suggesting that proximity to DNA may
-            correlate with pathogenicity.
+            This difference is statistically significant ({{ formatPLabel(mannWhitneyPValue) }}),
+            suggesting that proximity to DNA may correlate with pathogenicity.
           </span>
           <span v-else> This difference is not statistically significant at p &lt; 0.05. </span>
         </div>
@@ -81,7 +80,7 @@
 </template>
 
 <script>
-import { formatPValue } from '@/utils/statistics';
+import { formatPLabel } from '@/utils/statistics';
 
 export default {
   name: 'DistanceCategoryBreakdown',
@@ -238,9 +237,7 @@ export default {
       if (category === 'medium') return 'Medium (5-10Å)';
       return 'Far (≥10Å)';
     },
-    formatPValueDisplay(pValue) {
-      return formatPValue(pValue);
-    },
+    formatPLabel,
   },
 };
 </script>

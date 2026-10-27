@@ -153,7 +153,7 @@
                     </v-col>
                   </v-row>
 
-                  <div ref="stackedBarContainer" class="chart-measure">
+                  <div ref="stackedBarContainer" class="chart-measure chart-scroll">
                     <StackedBarChart
                       :chart-data="stackedBarChartData"
                       :display-limit="displayLimitValue"
@@ -228,7 +228,11 @@
                   </v-row>
 
                   <!-- Chart -->
-                  <div v-else-if="comparisonData" ref="comparisonContainer" class="chart-measure">
+                  <div
+                    v-else-if="comparisonData"
+                    ref="comparisonContainer"
+                    class="chart-measure chart-scroll"
+                  >
                     <VariantComparisonChart
                       :comparison-data="comparisonData"
                       :comparison-type="comparison"
@@ -304,7 +308,11 @@
                   </v-row>
 
                   <!-- Chart -->
-                  <div v-else-if="survivalData" ref="survivalContainer" class="chart-measure">
+                  <div
+                    v-else-if="survivalData"
+                    ref="survivalContainer"
+                    class="chart-measure chart-scroll"
+                  >
                     <KaplanMeierChart
                       :survival-data="survivalData"
                       :width="survivalSize.width.value"
@@ -723,7 +731,8 @@ function fetchAggregationData() {
   }
 }
 
-async function fetchComparisonData() {
+// quiet: background preload, so a failure stays on its own tab, not the page banner.
+async function fetchComparisonData({ quiet = false } = {}) {
   comparisonLoading.value = true;
   comparisonError.value = null;
 
@@ -755,13 +764,14 @@ async function fetchComparisonData() {
     });
     comparisonError.value =
       error.response?.data?.detail || 'Failed to load comparison data. Please try again.';
-    pageError.value = `Variant comparison data unavailable: ${error.message}`;
+    if (!quiet) pageError.value = `Variant comparison data unavailable: ${error.message}`;
   } finally {
     comparisonLoading.value = false;
   }
 }
 
-async function fetchSurvivalData() {
+// quiet: background preload, so a failure stays on its own tab, not the page banner.
+async function fetchSurvivalData({ quiet = false } = {}) {
   survivalLoading.value = true;
   survivalError.value = null;
 
@@ -790,7 +800,7 @@ async function fetchSurvivalData() {
     });
     survivalError.value =
       error.response?.data?.detail || 'Failed to load survival data. Please try again.';
-    pageError.value = `Survival data unavailable: ${error.message}`;
+    if (!quiet) pageError.value = `Survival data unavailable: ${error.message}`;
   } finally {
     survivalLoading.value = false;
   }
@@ -907,8 +917,8 @@ onMounted(() => {
   // Load the other API-backed tabs once idle, so switching to them is instant.
   const whenIdle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1000));
   whenIdle(() => {
-    if (!comparisonData.value && !comparisonLoading.value) fetchComparisonData();
-    if (!survivalData.value && !survivalLoading.value) fetchSurvivalData();
+    if (!comparisonData.value && !comparisonLoading.value) fetchComparisonData({ quiet: true });
+    if (!survivalData.value && !survivalLoading.value) fetchSurvivalData({ quiet: true });
   });
 
   // Measure the chart for whichever tab we land on (deep-link / refresh) so it
@@ -932,5 +942,14 @@ onMounted(() => {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
+}
+
+/* Dense charts keep a readable size on phones and scroll sideways instead of
+   shrinking their text to a few pixels. */
+.chart-scroll {
+  overflow-x: auto;
+}
+.chart-scroll :deep(svg) {
+  min-width: 720px;
 }
 </style>
