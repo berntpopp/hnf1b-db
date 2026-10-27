@@ -99,6 +99,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
+      - name: Make the throwaway test Postgres non-durable
+        # Per-test TRUNCATE fsyncs ~20 relations; on a disposable CI DB that is
+        # pure cost (local benchmark: backend suite 429 s -> 64 s).
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -U hnf1b_user -d hnf1b_test -q \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+
       - name: Setup uv + Python
         uses: ./.github/actions/setup-uv-python
         with:
@@ -285,6 +295,16 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Make the throwaway test Postgres non-durable
+        # Per-test TRUNCATE fsyncs ~20 relations; on a disposable CI DB that is
+        # pure cost (local benchmark: backend suite 429 s -> 64 s).
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -U hnf1b_user -d hnf1b_phenopackets_test -q \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
 
       - name: Setup uv + Python
         uses: ./.github/actions/setup-uv-python
