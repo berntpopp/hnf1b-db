@@ -4,6 +4,13 @@
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # Load nvm
 
+# Repo hygiene hooks (.pre-commit-config.yaml: yaml/json/toml, large files,
+# private keys, grep guards) on staged files; husky owns core.hooksPath, so
+# this is how they run locally. Lint/type/test gates run at pre-push.
+if command -v uvx >/dev/null 2>&1; then
+  uvx pre-commit run --config .pre-commit-config.yaml || exit 1
+fi
+
 # Only run frontend checks if frontend files are staged
 STAGED_FILES=$(git diff --name-only --cached)
 HAS_FRONTEND_FILES=$(echo "$STAGED_FILES" | grep -c "^frontend/" || true)

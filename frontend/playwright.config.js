@@ -6,9 +6,9 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * Wave 6 Task 1: scaffolds the Playwright runner so CI can exercise the
  * existing `tests/e2e/*.spec.js` suite. Specs assume the frontend is on
- * :5173 and the backend on :8000 — we start the Vite dev server via
- * `webServer` here, and CI brings up the backend + Postgres + Redis
- * stack separately. If `E2E_BASE_URL` is set (e.g. by CI pointing at a
+ * :5173 and the backend on :8000 — we start the Vite dev server (CI: a
+ * production build served by `vite preview`) via `webServer` here, and CI
+ * brings up the backend + Postgres + Redis stack separately. If `E2E_BASE_URL` is set (e.g. by CI pointing at a
  * preview deploy), `webServer` is skipped.
  */
 
@@ -44,7 +44,11 @@ export default defineConfig({
   // wired up by the e2e-tests workflow job.
   webServer: useWebServer
     ? {
-        command: 'npm run dev -- --port 5173 --strictPort',
+        // CI tests the production bundle: no per-page dev transforms, and it is
+        // what ships. Local runs keep the dev server for fast iteration.
+        command: process.env.CI
+          ? 'npm run build && npx vite preview --port 5173 --strictPort'
+          : 'npm run dev -- --port 5173 --strictPort',
         port: 5173,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

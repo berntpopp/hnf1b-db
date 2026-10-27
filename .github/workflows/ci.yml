@@ -19,6 +19,8 @@ permissions:
 jobs:
   changes:
     name: Detect changed paths
+    # Draft PRs run nothing (every job needs this one); marking the PR ready
+    # for review triggers the full run.
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     permissions:
@@ -96,6 +98,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Make the throwaway test Postgres non-durable
+        # Per-test TRUNCATE fsyncs ~20 relations; on a disposable CI DB that is
+        # pure cost (local benchmark: backend suite 429 s -> 64 s).
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -U hnf1b_user -d hnf1b_test -q \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
 
       - name: Setup uv + Python
         uses: ./.github/actions/setup-uv-python
@@ -284,6 +296,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Make the throwaway test Postgres non-durable
+        # Per-test TRUNCATE fsyncs ~20 relations; on a disposable CI DB that is
+        # pure cost (local benchmark: backend suite 429 s -> 64 s).
+        run: |
+          docker exec ${{ job.services.postgres.id }} psql -U hnf1b_user -d hnf1b_phenopackets_test -q \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+
       - name: Setup uv + Python
         uses: ./.github/actions/setup-uv-python
         with:
@@ -416,6 +438,15 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: .pre-commit-config.yaml
+
+      - name: Cache pre-commit hook environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Run pre-commit hygiene hooks (same target as local pre-push)
         run: make ci-hygiene
