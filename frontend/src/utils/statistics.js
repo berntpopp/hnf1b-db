@@ -163,11 +163,9 @@ function exactMannWhitneyP(U, n1, n2) {
 
   const totalArrangements = binomialCoeff(n1 + n2, n1);
 
-  let countLessOrEqual = 0;
-  for (let u = 0; u <= U; u++) {
-    memo.clear();
-    countLessOrEqual += countWays(n1, n2, u);
-  }
+  // countWays(n1, n2, u) already counts the arrangements with U <= u, so the
+  // one-tailed probability is a single lookup, not a sum over u = 0..U.
+  const countLessOrEqual = countWays(n1, n2, U);
 
   const pOneTail = countLessOrEqual / totalArrangements;
   return Math.min(1, 2 * pOneTail);
@@ -200,10 +198,12 @@ export function normalCDF(x) {
   const p = 0.3275911;
 
   const sign = x < 0 ? -1 : 1;
-  const absX = Math.abs(x);
+  // The Abramowitz-Stegun 7.1.26 approximation models erf(x); the normal CDF
+  // needs erf(x / sqrt(2)).
+  const z = Math.abs(x) / Math.SQRT2;
 
-  const t = 1.0 / (1.0 + p * absX);
-  const y = 1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-absX * absX);
+  const t = 1.0 / (1.0 + p * z);
+  const y = 1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-z * z);
 
   return 0.5 * (1.0 + sign * y);
 }
