@@ -2636,6 +2636,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/publications/{pmid}/specialty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Curated medical specialty plus rule-based suggestions
+         * @description Returns the saved medical_specialty and suggestions scored from the journal (NLM Catalog MeSH + title, weight 2) and the first/last author affiliations (weight 1 each). Curator-only; calls NCBI live and degrades to empty suggestions + suggestion_error if NCBI fails.
+         */
+        get: operations["get_specialty_api_v2_publications__pmid__specialty_get"];
+        /**
+         * Save the curated medical specialty
+         * @description Persist the curator's ordered specialty list (empty list clears it).
+         */
+        put: operations["put_specialty_api_v2_publications__pmid__specialty_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/reference/genes": {
         parameters: {
             query?: never;
@@ -4534,6 +4558,14 @@ export interface components {
             self: string;
         };
         /**
+         * MedicalSpecialtyUpdate
+         * @description Curated specialties, most important first; empty list clears.
+         */
+        MedicalSpecialtyUpdate: {
+            /** Medical Specialty */
+            medical_specialty: ("nephrology" | "diabetology" | "genetics" | "pediatrics" | "pathology" | "radiology" | "obstetrics" | "gynecology")[];
+        };
+        /**
          * MentionableUserOut
          * @description Minimal user projection used by the @-mention autocomplete endpoint.
          */
@@ -5394,6 +5426,11 @@ export interface components {
              */
             journal?: string | null;
             /**
+             * Medical Specialty
+             * @description Curated medical specialties, most important first
+             */
+            medical_specialty?: string[];
+            /**
              * Pmid
              * @description PubMed ID in format PMID:12345678
              */
@@ -5942,6 +5979,43 @@ export interface components {
          * @enum {string}
          */
         SourceStatus: "stated" | "not_reported" | "not_applicable" | "unknown" | "blank";
+        /**
+         * SpecialtySuggestionItem
+         * @description One suggested specialty with the evidence that produced it.
+         */
+        SpecialtySuggestionItem: {
+            /**
+             * Evidence
+             * @description Sources: journal, first_author, last_author
+             */
+            evidence: string[];
+            /**
+             * Score
+             * @description journal=2, each first/last author=1
+             */
+            score: number;
+            /** Specialty */
+            specialty: string;
+        };
+        /**
+         * SpecialtySuggestionResponse
+         * @description Saved specialty plus ranked rule-based suggestions for a publication.
+         */
+        SpecialtySuggestionResponse: {
+            /** Medical Specialty */
+            medical_specialty?: string[];
+            /** Pmid */
+            pmid: string;
+            /**
+             * Suggestion Error
+             * @description Set when NCBI could not be reached
+             */
+            suggestion_error?: string | null;
+            /** Suggestions */
+            suggestions: components["schemas"]["SpecialtySuggestionItem"][];
+            /** Vocabulary */
+            vocabulary: ("nephrology" | "diabetology" | "genetics" | "pediatrics" | "pathology" | "radiology" | "obstetrics" | "gynecology")[];
+        };
         /**
          * StateCounts
          * @description Queue facet counts under the active non-state filters.
@@ -10361,6 +10435,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_specialty_api_v2_publications__pmid__specialty_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pmid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecialtySuggestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_specialty_api_v2_publications__pmid__specialty_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pmid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MedicalSpecialtyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MedicalSpecialtyUpdate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

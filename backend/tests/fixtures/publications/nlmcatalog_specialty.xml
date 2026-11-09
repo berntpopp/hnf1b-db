@@ -1,0 +1,369 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<NLMCatalogRecordSet><NLMCatalogRecord Owner="NLM" Status="Completed">
+    <NlmUniqueID>100939345</NlmUniqueID>
+    <DateCreated>
+        <Year>2000</Year>
+        <Month>03</Month>
+        <Day>20</Day>
+    </DateCreated>
+    <DateRevised>
+        <Year>2026</Year>
+        <Month>06</Month>
+        <Day>25</Day>
+    </DateRevised>
+    <DateAuthorized>
+        <Year>2001</Year>
+        <Month>04</Month>
+        <Day>04</Day>
+    </DateAuthorized>
+    <DateCompleted>
+        <Year>2001</Year>
+        <Month>04</Month>
+        <Day>04</Day>
+    </DateCompleted>
+    <DateRevisedMajor>
+        <Year>2026</Year>
+        <Month>06</Month>
+        <Day>25</Day>
+    </DateRevisedMajor>
+    <TitleMain>
+        <Title Sort="0">Pediatric diabetes.</Title>
+    </TitleMain>
+    <MedlineTA>Pediatr Diabetes</MedlineTA>
+    <ResourceInfo>
+        <TypeOfResource>Serial</TypeOfResource>
+        <Issuance>continuing</Issuance>
+        <ResourceUnit>remote electronic resource</ResourceUnit>
+        <ResourceUnit>text</ResourceUnit>
+        <Resource>
+            <ContentType>text</ContentType>
+            <MediaType>unmediated</MediaType>
+            <CarrierType>volume</CarrierType>
+        </Resource>
+    </ResourceInfo>
+    <PublicationTypeList>
+        <PublicationType>Periodical</PublicationType>
+    </PublicationTypeList>
+    <PublicationInfo>
+        <Country>China</Country>
+        <PlaceCode Authority="MARC">cc</PlaceCode>
+        <Imprint ImprintType="Original" FunctionType="Publication">
+            <Place>Copenhagen :</Place>
+            <Entity>Munksgaard,</Entity>
+            <DateIssued>c2000-</DateIssued>
+            <ImprintFull>Copenhagen : Munksgaard, c2000-</ImprintFull>
+        </Imprint>
+        <Imprint ImprintType="Current" FunctionType="Publication">
+            <Place>Nanjing, China :</Place>
+            <Entity>Maximum Academic Press</Entity>
+            <ImprintFull>2026- : Nanjing, China : Maximum Academic Press</ImprintFull>
+        </Imprint>
+        <PublicationFirstYear>2000</PublicationFirstYear>
+        <PublicationEndYear>9999</PublicationEndYear>
+        <DatesOfSerialPublication>Vol. 1, no. 1 (Mar. 2000)-</DatesOfSerialPublication>
+        <Frequency FrequencyType="Current">Bimonthly</Frequency>
+    </PublicationInfo>
+    <Language LangType="Primary">eng</Language>
+    <PhysicalDescription>
+        <Extent>v.</Extent>
+    </PhysicalDescription>
+    <IndexingSourceList>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Full" IndexingStatus="Currently-indexed">MEDLINE</IndexingSourceName>
+            <Coverage>v4n1, Mar. 2003-</Coverage>
+        </IndexingSource>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Full" IndexingStatus="Currently-indexed">PubMed</IndexingSourceName>
+            <Coverage>v4n1, Mar. 2003-</Coverage>
+        </IndexingSource>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Full">Index medicus</IndexingSourceName>
+        </IndexingSource>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Unknown">PMC</IndexingSourceName>
+        </IndexingSource>
+    </IndexingSourceList>
+    <GeneralNote Owner="NLM">Title from cover.</GeneralNote>
+    <GeneralNote Owner="NLM">Print issues ceased with v. 15, no. 8 (Dec. 2014).</GeneralNote>
+    <GeneralNote Owner="NLM">Also issued online.</GeneralNote>
+    <MeshHeadingList>
+        <MeshHeading>
+            <DescriptorName MajorTopicYN="N">Child</DescriptorName>
+        </MeshHeading>
+        <MeshHeading>
+            <DescriptorName MajorTopicYN="Y">Diabetes Mellitus</DescriptorName>
+        </MeshHeading>
+    </MeshHeadingList>
+    <Classification NLMCallNumberYN="Y" Authority="NLM" CallNumberType="NLMClass">W1 PE167FBD</Classification>
+    <ELocationList>
+        <ELocation>
+            <ELocationID EIdType="url" ValidYN="Y">https://onlinelibrary.wiley.com/journal/pedi</ELocationID>
+        </ELocation>
+        <ELocation>
+            <ELocationID EIdType="url" ValidYN="Y">https://www.maxapress.com/pedi</ELocationID>
+        </ELocation>
+        <ELocation>
+            <ELocationID EIdType="url" ValidYN="Y">https://pmc.ncbi.nlm.nih.gov/journals/?term=100939345</ELocationID>
+        </ELocation>
+    </ELocationList>
+    <ISSN ValidYN="Y" IssnType="Print">1399-543X</ISSN>
+    <ISSN ValidYN="Y" IssnType="Electronic">1399-5448</ISSN>
+    <OtherID Prefix="(OCoLC)" Source="OCLC">44480851</OtherID>
+</NLMCatalogRecord>
+
+<NLMCatalogRecord Owner="NLM" Status="Completed">
+    <NlmUniqueID>9013836</NlmUniqueID>
+    <DateCreated>
+        <Year>1990</Year>
+        <Month>09</Month>
+        <Day>27</Day>
+    </DateCreated>
+    <DateRevised>
+        <Year>2026</Year>
+        <Month>05</Month>
+        <Day>08</Day>
+    </DateRevised>
+    <DateAuthorized>
+        <Year>1990</Year>
+        <Month>09</Month>
+        <Day>27</Day>
+    </DateAuthorized>
+    <DateCompleted>
+        <Year>1990</Year>
+        <Month>09</Month>
+        <Day>27</Day>
+    </DateCompleted>
+    <DateRevisedMajor>
+        <Year>2024</Year>
+        <Month>10</Month>
+        <Day>16</Day>
+    </DateRevisedMajor>
+    <TitleMain>
+        <Title Sort="0">Journal of the American Society of Nephrology : JASN.</Title>
+    </TitleMain>
+    <MedlineTA>J Am Soc Nephrol</MedlineTA>
+    <TitleAlternate Owner="Undetermined" TitleType="Key">
+        <Title Sort="0">Journal of the American Society of Nephrology</Title>
+    </TitleAlternate>
+    <TitleAlternate Owner="NLM" TitleType="Other">
+        <Title Sort="N">JASN</Title>
+    </TitleAlternate>
+    <TitleAlternate Owner="NCBI" TitleType="Other">
+        <Title Sort="N">J AM SOC NEPHROL</Title>
+    </TitleAlternate>
+    <TitleRelated Owner="NLM" TitleType="Related">
+        <Title Sort="N">Nephrology self-assessment program</Title>
+        <RecordID Source="OCLC">47815833</RecordID>
+        <RecordID Source="LC">2001214946</RecordID>
+        <RecordID Source="NLM">101132685</RecordID>
+        <ISSN IssnType="Undetermined">1536-936X</ISSN>
+    </TitleRelated>
+    <AuthorList CompleteYN="Y">
+        <Author>
+            <CollectiveName>American Society of Nephrology.</CollectiveName>
+        </Author>
+    </AuthorList>
+    <ResourceInfo>
+        <TypeOfResource>Serial</TypeOfResource>
+        <Issuance>continuing</Issuance>
+        <ResourceUnit>remote electronic resource</ResourceUnit>
+        <ResourceUnit>text</ResourceUnit>
+        <Resource>
+            <ContentType>text</ContentType>
+            <MediaType>unmediated</MediaType>
+            <CarrierType>volume</CarrierType>
+        </Resource>
+    </ResourceInfo>
+    <PublicationTypeList>
+        <PublicationType>Periodical</PublicationType>
+    </PublicationTypeList>
+    <PublicationInfo>
+        <Country>United States</Country>
+        <PlaceCode Authority="MARC">mdu</PlaceCode>
+        <Imprint ImprintType="Original" FunctionType="Publication">
+            <Place>Baltimore, MD :</Place>
+            <Entity>Williams &amp; Wilkins,</Entity>
+            <DateIssued>c1990-</DateIssued>
+            <ImprintFull>Baltimore, MD : Williams &amp; Wilkins, c1990-</ImprintFull>
+        </Imprint>
+        <Imprint ImprintType="Current" FunctionType="Publication">
+            <Place>Hagerstown, MD :</Place>
+            <Entity>Wolters Kluwer Health, on behalf of the American Society of Nephrology</Entity>
+            <ImprintFull>2023- : Hagerstown, MD : Wolters Kluwer Health, on behalf of the American Society of Nephrology</ImprintFull>
+        </Imprint>
+        <PublicationFirstYear>1990</PublicationFirstYear>
+        <PublicationEndYear>9999</PublicationEndYear>
+        <DatesOfSerialPublication>Vol. 1, no. 1 (July 1990)-</DatesOfSerialPublication>
+        <Frequency FrequencyType="Current">Monthly, 2007-</Frequency>
+        <Frequency FrequencyType="Former">Monthly, 1990-2004</Frequency>
+        <Frequency FrequencyType="Former">Thirteen no. a year (two issues in Oct.), 2005-2006</Frequency>
+    </PublicationInfo>
+    <Language LangType="Primary">eng</Language>
+    <PhysicalDescription>
+        <Extent>v. : ill.</Extent>
+    </PhysicalDescription>
+    <IndexingSourceList>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Full" IndexingStatus="Currently-indexed">MEDLINE</IndexingSourceName>
+            <Coverage>v1n1, July 1990-</Coverage>
+        </IndexingSource>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Unknown" IndexingStatus="Currently-indexed">PubMed</IndexingSourceName>
+            <Coverage>v1n1, July 1990-</Coverage>
+        </IndexingSource>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Unknown">PMC</IndexingSourceName>
+        </IndexingSource>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Full">Index medicus</IndexingSourceName>
+        </IndexingSource>
+    </IndexingSourceList>
+    <GeneralNote Owner="NLM">Title from cover.</GeneralNote>
+    <GeneralNote Owner="NLM">Imprint varies.</GeneralNote>
+    <GeneralNote Owner="NLM">Latest issue consulted: surrogate of Vol. 16, no. 1 (Jan. 2005).</GeneralNote>
+    <GeneralNote Owner="NLM">Supplements accompany some vols.</GeneralNote>
+    <GeneralNote Owner="NLM">Also issued online.</GeneralNote>
+    <GeneralNote Owner="NLM">Official journal of: the American Society of Nephrology.</GeneralNote>
+    <LocalNote LocalNoteType="PreservationAction">Vol. 1, no. 1 (JUL 1990)19910912 Notice not published Printed on acid-free paper</LocalNote>
+    <MeshHeadingList>
+        <MeshHeading>
+            <DescriptorName MajorTopicYN="Y">Kidney Diseases</DescriptorName>
+        </MeshHeading>
+        <MeshHeading>
+            <DescriptorName MajorTopicYN="Y">Nephrology</DescriptorName>
+        </MeshHeading>
+    </MeshHeadingList>
+    <Classification NLMCallNumberYN="Y" Authority="NLM" CallNumberType="NLMClass">W1 JO911BB</Classification>
+    <ELocationList>
+        <ELocation>
+            <ELocationID EIdType="url" ValidYN="Y">http://www.jasn.org/</ELocationID>
+        </ELocation>
+        <ELocation>
+            <ELocationID EIdType="url" ValidYN="Y">http://ovidsp.ovid.com/ovidweb.cgi?T=JS&amp;MODE=ovid&amp;PAGE=toc&amp;D=ovft&amp;AN=00001751-000000000-00000</ELocationID>
+        </ELocation>
+        <ELocation>
+            <ELocationID EIdType="url" ValidYN="Y">https://pmc.ncbi.nlm.nih.gov/journals/?term=9013836</ELocationID>
+        </ELocation>
+    </ELocationList>
+    <LCCN ValidYN="Y">sn 89003167</LCCN>
+    <ISSN ValidYN="Y" IssnType="Print">1046-6673</ISSN>
+    <ISSN ValidYN="Y" IssnType="Electronic">1533-3450</ISSN>
+    <Coden>JASNEU</Coden>
+    <OtherID Prefix="(DNLM)" Source="NLM">SR0066885(s)</OtherID>
+    <OtherID Prefix="(OCoLC)" Source="OCLC">20484750</OtherID>
+</NLMCatalogRecord>
+
+<NLMCatalogRecord Owner="NLM" Status="Completed">
+    <NlmUniqueID>9216904</NlmUniqueID>
+    <DateCreated>
+        <Year>1992</Year>
+        <Month>11</Month>
+        <Day>27</Day>
+    </DateCreated>
+    <DateRevised>
+        <Year>2026</Year>
+        <Month>05</Month>
+        <Day>08</Day>
+    </DateRevised>
+    <DateAuthorized>
+        <Year>1992</Year>
+        <Month>11</Month>
+        <Day>27</Day>
+    </DateAuthorized>
+    <DateCompleted>
+        <Year>1992</Year>
+        <Month>11</Month>
+        <Day>27</Day>
+    </DateCompleted>
+    <DateRevisedMajor>
+        <Year>2026</Year>
+        <Month>03</Month>
+        <Day>16</Day>
+    </DateRevisedMajor>
+    <TitleMain>
+        <Title Sort="0">Nature genetics.</Title>
+    </TitleMain>
+    <MedlineTA>Nat Genet</MedlineTA>
+    <TitleAlternate Owner="Undetermined" TitleType="Key">
+        <Title Sort="0">Nature genetics</Title>
+    </TitleAlternate>
+    <TitleAlternate Owner="NLM" TitleType="Other">
+        <Title Sort="N">Genetics</Title>
+    </TitleAlternate>
+    <TitleAlternate Owner="NCBI" TitleType="Other">
+        <Title Sort="N">NAT GENET</Title>
+    </TitleAlternate>
+    <TitleAlternate Owner="NCBI" TitleType="Other">
+        <Title Sort="N">Nat. Genet.</Title>
+    </TitleAlternate>
+    <TitleAlternate Owner="NCBI" TitleType="Other">
+        <Title Sort="N">Nat.Genet.</Title>
+    </TitleAlternate>
+    <TitleAlternate Owner="NCBI" TitleType="Other">
+        <Title Sort="N">Nature Genet</Title>
+    </TitleAlternate>
+    <ResourceInfo>
+        <TypeOfResource>Serial</TypeOfResource>
+        <Issuance>continuing</Issuance>
+        <ResourceUnit>text</ResourceUnit>
+        <Resource>
+            <ContentType>text</ContentType>
+            <MediaType>unmediated</MediaType>
+            <CarrierType>volume</CarrierType>
+        </Resource>
+    </ResourceInfo>
+    <PublicationTypeList>
+        <PublicationType>Periodical</PublicationType>
+    </PublicationTypeList>
+    <PublicationInfo>
+        <Country>United States</Country>
+        <PlaceCode Authority="MARC">nyu</PlaceCode>
+        <Imprint ImprintType="Original" FunctionType="Publication">
+            <Place>New York, NY :</Place>
+            <Entity>Nature Pub. Co.,</Entity>
+            <DateIssued>c1992-</DateIssued>
+            <ImprintFull>New York, NY : Nature Pub. Co., c1992-</ImprintFull>
+        </Imprint>
+        <PublicationFirstYear>1992</PublicationFirstYear>
+        <PublicationEndYear>9999</PublicationEndYear>
+        <DatesOfSerialPublication>Vol. 1, no. 1 (Apr. 1992)-</DatesOfSerialPublication>
+        <Frequency FrequencyType="Current">Monthly</Frequency>
+    </PublicationInfo>
+    <Language LangType="Primary">eng</Language>
+    <PhysicalDescription>
+        <Extent>v. : ill.</Extent>
+    </PhysicalDescription>
+    <IndexingSourceList>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Full" IndexingStatus="Currently-indexed">MEDLINE</IndexingSourceName>
+            <Coverage>v1n1,Apr. 1992-</Coverage>
+        </IndexingSource>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Full" IndexingStatus="Currently-indexed">PubMed</IndexingSourceName>
+            <Coverage>v1n1,Apr. 1992-</Coverage>
+        </IndexingSource>
+        <IndexingSource>
+            <IndexingSourceName IndexingTreatment="Full">Index medicus</IndexingSourceName>
+        </IndexingSource>
+    </IndexingSourceList>
+    <GeneralNote Owner="NLM">Monthly.</GeneralNote>
+    <GeneralNote Owner="NLM">Title from cover.</GeneralNote>
+    <LocalNote LocalNoteType="PreservationAction">Vol. 9, no. 3 (MAR 1995)19950520 Notice not published Printed on acid-free paper</LocalNote>
+    <MeshHeadingList>
+        <MeshHeading>
+            <DescriptorName MajorTopicYN="Y">Genetics, Medical</DescriptorName>
+        </MeshHeading>
+    </MeshHeadingList>
+    <Classification NLMCallNumberYN="Y" Authority="NLM" CallNumberType="NLMClass">W1 NA812J</Classification>
+    <ELocationList>
+        <ELocation>
+            <ELocationID EIdType="url" ValidYN="Y">http://www.nature.com/ng/</ELocationID>
+        </ELocation>
+    </ELocationList>
+    <ISSN ValidYN="Y" IssnType="Print">1061-4036</ISSN>
+    <ISSN ValidYN="Y" IssnType="Electronic">1546-1718</ISSN>
+    <OtherID Prefix="(DNLM)" Source="NLM">SR0073083(s)</OtherID>
+    <OtherID Prefix="(OCoLC)" Source="OCLC">25302333</OtherID>
+</NLMCatalogRecord>
+
+</NLMCatalogRecordSet>

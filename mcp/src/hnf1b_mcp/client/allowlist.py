@@ -68,6 +68,8 @@ _DENY = [
         r"^/publications/sync$",
         # Curator-only RAG phenotype suggestion helper.
         r"^/publications/passages/suggest-phenotypes$",
+        # Curator-only specialty suggestion (live NCBI) + write.
+        r"^/publications/[^/]+/specialty$",
         # Clinical aggregation routes — not part of the curated MCP statistics surface.
         r"^/clinical/",
         # Curation collaboration surface (comments, edits, resolve) — write/privileged.

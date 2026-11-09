@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-09
+
+### Added
+
+- Publication medical specialty curation (#11). Curators set a publication's `medical_specialty` on its page, with one-click suggestions that follow the rule used for the Vasileiou et al. publication sheet: the journal's specialty (NLM Catalog MeSH + title) plus the specialty of the first and last authors' departments. Each suggestion shows its evidence. On the 86 hand-labelled papers the top suggestion matches a curator label 88% of the time (precision 0.76, recall 0.82).
+- `GET|PUT /api/v2/publications/{pmid}/specialty` (curator-only). GET keeps working when NCBI is down and returns empty suggestions with `suggestion_error`. The saved value is included in the public `/publications/{pmid}/metadata` response.
+- `backend/scripts/suggest_medical_specialty.py` for batch suggestions from the publications sheet export, with `--evaluate` against existing labels.
+
+### Changed
+
+- Database: new `publication_metadata.medical_specialty` column (migration `f2a1c0d9e8b7`).
+
 ## [0.4.6] - 2026-11-09
 
 ### Security

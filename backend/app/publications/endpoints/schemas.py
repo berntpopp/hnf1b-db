@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.publications.specialty import MedicalSpecialty
+
 
 class AuthorModel(BaseModel):
     """Author information."""
@@ -28,6 +30,10 @@ class PublicationMetadataResponse(BaseModel):
     abstract: Optional[str] = Field(None, description="Abstract text (may be null)")
     data_source: str = Field(default="PubMed", description="Data source")
     fetched_at: str = Field(..., description="Storage timestamp")
+    medical_specialty: list[str] = Field(
+        default_factory=list,
+        description="Curated medical specialties, most important first",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -192,3 +198,31 @@ class PhenotypeSuggestionResponse(BaseModel):
     suggestions: list[PhenotypeSuggestionItem] = Field(
         default_factory=list, description="Extracted phenotype suggestions"
     )
+
+
+class SpecialtySuggestionItem(BaseModel):
+    """One suggested specialty with the evidence that produced it."""
+
+    specialty: str
+    score: int = Field(..., description="journal=2, each first/last author=1")
+    evidence: list[str] = Field(
+        ..., description="Sources: journal, first_author, last_author"
+    )
+
+
+class SpecialtySuggestionResponse(BaseModel):
+    """Saved specialty plus ranked rule-based suggestions for a publication."""
+
+    pmid: str
+    medical_specialty: list[str] = Field(default_factory=list)
+    vocabulary: list[MedicalSpecialty]
+    suggestions: list[SpecialtySuggestionItem]
+    suggestion_error: Optional[str] = Field(
+        None, description="Set when NCBI could not be reached"
+    )
+
+
+class MedicalSpecialtyUpdate(BaseModel):
+    """Curated specialties, most important first; empty list clears."""
+
+    medical_specialty: list[MedicalSpecialty] = Field(..., max_length=8)

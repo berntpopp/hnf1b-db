@@ -199,7 +199,8 @@ async def _get_cached_metadata(pmid: str, db: AsyncSession) -> Optional[dict]:
             data_source,
             fetched_at,
             fetched_by,
-            api_version
+            api_version,
+            medical_specialty
         FROM publication_metadata
         WHERE pmid = :pmid
     """)
@@ -220,6 +221,7 @@ async def _get_cached_metadata(pmid: str, db: AsyncSession) -> Optional[dict]:
             "fetched_at": row.fetched_at,
             "fetched_by": row.fetched_by,
             "api_version": row.api_version,
+            "medical_specialty": row.medical_specialty or [],
         }
 
     return None
