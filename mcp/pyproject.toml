@@ -1,6 +1,6 @@
 [project]
 name = "hnf1b-mcp"
-version = "0.4.4"
+version = "0.4.5"
 description = "Read-only MCP server exposing HNF1B-db public data to LLMs"
 requires-python = ">=3.11"
 dependencies = [
@@ -23,9 +23,9 @@ packages = ["src/hnf1b_mcp"]
 
 [dependency-groups]
 dev = [
-    "ruff==0.17.2",
-    "mypy==2.4.0",
-    "pytest==9.1.1",
+    "ruff==0.17.3",
+    "mypy==2.4.1",
+    "pytest==9.2.0",
     "pytest-asyncio>=1.2.0",
     "pytest-cov==7.1.0",
     "pytest-xdist>=3.6.0",  # Parallel test execution (mcp tests are isolated)

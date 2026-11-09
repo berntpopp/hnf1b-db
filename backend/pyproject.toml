@@ -1,6 +1,6 @@
 [project]
 name = "hnf1b-api"
-version = "0.4.4"
+version = "0.4.5"
 description = "FastAPI-based REST API for managing clinical and genetic data for individuals with HNF1B disease"
 requires-python = ">=3.10"
 dependencies = [
@@ -41,15 +41,15 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff==0.17.2",
-    "mypy==2.4.0",
+    "ruff==0.17.3",
+    "mypy==2.4.1",
     "types-jsonschema>=4.26.0.20261006",
     "types-pyyaml>=6.0.12.20260906",  # Type stubs for PyYAML
     "types-redis>=4.6.0",  # Type stubs for Redis
 ]
 test = [
     "ga4gh-vrs>=2.1.3",
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "pytest-asyncio>=1.2.0",  # Updated for pytest 8.x compatibility (0.21.1 incompatible)
     "pytest-cov==7.1.0",
     "pytest-xdist>=3.6.0",  # Parallel test execution with per-worker DB isolation

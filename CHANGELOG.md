@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-11-09
+
+### Fixed
+
+- Variant DNA-distance analysis: Mann-Whitney U p-values were wrong on both paths. The normal approximation applied the erf approximation to `x` instead of `x/sqrt(2)` (p-values far too small), and the exact test double-counted cumulative arrangements. Both now match R's `wilcox.test` (#603, thanks @bfs2021).
+
+### Security
+
+- authlib 1.7.2 -> 1.9.5 (mcp) and dnspython 2.8.0 -> 2.9.2 (backend, mcp), clearing all open Dependabot alerts, including one critical.
+
+### Changed
+
+- MCP server upgraded to fastmcp 4 / MCP SDK 2 (#597).
+- Faster, local-first CI pipeline (#587, #588); unused requirements exports removed (#601).
+- Dependency updates: tiptap 3.32.1, axios 1.21.0, sass 1.107.0, eslint-plugin-vue 10.12.0, pydantic-settings 2.16.2, ruff 0.17.3, mypy 2.4.1, pytest 9.2.0, pytest-asyncio 1.4.1, setup-uv 10.3.3 (#604-#609).
+
 ## [0.4.4] - 2026-10-27
 
 ### Added
