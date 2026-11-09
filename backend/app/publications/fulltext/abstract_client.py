@@ -16,14 +16,13 @@ import html
 import logging
 from typing import TYPE_CHECKING, Optional, Union
 
+import aiohttp
 from lxml import etree  # type: ignore[import-untyped]
 
 from app.publications.fulltext.types import AbstractResult
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
-
-    import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +197,7 @@ async def fetch_abstracts(
         async with session.post(
             base_url,
             data=params,
-            timeout=timeout,
+            timeout=aiohttp.ClientTimeout(total=timeout),
         ) as response:
             # Guard against parsing a 429/5xx error body as if it were efetch
             # XML (which would silently mark every PMID in the batch as having

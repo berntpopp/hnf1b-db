@@ -17,7 +17,7 @@ Resolution order (first hit wins, cached for the process lifetime):
 
 from __future__ import annotations
 
-import sys
+import tomllib
 from functools import lru_cache
 from pathlib import Path
 
@@ -43,14 +43,6 @@ def _read_version_from_pyproject() -> str | None:
     Walks up from this module so it works regardless of the working directory
     and whether the code runs from source or a copied image layout.
     """
-    if sys.version_info >= (3, 11):
-        import tomllib
-    else:  # pragma: no cover - Python 3.10 fallback
-        try:
-            import tomli as tomllib  # type: ignore[import-not-found]
-        except ModuleNotFoundError:
-            return None
-
     for parent in Path(__file__).resolve().parents:
         candidate = parent / "pyproject.toml"
         if candidate.is_file():
