@@ -158,6 +158,11 @@
                         <div class="text-body-2">{{ formatAuthors(publication.authors) }}</div>
                       </div>
 
+                      <PublicationSpecialty
+                        v-model="publication.medical_specialty"
+                        :pmid="publicationId"
+                      />
+
                       <div v-if="publication.journal" class="mb-4">
                         <div class="text-subtitle-2 text-grey-darken-1 mb-1">Journal</div>
                         <div class="text-body-2 font-italic">{{ publication.journal }}</div>
@@ -366,6 +371,7 @@ import { getPublicationMetadata, getPhenopacketsByPublication } from '@/api';
 import { buildSortParameter } from '@/utils/pagination';
 import AppDataTable from '@/components/common/AppDataTable.vue';
 import AppPagination from '@/components/common/AppPagination.vue';
+import PublicationSpecialty from '@/components/curation/PublicationSpecialty.vue';
 import {
   usePublicationSeo,
   usePublicationStructuredData,
@@ -377,6 +383,7 @@ export default {
   components: {
     AppDataTable,
     AppPagination,
+    PublicationSpecialty,
   },
   setup() {
     const route = useRoute();

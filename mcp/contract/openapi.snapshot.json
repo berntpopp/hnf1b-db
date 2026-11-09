@@ -2207,6 +2207,34 @@
         "title": "LinksObject",
         "type": "object"
       },
+      "MedicalSpecialtyUpdate": {
+        "description": "Curated specialties, most important first; empty list clears.",
+        "properties": {
+          "medical_specialty": {
+            "items": {
+              "enum": [
+                "nephrology",
+                "diabetology",
+                "genetics",
+                "pediatrics",
+                "pathology",
+                "radiology",
+                "obstetrics",
+                "gynecology"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Medical Specialty",
+            "type": "array"
+          }
+        },
+        "required": [
+          "medical_specialty"
+        ],
+        "title": "MedicalSpecialtyUpdate",
+        "type": "object"
+      },
       "MentionableUserOut": {
         "description": "Minimal user projection used by the @-mention autocomplete endpoint.",
         "properties": {
@@ -3797,6 +3825,14 @@
             "description": "Journal name",
             "title": "Journal"
           },
+          "medical_specialty": {
+            "description": "Curated medical specialties, most important first",
+            "items": {
+              "type": "string"
+            },
+            "title": "Medical Specialty",
+            "type": "array"
+          },
           "pmid": {
             "description": "PubMed ID in format PMID:12345678",
             "title": "Pmid",
@@ -5281,6 +5317,94 @@
         ],
         "title": "SourceStatus",
         "type": "string"
+      },
+      "SpecialtySuggestionItem": {
+        "description": "One suggested specialty with the evidence that produced it.",
+        "properties": {
+          "evidence": {
+            "description": "Sources: journal, first_author, last_author",
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "score": {
+            "description": "journal=2, each first/last author=1",
+            "title": "Score",
+            "type": "integer"
+          },
+          "specialty": {
+            "title": "Specialty",
+            "type": "string"
+          }
+        },
+        "required": [
+          "specialty",
+          "score",
+          "evidence"
+        ],
+        "title": "SpecialtySuggestionItem",
+        "type": "object"
+      },
+      "SpecialtySuggestionResponse": {
+        "description": "Saved specialty plus ranked rule-based suggestions for a publication.",
+        "properties": {
+          "medical_specialty": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Medical Specialty",
+            "type": "array"
+          },
+          "pmid": {
+            "title": "Pmid",
+            "type": "string"
+          },
+          "suggestion_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when NCBI could not be reached",
+            "title": "Suggestion Error"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/SpecialtySuggestionItem"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "vocabulary": {
+            "items": {
+              "enum": [
+                "nephrology",
+                "diabetology",
+                "genetics",
+                "pediatrics",
+                "pathology",
+                "radiology",
+                "obstetrics",
+                "gynecology"
+              ],
+              "type": "string"
+            },
+            "title": "Vocabulary",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pmid",
+          "vocabulary",
+          "suggestions"
+        ],
+        "title": "SpecialtySuggestionResponse",
+        "type": "object"
       },
       "StateCounts": {
         "description": "Queue facet counts under the active non-state filters.",
@@ -13210,6 +13334,112 @@
           }
         },
         "summary": "Get publication metadata from PubMed",
+        "tags": [
+          "publications",
+          "publications"
+        ]
+      }
+    },
+    "/api/v2/publications/{pmid}/specialty": {
+      "get": {
+        "description": "Returns the saved medical_specialty and suggestions scored from the journal (NLM Catalog MeSH + title, weight 2) and the first/last author affiliations (weight 1 each). Curator-only; calls NCBI live and degrades to empty suggestions + suggestion_error if NCBI fails.",
+        "operationId": "get_specialty_api_v2_publications__pmid__specialty_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pmid",
+            "required": true,
+            "schema": {
+              "title": "Pmid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialtySuggestionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Curated medical specialty plus rule-based suggestions",
+        "tags": [
+          "publications",
+          "publications"
+        ]
+      },
+      "put": {
+        "description": "Persist the curator's ordered specialty list (empty list clears it).",
+        "operationId": "put_specialty_api_v2_publications__pmid__specialty_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pmid",
+            "required": true,
+            "schema": {
+              "title": "Pmid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MedicalSpecialtyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MedicalSpecialtyUpdate"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save the curated medical specialty",
         "tags": [
           "publications",
           "publications"

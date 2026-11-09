@@ -41,3 +41,18 @@ export const getPublications = (params = {}) => apiClient.get('/publications/', 
  *   - fetched_at: ISO timestamp
  */
 export const getPublicationMetadata = (pmid) => apiClient.get(`/publications/${pmid}/metadata`);
+
+/**
+ * Curated medical specialty plus rule-based suggestions (curator-only).
+ * @param {string} pmid - PubMed ID (with or without PMID: prefix)
+ * @returns {Promise} { pmid, medical_specialty, vocabulary, suggestions: [{specialty, score, evidence}], suggestion_error }
+ */
+export const getPublicationSpecialty = (pmid) => apiClient.get(`/publications/${pmid}/specialty`);
+
+/**
+ * Save the curated medical specialty (curator-only). Empty array clears it.
+ * @param {string} pmid - PubMed ID
+ * @param {string[]} specialties - Ordered, most important first
+ */
+export const updatePublicationSpecialty = (pmid, specialties) =>
+  apiClient.put(`/publications/${pmid}/specialty`, { medical_specialty: specialties });

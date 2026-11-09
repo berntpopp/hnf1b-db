@@ -128,6 +128,7 @@ PHENOPACKETS_SEARCH = "/phenopackets/search"
 PHENOPACKETS_SEARCH_FACETS = "/phenopackets/search/facets"
 PUBLICATIONS = "/publications/"
 PUBLICATIONS_BY_PMID_METADATA = "/publications/{pmid}/metadata"
+PUBLICATIONS_BY_PMID_SPECIALTY = "/publications/{pmid}/specialty"
 PUBLICATIONS_PASSAGES = "/publications/passages"
 PUBLICATIONS_PASSAGES_SUGGEST_PHENOTYPES = "/publications/passages/suggest-phenotypes"
 PUBLICATIONS_SYNC = "/publications/sync"
@@ -253,6 +254,7 @@ ALL_PATHS: tuple[str, ...] = (
     PHENOPACKETS_SEARCH_FACETS,
     PUBLICATIONS,
     PUBLICATIONS_BY_PMID_METADATA,
+    PUBLICATIONS_BY_PMID_SPECIALTY,
     PUBLICATIONS_PASSAGES,
     PUBLICATIONS_PASSAGES_SUGGEST_PHENOTYPES,
     PUBLICATIONS_SYNC,

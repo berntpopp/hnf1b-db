@@ -9,6 +9,7 @@ Routes, grouped by file:
 - ``list_route``      → ``GET /``
 - ``passages_route``  → ``GET /passages``
 - ``metadata_route``  → ``GET /{pmid}/metadata``
+- ``specialty_route`` → ``GET|PUT /{pmid}/specialty`` (curator)
 - ``sync_route``      → ``POST /sync``
 
 ``passages_route`` is included before ``metadata_route`` so the literal
@@ -20,12 +21,14 @@ from fastapi import APIRouter
 from .list_route import router as _list_router
 from .metadata_route import router as _metadata_router
 from .passages_route import router as _passages_router
+from .specialty_route import router as _specialty_router
 from .sync_route import router as _sync_router
 
 router = APIRouter(prefix="/api/v2/publications", tags=["publications"])
 router.include_router(_list_router)
 router.include_router(_passages_router)
 router.include_router(_metadata_router)
+router.include_router(_specialty_router)
 router.include_router(_sync_router)
 
 __all__ = ["router"]
