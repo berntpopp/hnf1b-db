@@ -5,10 +5,10 @@ endpoint exposing the app version and the live Alembic schema revision.
 """
 
 import re
+import tomllib
 from pathlib import Path
 
 import pytest
-import tomllib
 
 from app.core.version import (
     API_PATH_VERSION,

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-11-09
+
+### Security
+
+- Clears the Dependabot alerts that remained after 0.4.5: joserfc 1.8.0 (mcp, via authlib), qs 6.16.1 and minimatch 11 (frontend overrides), and dnspython 2.9.2 for every backend interpreter.
+
+### Changed
+
+- Backend now requires Python >= 3.11 (Python 3.10 reached end of life in October 2026; Docker and CI already run 3.11). The `tomli` fallback is removed.
+
+### Fixed
+
+- PubMed abstract fetch passed a bare float as the aiohttp request timeout; it now passes `aiohttp.ClientTimeout(total=...)`.
+
 ## [0.4.5] - 2026-11-09
 
 ### Fixed
